@@ -142,16 +142,104 @@ async function startInteractiveMode(options: any) {
   console.log(chalk.gray('Starting a conversation session...'));
   console.log();
 
-  // TODO: Implement interactive chat with inquirer
-  // For now, provide instructions for the user
-  console.log(chalk.cyan('💡 Interactive chat mode will be available soon!'));
-  console.log();
-  console.log(chalk.white('For now, you can use direct commands:'));
-  console.log(chalk.gray('  coding-agent "help me understand this file"'));
-  console.log(chalk.gray('  coding-agent "explain how this function works"'));
-  console.log(chalk.gray('  coding-agent "analyze the test failures"'));
-  console.log();
-  console.log(chalk.gray('Use'), chalk.white('coding-agent --help'), chalk.gray('for more options.'));
+  try {
+    // Import inquirer dynamically
+    const inquirer = await import('inquirer');
+
+    // Create tool orchestrator with LS tool
+    const lsTool = new LSTool(DEFAULT_TOOL_CONTEXT);
+    const orchestrator = new ToolOrchestrator(llmService, [lsTool]);
+
+    if (options.verbose) {
+      console.log(chalk.blue('🛠️  Registered tools:'), orchestrator.getRegisteredTools().map((t: any) => t.name).join(', '));
+    }
+
+    // Display welcome message and instructions
+    console.log(chalk.cyan('💬 Welcome to interactive chat mode!'));
+    console.log(chalk.gray('• Type your questions about the code or project'));
+    console.log(chalk.gray('• Use "help" for suggestions'));
+    console.log(chalk.gray('• Use "exit" or "quit" to leave'));
+    console.log(chalk.gray('• Use Ctrl+C to exit anytime'));
+    console.log();
+
+    // Set up graceful exit handler for Ctrl+C
+    const handleExit = () => {
+      console.log(chalk.yellow('\n👋 Goodbye! Thanks for using Coding Agent.'));
+      process.exit(0);
+    };
+    process.on('SIGINT', handleExit);
+
+    // Start chat loop
+    while (true) {
+      try {
+        const { message } = await inquirer.default.prompt([
+          {
+            type: 'input',
+            name: 'message',
+            message: chalk.green('You:'),
+            validate: (input: string) => {
+              if (!input.trim()) {
+                return 'Please enter a message or type "exit" to quit.';
+              }
+              return true;
+            }
+          }
+        ]);
+
+        const trimmedMessage = message.trim();
+
+        // Handle exit commands
+        if (trimmedMessage.toLowerCase() === 'exit' ||
+            trimmedMessage.toLowerCase() === 'quit' ||
+            trimmedMessage.toLowerCase() === 'q') {
+          console.log(chalk.yellow('👋 Goodbye! Thanks for using Coding Agent.'));
+          break;
+        }
+
+        // Handle help command
+        if (trimmedMessage.toLowerCase() === 'help') {
+          displayChatHelp();
+          continue;
+        }
+
+        // Process the message with the AI
+        try {
+          console.log(chalk.cyan('🤖 Agent:'), chalk.gray('Thinking...'));
+
+          const response = await orchestrator.processMessage(
+            trimmedMessage,
+            undefined, // No streaming callback for now
+            options.verbose
+          );
+
+          // Clear the "Thinking..." line and display response
+          process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
+          console.log(chalk.cyan('🤖 Agent:'), response);
+          console.log(); // Add spacing
+
+        } catch (error) {
+          console.log(); // Clear the "Thinking..." line
+          console.error(chalk.red('❌ Error:'), error instanceof Error ? error.message : 'Unknown error');
+          console.log(chalk.gray('Try rephrasing your question or type "help" for suggestions.'));
+          console.log();
+        }
+      } catch (promptError: any) {
+        // Handle Ctrl+C or other prompt interruptions
+        if (promptError.name === 'ExitPromptError' || promptError.isTTYError) {
+          handleExit();
+        } else {
+          throw promptError;
+        }
+      }
+    }
+
+    // Clean up signal handler
+    process.removeListener('SIGINT', handleExit);
+
+  } catch (error) {
+    console.error(chalk.red('Failed to start interactive mode:'), error instanceof Error ? error.message : 'Unknown error');
+    process.exit(1);
+  }
 }
 
 /**
@@ -186,6 +274,30 @@ async function runSetupWizard() {
 function displayBanner() {
   console.log(chalk.yellow.bold('🤖 Coding Agent'));
   console.log(chalk.gray('AI Programming Assistant v' + version));
+  console.log();
+}
+
+/**
+ * Display chat help information
+ */
+function displayChatHelp() {
+  console.log(chalk.yellow('💡 Coding Agent Help'));
+  console.log();
+  console.log(chalk.white('Available Commands:'));
+  console.log(chalk.gray('  help               - Show this help message'));
+  console.log(chalk.gray('  exit, quit, q      - Exit interactive mode'));
+  console.log();
+  console.log(chalk.white('Example Questions:'));
+  console.log(chalk.gray('  "Explain what this project does"'));
+  console.log(chalk.gray('  "List files in the src directory"'));
+  console.log(chalk.gray('  "Help me understand this error"'));
+  console.log(chalk.gray('  "What are the main components?"'));
+  console.log(chalk.gray('  "Show me the test files"'));
+  console.log();
+  console.log(chalk.white('Tips:'));
+  console.log(chalk.gray('  • Be specific about what you want to know'));
+  console.log(chalk.gray('  • Ask about files, directories, or code patterns'));
+  console.log(chalk.gray('  • Use natural language - no special syntax needed'));
   console.log();
 }
 

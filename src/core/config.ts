@@ -26,7 +26,7 @@ export class ConfigManager {
   private loadConfig(): Config {
     const defaultConfig: Config = {
       maxTokens: 4000,
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o',
       verbose: false
     };
 
@@ -183,9 +183,9 @@ export class ConfigManager {
         message: 'Select OpenAI model:',
         default: this.config.model,
         choices: [
-          { name: 'GPT-4 Turbo (Recommended)', value: 'gpt-4-turbo-preview' },
-          { name: 'GPT-4', value: 'gpt-4' },
-          { name: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' }
+          { name: 'GPT-4o (Latest, Function Calling)', value: 'gpt-4o' },
+          { name: 'GPT-4o 2024-08-06 (Structured Outputs)', value: 'gpt-4o-2024-08-06' },
+          { name: 'GPT-4.1 (Advanced Reasoning)', value: 'gpt-4.1' }
         ]
       },
       {
