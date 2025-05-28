@@ -163,8 +163,8 @@ export class ToolOrchestrator {
 - Set up error handling framework
 
 **Week 2: Core Tools**
-- Implement Read tool with security measures
 - Implement LS tool with filtering
+- Implement Read tool with security measures
 - Implement Glob tool with pattern matching
 - Add comprehensive testing
 
