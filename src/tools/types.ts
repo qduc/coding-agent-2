@@ -33,13 +33,11 @@ export interface PropertySchema {
  */
 export interface ToolResult {
   success: boolean;
-  data?: any;
-  error?: ToolError;
+  output?: any;
+  error?: ToolError | string;
   metadata?: {
     executionTime?: number;
-    size?: number;
-    type?: string;
-    [key: string]: any;
+    errorCode?: string;
   };
 }
 
@@ -47,26 +45,17 @@ export interface ToolResult {
  * Tool execution error with context
  */
 export class ToolError extends Error {
-  constructor(
-    message: string,
-    public code: ToolErrorCode,
-    public suggestions?: string[]
-  ) {
+  code: ToolErrorCode;
+  suggestions?: string[];
+
+  constructor(message: string, code: ToolErrorCode, suggestions?: string[]) {
     super(message);
     this.name = 'ToolError';
-  }
+    this.code = code;
+    this.suggestions = suggestions;
 
-  /**
-   * Convert to user-friendly error message
-   */
-  toUserMessage(): string {
-    const baseMessage = this.message;
-
-    if (this.suggestions && this.suggestions.length > 0) {
-      return `${baseMessage}\n\nSuggestions:\n${this.suggestions.map(s => `  • ${s}`).join('\n')}`;
-    }
-
-    return baseMessage;
+    // Set the prototype explicitly to ensure instanceof works correctly
+    Object.setPrototypeOf(this, ToolError.prototype);
   }
 }
 
@@ -81,6 +70,7 @@ export type ToolErrorCode =
   | 'VALIDATION_ERROR'
   | 'FILE_TOO_LARGE'
   | 'OPERATION_TIMEOUT'
+  | 'DIRECTORY_ERROR'
   | 'UNKNOWN_ERROR';
 
 /**

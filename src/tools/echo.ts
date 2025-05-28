@@ -1,68 +1,46 @@
 /**
- * Example Echo Tool - demonstrates BaseTool usage
- *
- * This is a simple example tool that echoes back the input with optional formatting.
- * It serves as a template and testing tool for the BaseTool infrastructure.
+ * Echo tool - Simple test tool that echoes back the input
+ * Used for testing and debugging the tool system
  */
 
 import { BaseTool } from './base';
 import { ToolSchema, ToolResult } from './types';
 
-interface EchoParams {
+export interface EchoParams {
   message: string;
-  uppercase?: boolean;
   repeat?: number;
 }
 
 export class EchoTool extends BaseTool {
   readonly name = 'echo';
-  readonly description = 'Echo back a message with optional formatting (for testing and demonstration)';
+  readonly description = 'Echo back a message (useful for testing)';
+
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
       message: {
         type: 'string',
-        description: 'The message to echo back',
-        minLength: 1,
-        maxLength: 1000
-      },
-      uppercase: {
-        type: 'boolean',
-        description: 'Convert message to uppercase'
+        description: 'Message to echo back'
       },
       repeat: {
         type: 'number',
         description: 'Number of times to repeat the message',
+        default: 1,
         minimum: 1,
         maximum: 10
       }
     },
-    required: ['message'],
-    additionalProperties: false
+    required: ['message']
   };
 
   protected async executeImpl(params: EchoParams): Promise<ToolResult> {
-    let { message, uppercase = false, repeat = 1 } = params;
+    const { message, repeat = 1 } = params;
 
-    // Apply formatting
-    if (uppercase) {
-      message = message.toUpperCase();
-    }
+    const repeatedMessage = Array(repeat).fill(message).join(' ');
 
-    // Repeat the message
-    const result = Array(repeat).fill(message).join(' ');
-
-    return this.createSuccessResult(result, {
-      originalMessage: params.message,
-      formatted: uppercase,
-      repetitions: repeat,
-      outputLength: result.length,
-      type: 'echo'
+    return this.createSuccessResult(repeatedMessage, {
+      originalMessage: message,
+      repeatCount: repeat
     });
   }
-}
-
-// Export a factory function for easy instantiation
-export function createEchoTool(): EchoTool {
-  return new EchoTool();
 }

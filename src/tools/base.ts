@@ -195,10 +195,10 @@ export abstract class BaseTool {
   /**
    * Create a successful tool result
    */
-  protected createSuccessResult(data: any, metadata?: any): ToolResult {
+  protected createSuccessResult(output: any, metadata?: any): ToolResult {
     return {
       success: true,
-      data,
+      output,
       metadata
     };
   }
