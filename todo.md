@@ -1,9 +1,9 @@
 ## Coding Agent Todo List
 
 ### Phase 1: Quick Start Foundation (MVP)
-- [ ] Set up Node.js/TypeScript project structure
-- [ ] Install core dependencies (commander, inquirer, chalk, openai)
-- [ ] Create basic CLI entry point with `coding-agent` command
+- [x] Set up Node.js/TypeScript project structure
+- [x] Install core dependencies (commander, inquirer, chalk, openai)
+- [x] Create basic CLI entry point with `coding-agent` command
 - [ ] Add configuration management for API keys
 - [ ] Set up OpenAI API integration with streaming
 
