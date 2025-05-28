@@ -1,0 +1,193 @@
+import OpenAI from 'openai';
+import chalk from 'chalk';
+import { configManager } from '../core/config';
+
+export interface Message {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface StreamingResponse {
+  content: string;
+  finishReason: string | null;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+
+export class LLMService {
+  private openai: OpenAI | null = null;
+  private initialized = false;
+
+  /**
+   * Initialize OpenAI client
+   */
+  async initialize(): Promise<boolean> {
+    try {
+      const config = configManager.getConfig();
+
+      if (!config.openaiApiKey) {
+        return false;
+      }
+
+      this.openai = new OpenAI({
+        apiKey: config.openaiApiKey
+      });
+
+      // Test the connection
+      await this.testConnection();
+      this.initialized = true;
+      return true;
+    } catch (error) {
+      console.error(chalk.red('Failed to initialize OpenAI:'), error instanceof Error ? error.message : 'Unknown error');
+      return false;
+    }
+  }
+
+  /**
+   * Test OpenAI connection
+   */
+  private async testConnection(): Promise<void> {
+    if (!this.openai) {
+      throw new Error('OpenAI client not initialized');
+    }
+
+    // Simple test to verify API key works
+    await this.openai.models.list();
+  }
+
+  /**
+   * Check if service is ready
+   */
+  isReady(): boolean {
+    return this.initialized && this.openai !== null;
+  }
+
+  /**
+   * Send a message and get streaming response
+   */
+  async streamMessage(
+    messages: Message[],
+    onChunk: (chunk: string) => void,
+    onComplete?: (response: StreamingResponse) => void
+  ): Promise<StreamingResponse> {
+    if (!this.isReady()) {
+      throw new Error('LLM service not initialized. Run setup first.');
+    }
+
+    const config = configManager.getConfig();
+
+    try {
+      const stream = await this.openai!.chat.completions.create({
+        model: config.model || 'gpt-4-turbo-preview',
+        messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        max_tokens: config.maxTokens || 4000,
+        stream: true,
+        temperature: 0.7
+      });
+
+      let fullContent = '';
+      let finishReason: string | null = null;
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta;
+
+        if (delta?.content) {
+          fullContent += delta.content;
+          onChunk(delta.content);
+        }
+
+        if (chunk.choices[0]?.finish_reason) {
+          finishReason = chunk.choices[0].finish_reason;
+        }
+      }
+
+      const response: StreamingResponse = {
+        content: fullContent,
+        finishReason
+      };
+
+      if (onComplete) {
+        onComplete(response);
+      }
+
+      return response;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`OpenAI API error: ${error.message}`);
+      }
+      throw new Error('Unknown OpenAI API error');
+    }
+  }
+
+  /**
+   * Send a simple message and get complete response
+   */
+  async sendMessage(messages: Message[]): Promise<string> {
+    if (!this.isReady()) {
+      throw new Error('LLM service not initialized. Run setup first.');
+    }
+
+    const config = configManager.getConfig();
+
+    try {
+      const response = await this.openai!.chat.completions.create({
+        model: config.model || 'gpt-4-turbo-preview',
+        messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        max_tokens: config.maxTokens || 4000,
+        temperature: 0.7
+      });
+
+      return response.choices[0]?.message?.content || '';
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`OpenAI API error: ${error.message}`);
+      }
+      throw new Error('Unknown OpenAI API error');
+    }
+  }
+
+  /**
+   * Create a system message for coding assistant context
+   */
+  createSystemMessage(): Message {
+    return {
+      role: 'system',
+      content: `You are a helpful coding assistant. You help developers understand, analyze, and work with their code.
+
+Key capabilities:
+- Read and analyze files in the project
+- Explain code functionality and structure
+- Help debug issues and suggest improvements
+- Provide clear, concise explanations
+- Ask clarifying questions when needed
+
+Always be helpful, accurate, and focused on the specific coding task at hand.`
+    };
+  }
+
+  /**
+   * Format user input as a message
+   */
+  createUserMessage(content: string): Message {
+    return {
+      role: 'user',
+      content
+    };
+  }
+
+  /**
+   * Format assistant response as a message
+   */
+  createAssistantMessage(content: string): Message {
+    return {
+      role: 'assistant',
+      content
+    };
+  }
+}
+
+// Export singleton instance
+export const llmService = new LLMService();

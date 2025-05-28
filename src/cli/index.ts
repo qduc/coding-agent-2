@@ -4,6 +4,8 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { configManager } from '../core/config';
+import { llmService } from '../services/llm';
 
 // Read version from package.json
 const packageJsonPath = path.join(__dirname, '../../package.json');
@@ -23,11 +25,45 @@ async function main() {
       .argument('[command]', 'Direct command to execute (e.g. "help me understand this file")')
       .option('-v, --verbose', 'Enable verbose output')
       .option('--no-color', 'Disable colored output')
+      .option('--setup', 'Run configuration setup wizard')
+      .option('--config', 'Show current configuration')
       .helpOption('-h, --help', 'Display help information')
       .action(async (command: string | undefined, options: any) => {
         // Handle colored output setting
         if (options.noColor) {
           chalk.level = 0;
+        }
+
+        // Handle setup wizard
+        if (options.setup) {
+          await runSetupWizard();
+          return;
+        }
+
+        // Handle config display
+        if (options.config) {
+          configManager.displayConfig();
+          return;
+        }
+
+        // Validate configuration before proceeding
+        const validation = configManager.validate();
+        if (!validation.isValid) {
+          console.error(chalk.red('Configuration Error:'));
+          validation.errors.forEach((error: string) => {
+            console.error(chalk.red('  •'), error);
+          });
+          console.log();
+          console.log(chalk.yellow('Run'), chalk.white('coding-agent --setup'), chalk.yellow('to configure the agent.'));
+          process.exit(1);
+        }
+
+        // Initialize LLM service
+        const initialized = await llmService.initialize();
+        if (!initialized) {
+          console.error(chalk.red('Failed to initialize AI service.'));
+          console.log(chalk.yellow('Run'), chalk.white('coding-agent --setup'), chalk.yellow('to configure the agent.'));
+          process.exit(1);
         }
 
         if (command) {
@@ -59,15 +95,34 @@ async function handleDirectCommand(command: string, options: any) {
   console.log(chalk.gray('Processing your request...'));
   console.log();
 
-  // TODO: Implement actual command processing with AI agent
-  // For now, provide a placeholder response
-  console.log(chalk.green('Command received:'), `"${command}"`);
-  console.log();
-  console.log(chalk.cyan('📝 Response:'));
-  console.log('I understand you want me to:', command);
-  console.log();
-  console.log(chalk.gray('Note: Full AI integration is coming soon! This is the basic CLI foundation.'));
-  console.log(chalk.gray('The agent will soon be able to read files, analyze code, and provide intelligent assistance.'));
+  try {
+    // Create conversation with system message and user command
+    const systemMessage = llmService.createSystemMessage();
+    const userMessage = llmService.createUserMessage(command);
+
+    console.log(chalk.cyan('📝 Response:'));
+
+    // Stream the response
+    await llmService.streamMessage(
+      [systemMessage, userMessage],
+      (chunk: string) => {
+        // Print each chunk as it arrives
+        process.stdout.write(chunk);
+      },
+      (response: any) => {
+        // Print newline when complete
+        console.log();
+        console.log();
+
+        if (options.verbose) {
+          console.log(chalk.gray('Finish reason:'), response.finishReason);
+        }
+      }
+    );
+  } catch (error) {
+    console.error(chalk.red('Error processing command:'), error instanceof Error ? error.message : 'Unknown error');
+    process.exit(1);
+  }
 }
 
 /**
@@ -92,6 +147,32 @@ async function startInteractiveMode(options: any) {
   console.log(chalk.gray('  coding-agent "analyze the test failures"'));
   console.log();
   console.log(chalk.gray('Use'), chalk.white('coding-agent --help'), chalk.gray('for more options.'));
+}
+
+/**
+ * Run the configuration setup wizard
+ */
+async function runSetupWizard() {
+  try {
+    await configManager.setupWizard();
+
+    // Test the connection after setup
+    console.log(chalk.blue('Testing connection...'));
+    const initialized = await llmService.initialize();
+
+    if (initialized) {
+      console.log(chalk.green('✅ Setup complete! Your coding agent is ready to use.'));
+      console.log();
+      console.log(chalk.white('Try it out:'));
+      console.log(chalk.gray('  coding-agent "help me understand this project"'));
+    } else {
+      console.log(chalk.red('❌ Setup completed but connection test failed.'));
+      console.log(chalk.yellow('Please check your API key and try again.'));
+    }
+  } catch (error) {
+    console.error(chalk.red('Setup failed:'), error instanceof Error ? error.message : 'Unknown error');
+    process.exit(1);
+  }
 }
 
 /**
