@@ -31,5 +31,7 @@ export { validateParams, validatePath, validateFileExtension } from './validatio
 export type { RetryOptions } from './retry';
 export { executeWithRetry, executeWithTimeout, DEFAULT_RETRY_OPTIONS } from './retry';
 
-export const tools = [
+// Default tools array - can be used to create orchestrator with common tools
+export const defaultTools = [
+  // LSTool will be instantiated when needed
 ];

@@ -309,7 +309,7 @@ export class LSTool extends BaseTool {
   private isBlockedPath(targetPath: string): boolean {
     const normalizedPath = path.normalize(targetPath);
     const pathParts = normalizedPath.split(path.sep);
-    
+
     return this.context.blockedPaths.some(blockedPattern => {
       // Check if any part of the path matches the blocked pattern
       return pathParts.some(part => {

@@ -3,12 +3,25 @@ import chalk from 'chalk';
 import { configManager } from '../core/config';
 
 export interface Message {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: any[];
+  tool_call_id?: string;
 }
 
 export interface StreamingResponse {
   content: string;
+  finishReason: string | null;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+
+export interface FunctionCallResponse {
+  content: string | null;
+  tool_calls?: any[];
   finishReason: string | null;
   usage?: {
     promptTokens: number;
@@ -141,6 +154,62 @@ export class LLMService {
       });
 
       return response.choices[0]?.message?.content || '';
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`OpenAI API error: ${error.message}`);
+      }
+      throw new Error('Unknown OpenAI API error');
+    }
+  }
+
+  /**
+   * Send a message with function calling support
+   */
+  async sendMessageWithTools(
+    messages: Message[],
+    functions: any[] = []
+  ): Promise<FunctionCallResponse> {
+    if (!this.isReady()) {
+      throw new Error('LLM service not initialized. Run setup first.');
+    }
+
+    const config = configManager.getConfig();
+
+    try {
+      const requestParams: any = {
+        model: config.model || 'gpt-4-turbo-preview',
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
+          ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id })
+        })),
+        max_tokens: config.maxTokens || 4000,
+        temperature: 0.7
+      };
+
+      // Add function calling if functions are provided
+      if (functions.length > 0) {
+        requestParams.tools = functions.map(func => ({
+          type: 'function',
+          function: func
+        }));
+        requestParams.tool_choice = 'auto';
+      }
+
+      const response = await this.openai!.chat.completions.create(requestParams);
+
+      const choice = response.choices[0];
+      return {
+        content: choice.message.content,
+        tool_calls: choice.message.tool_calls,
+        finishReason: choice.finish_reason,
+        usage: response.usage ? {
+          promptTokens: response.usage.prompt_tokens,
+          completionTokens: response.usage.completion_tokens,
+          totalTokens: response.usage.total_tokens
+        } : undefined
+      };
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`OpenAI API error: ${error.message}`);

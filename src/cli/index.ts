@@ -6,6 +6,9 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { configManager } from '../core/config';
 import { llmService } from '../services/llm';
+import { ToolOrchestrator } from '../core/orchestrator';
+import { LSTool } from '../tools/ls';
+import { DEFAULT_TOOL_CONTEXT } from '../tools/types';
 
 // Read version from package.json
 const packageJsonPath = path.join(__dirname, '../../package.json');
@@ -96,29 +99,31 @@ async function handleDirectCommand(command: string, options: any) {
   console.log();
 
   try {
-    // Create conversation with system message and user command
-    const systemMessage = llmService.createSystemMessage();
-    const userMessage = llmService.createUserMessage(command);
+    // Create tool orchestrator with LS tool
+    const lsTool = new LSTool(DEFAULT_TOOL_CONTEXT);
+    const orchestrator = new ToolOrchestrator(llmService, [lsTool]);
+
+    if (options.verbose) {
+      console.log(chalk.blue('🛠️  Registered tools:'), orchestrator.getRegisteredTools().map((t: any) => t.name).join(', '));
+    }
 
     console.log(chalk.cyan('📝 Response:'));
 
-    // Stream the response
-    await llmService.streamMessage(
-      [systemMessage, userMessage],
-      (chunk: string) => {
-        // Print each chunk as it arrives
-        process.stdout.write(chunk);
-      },
-      (response: any) => {
-        // Print newline when complete
-        console.log();
-        console.log();
-
-        if (options.verbose) {
-          console.log(chalk.gray('Finish reason:'), response.finishReason);
-        }
-      }
+    // Process message with tool support
+    const response = await orchestrator.processMessage(
+      command,
+      undefined, // No streaming for now
+      options.verbose
     );
+
+    // Print the response
+    console.log(response);
+    console.log();
+
+    if (options.verbose) {
+      console.log(chalk.gray('Conversation summary:'));
+      console.log(chalk.gray(orchestrator.getConversationSummary()));
+    }
   } catch (error) {
     console.error(chalk.red('Error processing command:'), error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
