@@ -1,17 +1,28 @@
 import { LLMService } from '../services/llm';
 import { configManager } from './config';
 import { ToolLogger } from '../utils/toolLogger';
+import { LSTool } from '../tools/ls';
+import { GlobTool } from '../tools/glob';
+import { ReadTool } from '../tools/read';
+import { ToolOrchestrator } from './orchestrator';
 
 /**
  * Core Agent logic for orchestrating tools and LLM interactions
  */
 export class Agent {
   private llmService: LLMService;
-  private toolRegistry: any; // Will be implemented later
+  private orchestrator: ToolOrchestrator;
 
   constructor() {
     this.llmService = new LLMService();
-    // Tool registry will be initialized later
+
+    // Create instances of all tools
+    const lsTool = new LSTool();
+    const globTool = new GlobTool();
+    const readTool = new ReadTool();
+
+    // Initialize the orchestrator with all tools
+    this.orchestrator = new ToolOrchestrator(this.llmService, [lsTool, globTool, readTool]);
   }
 
   /**
