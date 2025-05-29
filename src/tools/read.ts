@@ -368,9 +368,28 @@ export class ReadTool extends BaseTool {
         lineCount = (content.match(/\r\n|\r|\n/g) || []).length + 1;
 
         // Detect line endings even if no line range was requested
-        if (content.includes('\r\n')) lineEndings.push('CRLF');
-        if (content.includes('\r') && !content.includes('\r\n')) lineEndings.push('CR');
-        if (content.includes('\n')) lineEndings.push('LF');
+        const detectLineEndings = (text: string): string[] => {
+          const endings = new Set<string>();
+        
+          if (text.includes('\r\n')) {
+            endings.add('CRLF');
+          }
+        
+          // Check for standalone CR (not part of CRLF)
+          // We need to look for \r that's not followed by \n
+          if (text.match(/\r(?!\n)/)) {
+            endings.add('CR');
+          }
+        
+          // Check for LF
+          if (text.includes('\n')) {
+            endings.add('LF');
+          }
+        
+          return Array.from(endings);
+        };
+
+        lineEndings = detectLineEndings(content);
 
         // Check for long lines (over 1000 characters)
         const lines = content.split(/\r\n|\r|\n/);
