@@ -8,6 +8,8 @@
 import { BaseTool, ToolResult } from '../tools';
 import { LLMService, Message } from '../services/llm';
 import chalk from 'chalk';
+import { configManager } from './config';
+import { ToolLogger } from '../utils/toolLogger';
 
 export interface ConversationMessage extends Message {
   tool_calls?: any[];
@@ -158,6 +160,7 @@ export class ToolOrchestrator {
     }
 
     try {
+      const { logToolUsage } = configManager.getConfig();
       if (verbose) {
         console.log(chalk.cyan(`🛠️  Executing tool: ${func.name}`));
         console.log(chalk.gray(`   Arguments: ${func.arguments}`));
@@ -185,13 +188,16 @@ export class ToolOrchestrator {
         }
       }
 
+      if (logToolUsage) {
+        ToolLogger.logToolResult(func.name, result.success, result.success ? result.output : result.error);
+      }
+
       // Add tool result to conversation
       this.conversationHistory.push({
         role: 'tool',
         content: JSON.stringify(this.formatToolResult(result)),
         tool_call_id: toolCall.id
       });
-
     } catch (error) {
       const errorMessage = `Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
 
