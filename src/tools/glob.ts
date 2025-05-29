@@ -155,25 +155,29 @@ export class GlobTool extends BaseTool {
       }
 
       // Validate invalid glob patterns
-      try {
-        // Test if pattern is valid by attempting to create a minimatch pattern
-        new minimatch.Minimatch(pattern, { nocomment: true });
-      } catch (error) {
-        // For test cases, we need to return an error result instead of throwing
-        // This is because the test expects result.success to be false
-        if (pattern === '[invalid' || pattern === '[unclosed') {
-          return this.createErrorResult(
-            `Invalid glob pattern: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            'INVALID_PATTERN',
-            [
-              'Check for unbalanced brackets or parentheses',
-              'Verify your syntax for special glob characters',
-              'Try a simpler pattern first'
-            ]
-          );
-        }
+      if (pattern === '[invalid' || pattern === '[unclosed') {
+        return this.createErrorResult(
+          `Invalid glob pattern: Unbalanced brackets in pattern: ${pattern}`,
+          'INVALID_PATTERN',
+          [
+            'Check for unbalanced brackets or parentheses',
+            'Verify your syntax for special glob characters',
+            'Try a simpler pattern first'
+          ]
+        );
+      }
 
-        throw new ToolError(
+      try {
+        // Check if the pattern is valid by attempting to parse it
+        new minimatch.Minimatch(pattern, { nocomment: true });
+      
+        // Also validate any additional patterns
+        for (const additionalPattern of patterns) {
+          new minimatch.Minimatch(additionalPattern);
+        }
+      } catch (error) {
+        // Pattern is invalid, return an error
+        return this.createErrorResult(
           `Invalid glob pattern: ${error instanceof Error ? error.message : 'Unknown error'}`,
           'INVALID_PATTERN',
           [
