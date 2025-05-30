@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import { MarkdownRenderer } from './markdown';
 
 // Mock chalk to return identifiable strings for testing
@@ -316,7 +315,7 @@ describe('MarkdownRenderer', () => {
 
   describe('Performance and Complex Cases', () => {
     test('should handle large documents efficiently', () => {
-      const sections = Array.from({ length: 100 }, (_, i) => 
+      const sections = Array.from({ length: 100 }, (_, i) =>
         `## Section ${i}\nThis is **content** for section ${i} with \`code\` examples.`
       );
       const input = sections.join('\n\n');

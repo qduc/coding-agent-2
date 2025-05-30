@@ -30,8 +30,12 @@ export class ToolLogger {
     if (result) {
       // Format different result types appropriately
       if (typeof result === 'string') {
-        if (result.length > 100) {
-          console.log(chalk.gray('   Result: [truncated]'), result.substring(0, 100) + '...');
+        const lines = result.split('\n');
+        if (lines.length > 4 || result.length > 300) {
+          const preview = lines.slice(0, 4).join('\n');
+          const truncatedInfo = lines.length > 4 ? `... (+${lines.length - 4} more lines)` : '...';
+          console.log(chalk.gray('   Result: [truncated]'));
+          console.log(preview + '\n' + chalk.gray(truncatedInfo));
         } else {
           console.log(chalk.gray('   Result:'), result);
         }
@@ -40,8 +44,12 @@ export class ToolLogger {
       } else if (typeof result === 'object') {
         try {
           const formatted = JSON.stringify(result, null, 2);
-          if (formatted.length > 200) {
+          const lines = formatted.split('\n');
+          if (lines.length > 8 || formatted.length > 400) {
+            const preview = lines.slice(0, 8).join('\n');
+            const truncatedInfo = `... (+${lines.length - 8} more lines)`;
             console.log(chalk.gray('   Result: [truncated object]'));
+            console.log(preview + '\n' + chalk.gray(truncatedInfo));
           } else {
             console.log(chalk.gray('   Result:'), formatted);
           }

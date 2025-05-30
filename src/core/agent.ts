@@ -4,6 +4,7 @@ import { LSTool } from '../tools/ls';
 import { GlobTool } from '../tools/glob';
 import { ReadTool } from '../tools/read';
 import { ToolOrchestrator } from './orchestrator';
+import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
 /**
  * Core Agent - Primary interface for AI programming assistant
@@ -14,6 +15,8 @@ import { ToolOrchestrator } from './orchestrator';
 export class Agent {
   private llmService: LLMService;
   private orchestrator: ToolOrchestrator;
+  private projectDiscovery: ProjectDiscovery;
+  private discoveryResult?: ProjectDiscoveryResult;
 
   constructor() {
     this.llmService = new LLMService();
@@ -25,6 +28,9 @@ export class Agent {
 
     // Initialize the orchestrator with all tools
     this.orchestrator = new ToolOrchestrator(this.llmService, [lsTool, globTool, readTool]);
+
+    // Initialize project discovery
+    this.projectDiscovery = new ProjectDiscovery();
   }
 
   /**
@@ -36,6 +42,12 @@ export class Agent {
     if (!validation.isValid) {
       throw new Error(`Configuration invalid: ${validation.errors.join(', ')}`);
     }
+
+    // Run project discovery
+    this.discoveryResult = await this.projectDiscovery.discover();
+
+    // Set project context in orchestrator
+    this.orchestrator.setProjectContext(this.discoveryResult);
 
     // Initialize LLM service
     return await this.llmService.initialize();
@@ -85,6 +97,13 @@ export class Agent {
    */
   getConversationSummary(): string {
     return this.orchestrator.getConversationSummary();
+  }
+
+  /**
+   * Get project discovery results
+   */
+  getProjectDiscovery(): ProjectDiscoveryResult | undefined {
+    return this.discoveryResult;
   }
 
   /**

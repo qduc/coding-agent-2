@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { configManager } from './config';
 import { ToolLogger } from '../utils/toolLogger';
+import { ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
 export interface ConversationMessage extends Message {
   tool_calls?: any[];
@@ -29,6 +30,7 @@ export interface ToolCall {
 export class ToolOrchestrator {
   private tools: Map<string, BaseTool> = new Map();
   private conversationHistory: ConversationMessage[] = [];
+  private projectContext?: ProjectDiscoveryResult;
 
   constructor(
     private llmService: LLMService,
@@ -45,6 +47,13 @@ export class ToolOrchestrator {
    */
   registerTool(tool: BaseTool): void {
     this.tools.set(tool.name, tool);
+  }
+
+  /**
+   * Set project context from discovery results
+   */
+  setProjectContext(projectContext: ProjectDiscoveryResult): void {
+    this.projectContext = projectContext;
   }
 
   /**
@@ -282,7 +291,11 @@ You have access to the following tools:`;
       .map(tool => `- ${tool.name}: ${tool.description}`)
       .join('\n');
 
-    const fullSystemMessage = `${baseSystemMessage}\n${toolDescriptions}\n\nWhen working with files:
+    // Include project context if available
+    const projectContextSection = this.projectContext ?
+      `\n\n${this.formatProjectContextForPrompt()}\n` : '\n';
+
+    const fullSystemMessage = `${baseSystemMessage}\n${toolDescriptions}${projectContextSection}\nWhen working with files:
 - Use the current working directory (${currentDirectory}) as the base for relative paths
 - When users say "this file" or "this project", they mean files in the current directory
 - Use the ls tool to explore the project structure when needed
@@ -294,6 +307,33 @@ Use these tools when you need to access files or gather information about the pr
       role: 'system',
       content: fullSystemMessage
     };
+  }
+
+  /**
+   * Format project context for inclusion in system prompt
+   */
+  private formatProjectContextForPrompt(): string {
+    if (!this.projectContext) {
+      return '';
+    }
+
+    const lines = [
+      'PROJECT CONTEXT:',
+      this.projectContext.summary,
+      '',
+      'Project Structure:',
+      this.projectContext.projectStructure,
+      '',
+      'Tech Stack:',
+      this.projectContext.techStack,
+      ''
+    ];
+
+    if (this.projectContext.entryPoints.length > 0) {
+      lines.push(`Entry Points: ${this.projectContext.entryPoints.join(', ')}`);
+    }
+
+    return lines.join('\n');
   }
 
   /**
