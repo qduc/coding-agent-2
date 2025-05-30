@@ -28,6 +28,17 @@ export class ToolLogger {
     console.log(status, chalk.cyan(toolName), success ? 'completed' : 'failed');
 
     if (result) {
+      // Special handling for Read tool - don't output file content
+      if (toolName.toLowerCase().includes('read')) {
+        if (typeof result === 'string' && result.length > 0) {
+          const lineCount = result.split('\n').length;
+          console.log(chalk.gray('   Result:'), `[File content loaded successfully, ${lineCount} lines]`);
+        } else {
+          console.log(chalk.gray('   Result:'), result);
+        }
+        return;
+      }
+
       // Format different result types appropriately
       if (typeof result === 'string') {
         const lines = result.split('\n');
