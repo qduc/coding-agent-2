@@ -34,3 +34,4 @@ coverage/
 *.local
 *.sublime-workspace
 *.sublime-project
+.aider*

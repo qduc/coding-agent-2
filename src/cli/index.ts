@@ -5,10 +5,7 @@ import chalk from 'chalk';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { configManager } from '../core/config';
-import { llmService } from '../services/llm';
-import { ToolOrchestrator } from '../core/orchestrator';
-import { LSTool } from '../tools/ls';
-import { DEFAULT_TOOL_CONTEXT } from '../tools/types';
+import { Agent } from '../core/agent';
 
 // Read version from package.json
 const packageJsonPath = path.join(__dirname, '../../package.json');
@@ -61,8 +58,9 @@ async function main() {
           process.exit(1);
         }
 
-        // Initialize LLM service
-        const initialized = await llmService.initialize();
+        // Create and initialize agent
+        const agent = new Agent();
+        const initialized = await agent.initialize();
         if (!initialized) {
           console.error(chalk.red('Failed to initialize AI service.'));
           console.log(chalk.yellow('Run'), chalk.white('coding-agent --setup'), chalk.yellow('to configure the agent.'));
@@ -71,10 +69,10 @@ async function main() {
 
         if (command) {
           // Direct command mode
-          await handleDirectCommand(command, options);
+          await handleDirectCommand(command, agent, options);
         } else {
           // Interactive chat mode
-          await startInteractiveMode(options);
+          await startInteractiveMode(agent, options);
         }
       });
 
@@ -89,7 +87,7 @@ async function main() {
 /**
  * Handle direct command execution
  */
-async function handleDirectCommand(command: string, options: any) {
+async function handleDirectCommand(command: string, agent: Agent, options: any) {
   if (options.verbose) {
     console.log(chalk.blue('Executing direct command:'), command);
   }
@@ -99,18 +97,14 @@ async function handleDirectCommand(command: string, options: any) {
   console.log();
 
   try {
-    // Create tool orchestrator with LS tool
-    const lsTool = new LSTool(DEFAULT_TOOL_CONTEXT);
-    const orchestrator = new ToolOrchestrator(llmService, [lsTool]);
-
     if (options.verbose) {
-      console.log(chalk.blue('🛠️  Registered tools:'), orchestrator.getRegisteredTools().map((t: any) => t.name).join(', '));
+      console.log(chalk.blue('🛠️  Registered tools:'), agent.getRegisteredTools().map(t => t.name).join(', '));
     }
 
     console.log(chalk.cyan('📝 Response:'));
 
-    // Process message with tool support
-    const response = await orchestrator.processMessage(
+    // Process message with the agent
+    const response = await agent.processMessage(
       command,
       undefined, // No streaming for now
       options.verbose
@@ -122,7 +116,7 @@ async function handleDirectCommand(command: string, options: any) {
 
     if (options.verbose) {
       console.log(chalk.gray('Conversation summary:'));
-      console.log(chalk.gray(orchestrator.getConversationSummary()));
+      console.log(chalk.gray(agent.getConversationSummary()));
     }
   } catch (error) {
     console.error(chalk.red('Error processing command:'), error instanceof Error ? error.message : 'Unknown error');
@@ -133,7 +127,7 @@ async function handleDirectCommand(command: string, options: any) {
 /**
  * Start interactive chat mode
  */
-async function startInteractiveMode(options: any) {
+async function startInteractiveMode(agent: Agent, options: any) {
   if (options.verbose) {
     console.log(chalk.blue('Starting interactive chat mode...'));
   }
@@ -146,12 +140,8 @@ async function startInteractiveMode(options: any) {
     // Import inquirer dynamically
     const inquirer = await import('inquirer');
 
-    // Create tool orchestrator with LS tool
-    const lsTool = new LSTool(DEFAULT_TOOL_CONTEXT);
-    const orchestrator = new ToolOrchestrator(llmService, [lsTool]);
-
     if (options.verbose) {
-      console.log(chalk.blue('🛠️  Registered tools:'), orchestrator.getRegisteredTools().map((t: any) => t.name).join(', '));
+      console.log(chalk.blue('🛠️  Registered tools:'), agent.getRegisteredTools().map(t => t.name).join(', '));
     }
 
     // Display welcome message and instructions
@@ -206,7 +196,7 @@ async function startInteractiveMode(options: any) {
         try {
           console.log(chalk.cyan('🤖 Agent:'), chalk.gray('Thinking...'));
 
-          const response = await orchestrator.processMessage(
+          const response = await agent.processMessage(
             trimmedMessage,
             undefined, // No streaming callback for now
             options.verbose
@@ -251,7 +241,8 @@ async function runSetupWizard() {
 
     // Test the connection after setup
     console.log(chalk.blue('Testing connection...'));
-    const initialized = await llmService.initialize();
+    const agent = new Agent();
+    const initialized = await agent.initialize();
 
     if (initialized) {
       console.log(chalk.green('✅ Setup complete! Your coding agent is ready to use.'));

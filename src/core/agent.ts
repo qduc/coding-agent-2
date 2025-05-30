@@ -1,13 +1,15 @@
 import { LLMService } from '../services/llm';
 import { configManager } from './config';
-import { ToolLogger } from '../utils/toolLogger';
 import { LSTool } from '../tools/ls';
 import { GlobTool } from '../tools/glob';
 import { ReadTool } from '../tools/read';
 import { ToolOrchestrator } from './orchestrator';
 
 /**
- * Core Agent logic for orchestrating tools and LLM interactions
+ * Core Agent - Primary interface for AI programming assistant
+ *
+ * Provides high-level API for initialization, configuration, and message processing.
+ * Delegates tool execution to ToolOrchestrator while handling session management.
  */
 export class Agent {
   private llmService: LLMService;
@@ -16,7 +18,7 @@ export class Agent {
   constructor() {
     this.llmService = new LLMService();
 
-    // Create instances of all tools
+    // Create instances of all tools with default context
     const lsTool = new LSTool();
     const globTool = new GlobTool();
     const readTool = new ReadTool();
@@ -26,89 +28,69 @@ export class Agent {
   }
 
   /**
-   * Initialize the agent
+   * Initialize the agent and validate configuration
    */
   async initialize(): Promise<boolean> {
+    // Validate configuration
+    const validation = configManager.validate();
+    if (!validation.isValid) {
+      throw new Error(`Configuration invalid: ${validation.errors.join(', ')}`);
+    }
+
+    // Initialize LLM service
     return await this.llmService.initialize();
   }
 
   /**
-   * Execute a tool and log the results if enabled
+   * Check if agent is ready for operation
    */
-  async executeToolWithLogging(toolName: string, args: any): Promise<any> {
-    const config = configManager.getConfig();
-    let result;
-    let success = true;
-
-    try {
-      // This is a placeholder for actual tool execution
-      // Will be implemented with the tool registry
-      result = { success: true, data: 'Tool execution result' };
-    } catch (error) {
-      success = false;
-      result = error;
-    }
-
-    // Log tool result if enabled
-    if (config.logToolUsage) {
-      ToolLogger.logToolResult(toolName, success, result);
-    }
-
-    return result;
+  isReady(): boolean {
+    return this.llmService.isReady();
   }
 
   /**
-   * Process a user message with tool support
+   * Process a user message with full tool support
    */
-  async processMessage(userMessage: string, availableTools: any[]): Promise<string> {
-    // Create system and user messages
-    const messages = [
-      this.llmService.createSystemMessage(),
-      this.llmService.createUserMessage(userMessage)
-    ];
-
-    // Send message with tools and logging support
-    const config = configManager.getConfig();
-    const response = await this.llmService.sendMessageWithTools(
-      messages,
-      availableTools,
-      config.logToolUsage
-        ? (toolName: string, args: any) => {
-            ToolLogger.logToolCall(toolName, args);
-          }
-        : undefined
-    );
-
-    // Process and execute tool calls
-    if (response.tool_calls) {
-      for (const toolCall of response.tool_calls) {
-        if (toolCall.type === 'function') {
-          const { name, arguments: argsString } = toolCall.function;
-          const args = JSON.parse(argsString);
-
-          // Execute the tool and get result
-          const result = await this.executeToolWithLogging(name, args);
-
-          // Add the tool response as a message
-          messages.push({
-            role: 'assistant',
-            content: null,
-            tool_calls: [toolCall]
-          });
-
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(result)
-          });
-        }
-      }
-
-      // Get final response after tool usage
-      const finalResponse = await this.llmService.sendMessage(messages);
-      return finalResponse;
+  async processMessage(
+    userMessage: string,
+    onChunk?: (chunk: string) => void,
+    verbose: boolean = false
+  ): Promise<string> {
+    if (!this.isReady()) {
+      throw new Error('Agent not initialized. Call initialize() first.');
     }
 
-    return response.content || '';
+    return await this.orchestrator.processMessage(userMessage, onChunk, verbose);
+  }
+
+  /**
+   * Get list of registered tools
+   */
+  getRegisteredTools(): Array<{ name: string; description: string }> {
+    return this.orchestrator.getRegisteredTools().map(tool => ({
+      name: tool.name,
+      description: tool.description
+    }));
+  }
+
+  /**
+   * Clear conversation history
+   */
+  clearHistory(): void {
+    this.orchestrator.clearHistory();
+  }
+
+  /**
+   * Get conversation summary for debugging
+   */
+  getConversationSummary(): string {
+    return this.orchestrator.getConversationSummary();
+  }
+
+  /**
+   * Register a new tool
+   */
+  registerTool(tool: any): void {
+    this.orchestrator.registerTool(tool);
   }
 }

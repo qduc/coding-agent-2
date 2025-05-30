@@ -12,6 +12,42 @@ export { BaseTool } from './base';
 export { LSTool } from './ls';
 export type { LSParams, FileEntry, LSResult } from './ls';
 
+export { ReadTool } from './read';
+export type { ReadParams, ReadResult } from './read';
+/**
+ * Tools module index
+ *
+ * Exports all available tools to simplify imports
+ */
+
+// Base tool functionality
+export * from './types';
+export * from './base';
+export * from './validation';
+export * from './retry';
+
+// Tool implementations
+export * from './ls';
+export * from './glob';
+export * from './read';
+
+// Tool registry for dynamic tool loading
+import { BaseTool } from './base';
+import { LSTool } from './ls';
+import { GlobTool } from './glob';
+import { ReadTool } from './read';
+
+/**
+ * Registry of all available tools
+ */
+export const tools: Record<string, new (...args: any[]) => BaseTool> = {
+  ls: LSTool,
+  glob: GlobTool,
+  read: ReadTool
+};
+export { GlobTool } from './glob';
+export type { GlobParams, GlobMatch, GlobResult } from './glob';
+
 // Type definitions
 export type {
   ToolSchema,

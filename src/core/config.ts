@@ -8,6 +8,7 @@ export interface Config {
   verbose?: boolean;
   maxTokens?: number;
   model?: string;
+  logToolUsage?: boolean;
 }
 
 export class ConfigManager {
@@ -27,7 +28,8 @@ export class ConfigManager {
     const defaultConfig: Config = {
       maxTokens: 4000,
       model: 'gpt-4o',
-      verbose: false
+      verbose: false,
+      logToolUsage: true
     };
 
     let fileConfig: Partial<Config> = {};
@@ -55,6 +57,9 @@ export class ConfigManager {
     }
     if (process.env.CODING_AGENT_MAX_TOKENS) {
       envConfig.maxTokens = parseInt(process.env.CODING_AGENT_MAX_TOKENS, 10);
+    }
+    if (process.env.CODING_AGENT_LOG_TOOLS) {
+      envConfig.logToolUsage = process.env.CODING_AGENT_LOG_TOOLS === 'true';
     }
 
     return { ...defaultConfig, ...fileConfig, ...envConfig };
@@ -134,6 +139,7 @@ export class ConfigManager {
     console.log(`Model: ${chalk.white(config.model)}`);
     console.log(`Max Tokens: ${chalk.white(config.maxTokens)}`);
     console.log(`API Key: ${config.openaiApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
+    console.log(`Tool Logging: ${config.logToolUsage ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
     console.log(`Config file: ${chalk.gray(this.configPath)}`);
     console.log();
   }
@@ -176,7 +182,7 @@ export class ConfigManager {
     }
 
     // Optional configuration
-    const { model, maxTokens } = await inquirer.default.prompt([
+    const { model, maxTokens, logToolUsage } = await inquirer.default.prompt([
       {
         type: 'list',
         name: 'model',
@@ -199,11 +205,17 @@ export class ConfigManager {
           }
           return true;
         }
+      },
+      {
+        type: 'confirm',
+        name: 'logToolUsage',
+        message: 'Enable tool usage logging?',
+        default: this.config.logToolUsage || false
       }
     ]);
 
     // Save configuration (excluding API key)
-    await this.saveConfig({ model, maxTokens });
+    await this.saveConfig({ model, maxTokens, logToolUsage });
 
     console.log();
     console.log(chalk.green('✅ Configuration saved!'));

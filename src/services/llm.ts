@@ -1,6 +1,9 @@
 import OpenAI from 'openai';
 import chalk from 'chalk';
 import { configManager } from '../core/config';
+import * as os from 'os';
+import { execSync } from 'child_process';
+import { ToolLogger } from '../utils/toolLogger';
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -167,7 +170,8 @@ export class LLMService {
    */
   async sendMessageWithTools(
     messages: Message[],
-    functions: any[] = []
+    functions: any[] = [],
+    onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
     if (!this.isReady()) {
       throw new Error('LLM service not initialized. Run setup first.');
@@ -200,6 +204,24 @@ export class LLMService {
       const response = await this.openai!.chat.completions.create(requestParams);
 
       const choice = response.choices[0];
+      const { logToolUsage } = configManager.getConfig();
+      if (choice.message.tool_calls) {
+        for (const toolCall of choice.message.tool_calls) {
+          const { name, arguments: argsString } = toolCall.function;
+          let parsedArgs: any;
+          try {
+            parsedArgs = JSON.parse(argsString);
+          } catch {
+            parsedArgs = argsString;
+          }
+          if (logToolUsage) {
+            ToolLogger.logToolCall(name, parsedArgs);
+          }
+          if (onToolCall) {
+            onToolCall(name, parsedArgs);
+          }
+        }
+      }
       return {
         content: choice.message.content,
         tool_calls: choice.message.tool_calls,
@@ -222,9 +244,20 @@ export class LLMService {
    * Create a system message for coding assistant context
    */
   createSystemMessage(): Message {
+    let gitBranch = 'unknown';
+    try {
+      gitBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+    } catch {}
+    const environmentInfo = `Environment:
+- OS: ${os.type()} ${os.release()} (${process.platform}/${process.arch})
+- Node.js: ${process.version}
+- Working directory: ${process.cwd()}
+- Git branch: ${gitBranch}`;
     return {
       role: 'system',
       content: `You are a helpful coding assistant. You help developers understand, analyze, and work with their code.
+
+${environmentInfo}
 
 Key capabilities:
 - Read and analyze files in the project

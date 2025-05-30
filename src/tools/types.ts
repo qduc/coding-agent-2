@@ -71,7 +71,10 @@ export type ToolErrorCode =
   | 'FILE_TOO_LARGE'
   | 'OPERATION_TIMEOUT'
   | 'DIRECTORY_ERROR'
-  | 'UNKNOWN_ERROR';
+  | 'UNKNOWN_ERROR'
+  | 'INVALID_PATTERN'
+  | 'INVALID_FILE_TYPE'
+  | 'BINARY_FILE';
 
 /**
  * Tool execution context for security and limits

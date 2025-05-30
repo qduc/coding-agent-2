@@ -117,7 +117,7 @@ export class ReadTool extends BaseTool {
       try {
         validatePath(filePath, { allowAbsolute: true, mustExist: true });
       } catch (error) {
-        if (error instanceof ToolError && error.code === 'VALIDATION_ERROR' && 
+        if (error instanceof ToolError && error.code === 'VALIDATION_ERROR' &&
             (error.message.includes('does not exist') || error.message.includes('Cannot access path'))) {
           throw new ToolError(`File not found: ${filePath}`, 'FILE_NOT_FOUND', [
             'Check if the file path is correct',
@@ -228,19 +228,7 @@ export class ReadTool extends BaseTool {
         );
       }
 
-      // Check file extension restrictions
-      if (this.context.allowedExtensions.length > 0) {
-        try {
-          validateFileExtension(filePath, this.context.allowedExtensions);
-        } catch (error) {
-          if (error instanceof ToolError && error.code === 'VALIDATION_ERROR' && error.message.includes('extension')) {
-            throw new ToolError(error.message, 'INVALID_FILE_TYPE', error.suggestions);
-          }
-          throw error;
-        }
-      }
-
-      // Detect binary file when text encoding is requested
+      // Detect binary file when text encoding is requested - check this BEFORE extension validation
       const isBinary = await this.isBinaryFile(filePath);
       if (isBinary && (encoding === 'utf8' || encoding === 'ascii')) {
         throw new ToolError(
@@ -251,12 +239,27 @@ export class ReadTool extends BaseTool {
             'Check if you specified the correct file path'
           ]
         );
-      } else if (encoding !== 'utf8' && encoding !== 'ascii' && encoding !== 'hex' && encoding !== 'base64' && encoding !== 'binary') {
+      }
+
+      // Validate encoding parameter
+      if (encoding !== 'utf8' && encoding !== 'ascii' && encoding !== 'hex' && encoding !== 'base64' && encoding !== 'binary') {
         throw new ToolError(
           `Invalid encoding: ${encoding}. Must be one of: utf8, ascii, base64, hex, binary`,
           'VALIDATION_ERROR',
           ['Use one of the supported encodings: utf8, ascii, base64, hex, binary']
         );
+      }
+
+      // Check file extension restrictions - but only for non-binary files or when using text encodings
+      if (this.context.allowedExtensions.length > 0 && (!isBinary || (encoding === 'utf8' || encoding === 'ascii'))) {
+        try {
+          validateFileExtension(filePath, this.context.allowedExtensions);
+        } catch (error) {
+          if (error instanceof ToolError && error.code === 'VALIDATION_ERROR' && error.message.includes('extension')) {
+            throw new ToolError(error.message, 'INVALID_FILE_TYPE', error.suggestions);
+          }
+          throw error;
+        }
       }
     } catch (error) {
       if (error instanceof ToolError) {
@@ -313,22 +316,22 @@ export class ReadTool extends BaseTool {
       // Improved line endings detection
       const detectLineEndings = (text: string): string[] => {
         const endings = new Set<string>();
-      
+
         if (text.includes('\r\n')) {
           endings.add('CRLF');
         }
-      
+
         // Check for standalone CR (not part of CRLF)
         // We need to look for \r that's not followed by \n
         if (text.match(/\r(?!\n)/)) {
           endings.add('CR');
         }
-      
+
         // Check for LF
         if (text.includes('\n')) {
           endings.add('LF');
         }
-      
+
         return Array.from(endings);
       };
 
@@ -370,22 +373,22 @@ export class ReadTool extends BaseTool {
         // Detect line endings even if no line range was requested
         const detectLineEndings = (text: string): string[] => {
           const endings = new Set<string>();
-        
+
           if (text.includes('\r\n')) {
             endings.add('CRLF');
           }
-        
+
           // Check for standalone CR (not part of CRLF)
           // We need to look for \r that's not followed by \n
           if (text.match(/\r(?!\n)/)) {
             endings.add('CR');
           }
-        
+
           // Check for LF
           if (text.includes('\n')) {
             endings.add('LF');
           }
-        
+
           return Array.from(endings);
         };
 
