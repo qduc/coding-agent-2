@@ -30,12 +30,14 @@ export * from './retry';
 export * from './ls';
 export * from './glob';
 export * from './read';
+export * from './ripgrep';
 
 // Tool registry for dynamic tool loading
 import { BaseTool } from './base';
 import { LSTool } from './ls';
 import { GlobTool } from './glob';
 import { ReadTool } from './read';
+import { RipgrepTool } from './ripgrep';
 
 /**
  * Registry of all available tools
@@ -43,10 +45,14 @@ import { ReadTool } from './read';
 export const tools: Record<string, new (...args: any[]) => BaseTool> = {
   ls: LSTool,
   glob: GlobTool,
-  read: ReadTool
+  read: ReadTool,
+  ripgrep: RipgrepTool
 };
 export { GlobTool } from './glob';
 export type { GlobParams, GlobMatch, GlobResult } from './glob';
+
+export { RipgrepTool } from './ripgrep';
+export type { RipgrepParams, RipgrepMatch, RipgrepResult, RipgrepStats } from './ripgrep';
 
 // Type definitions
 export type {

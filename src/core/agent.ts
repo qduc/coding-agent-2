@@ -3,6 +3,7 @@ import { configManager } from './config';
 import { LSTool } from '../tools/ls';
 import { GlobTool } from '../tools/glob';
 import { ReadTool } from '../tools/read';
+import { RipgrepTool } from '../tools/ripgrep';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
@@ -25,9 +26,10 @@ export class Agent {
     const lsTool = new LSTool();
     const globTool = new GlobTool();
     const readTool = new ReadTool();
+    const ripgrepTool = new RipgrepTool();
 
     // Initialize the orchestrator with all tools
-    this.orchestrator = new ToolOrchestrator(this.llmService, [lsTool, globTool, readTool]);
+    this.orchestrator = new ToolOrchestrator(this.llmService, [lsTool, globTool, readTool, ripgrepTool]);
 
     // Initialize project discovery
     this.projectDiscovery = new ProjectDiscovery();
