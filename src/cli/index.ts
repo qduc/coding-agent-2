@@ -6,6 +6,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { configManager } from '../core/config';
 import { Agent } from '../core/agent';
+import { MarkdownRenderer } from '../utils/markdown';
 
 // Read version from package.json
 const packageJsonPath = path.join(__dirname, '../../package.json');
@@ -111,7 +112,7 @@ async function handleDirectCommand(command: string, agent: Agent, options: any) 
     );
 
     // Print the response
-    console.log(response);
+    console.log(renderResponse(response));
     console.log();
 
     if (options.verbose) {
@@ -204,7 +205,7 @@ async function startInteractiveMode(agent: Agent, options: any) {
 
           // Clear the "Thinking..." line and display response
           process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
-          console.log(chalk.cyan('🤖 Agent:'), response);
+          console.log(chalk.cyan('🤖 Agent:'), renderResponse(response));
           console.log(); // Add spacing
 
         } catch (error) {
@@ -290,6 +291,29 @@ function displayChatHelp() {
   console.log(chalk.gray('  • Ask about files, directories, or code patterns'));
   console.log(chalk.gray('  • Use natural language - no special syntax needed'));
   console.log();
+}
+
+/**
+ * Helper function to detect if content contains markdown and render it appropriately
+ */
+function renderResponse(content: string): string {
+  // Simple heuristic to detect markdown content
+  const hasMarkdown = /[#*`_\[\]()-]/.test(content) || 
+                     content.includes('```') || 
+                     content.includes('**') ||
+                     content.includes('##') ||
+                     content.includes('- ');
+
+  if (hasMarkdown) {
+    try {
+      return MarkdownRenderer.renderWithCodeHighlight(content);
+    } catch (error) {
+      // Fallback to plain text if markdown rendering fails
+      return content;
+    }
+  }
+
+  return content;
 }
 
 // Handle uncaught exceptions gracefully
