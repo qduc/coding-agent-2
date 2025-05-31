@@ -34,6 +34,18 @@ export class ProjectDiscovery {
   async discover(): Promise<ProjectDiscoveryResult> {
     const executedAt = new Date();
 
+    // If the working directory does not exist, return minimal info
+    if (!fs.existsSync(this.workingDirectory)) {
+      return {
+        projectStructure: '',
+        techStack: '',
+        entryPoints: [],
+        summary: `Basic project in ${path.basename(this.workingDirectory)}`,
+        executedAt,
+        workingDirectory: this.workingDirectory
+      };
+    }
+
     try {
       // Run all three discovery commands
       const projectStructure = await this.getProjectStructure();
