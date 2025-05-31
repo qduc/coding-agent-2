@@ -5,7 +5,7 @@ import { LSTool } from '../tools/ls';
 import { GlobTool } from '../tools/glob';
 import { ReadTool } from '../tools/read';
 import { RipgrepTool } from '../tools/ripgrep';
-import { WriteTool } from '@/tools/write';
+import { WriteTool } from '../tools/write';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
