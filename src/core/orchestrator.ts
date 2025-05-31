@@ -646,11 +646,34 @@ Use these tools when you need to access files or gather information about the pr
    * Convert tool schemas to Gemini function declarations format
    */
   private convertToGeminiFunctionDeclarations(tools: any[]): any[] {
-    return tools.map(tool => ({
-      name: tool.function?.name || tool.name,
-      description: tool.function?.description || tool.description,
-      parameters: tool.function?.parameters || tool.parameters
-    }));
+    return tools.map(tool => {
+      let name, description, parameters;
+      if (tool.function) {
+        name = tool.function.name;
+        description = tool.function.description;
+        parameters = tool.function.parameters;
+      } else if (tool.input_schema) {
+        name = tool.name;
+        description = tool.description;
+        parameters = tool.input_schema;
+      } else if (tool.parameters) {
+        name = tool.name;
+        description = tool.description;
+        parameters = tool.parameters;
+      } else {
+        // Fallback: return as-is (should not happen)
+        return tool;
+      }
+
+      // Normalize parameters.type for test compatibility
+      if (parameters && typeof parameters.type === 'string' && parameters.type.toLowerCase() === 'object') {
+        parameters = { ...parameters, type: 'object' };
+      } else if (parameters && typeof parameters.type === 'string' && parameters.type === 'OBJECT') {
+        parameters = { ...parameters, type: 'object' };
+      }
+
+      return { name, description, parameters };
+    });
   }
 
   /**
@@ -691,6 +714,9 @@ Use these tools when you need to access files or gather information about the pr
   /**
    * Gemini-specific chat loop with integrated tool execution
    */
+  /**
+   * Gemini-specific chat loop using Gemini's official function calling message format
+   */
   private async processGeminiChatLoop(
     userInput: string,
     functionDeclarations: any[],
@@ -698,58 +724,88 @@ Use these tools when you need to access files or gather information about the pr
     verbose?: boolean,
     maxIterations: number = 10
   ): Promise<string> {
-    try {
-      if (verbose) {
-        console.log('🔧 Starting integrated Gemini chat loop');
-        console.log(`🛠️ Available tools: ${functionDeclarations.map(f => f.name).join(', ')}`);
+    // Helper to build Gemini message parts
+    function buildGeminiMessage(role: 'user' | 'model', part: any) {
+      if (!part || (typeof part === 'object' && Object.keys(part).length === 0)) {
+        throw new Error(`Cannot create Gemini message with empty part for role: ${role}`);
       }
-
-      // Create tool executor that uses our orchestrator's tool execution
-      const toolExecutor = async (toolName: string, args: any) => {
-        if (verbose) {
-          console.log(`🔧 Executing tool: ${toolName}`);
-        }
-
-        // Find the tool in our registry
-        const tool = this.tools.get(toolName);
-        if (!tool) {
-          throw new Error(`Tool ${toolName} not found in registry`);
-        }
-
-        // Execute the tool with proper error handling
-        try {
-          const result = await tool.execute(args);
-          return result;
-        } catch (error) {
-          console.error(`❌ Tool execution failed for ${toolName}:`, error);
-          throw error;
-        }
-      };
-
-      // Check if we have the enhanced Gemini provider
-      if (this.llmService.provider === 'gemini' &&
-          typeof (this.llmService as any).processWithChatLoop === 'function') {
-
-        // Use the enhanced Gemini chat loop
-        return await (this.llmService as any).processWithChatLoop(
-          userInput,
-          functionDeclarations,
-          toolExecutor,
-          onChunk,
-          verbose,
-          maxIterations
-        );
-      } else {
-        // Fall back to traditional approach
-        if (verbose) {
-          console.log('⚠️ Enhanced Gemini chat loop not available, using traditional approach');
-        }
-        return await this.processMessage(userInput, onChunk, verbose);
-      }
-
-    } catch (error) {
-      console.error('❌ Gemini chat loop error:', error);
-      throw error;
+      return { role, parts: [part] };
     }
+
+    // Start conversation with user input
+    let contents: any[] = [buildGeminiMessage('user', { text: userInput })];
+    let iterations = 0;
+
+    // Get Gemini provider instance
+    const geminiProvider = (this.llmService as any).geminiProvider;
+    if (!geminiProvider) {
+      throw new Error('Gemini provider not initialized');
+    }
+
+    while (iterations++ < maxIterations) {
+      if (verbose) {
+        console.log(`🔄 Gemini tool call iteration ${iterations}`);
+        console.log(`📋 Contents length: ${contents.length}`);
+        console.log(`📋 Contents structure:`, JSON.stringify(contents, null, 2));
+      }
+
+      try {
+        // Send current contents to Gemini
+        const result = await geminiProvider.sendMessageWithTools(contents, functionDeclarations);
+
+        // Check for function call
+        const toolCall = result?.tool_calls?.[0];
+        if (toolCall && toolCall.function) {
+          if (verbose) {
+            console.log(`🔧 Executing tool: ${toolCall.function.name}`);
+          }
+
+          // Append function call as model message
+          const functionCallPart = {
+            functionCall: {
+              name: toolCall.function.name,
+              args: JSON.parse(toolCall.function.arguments)
+            }
+          };
+          contents.push(buildGeminiMessage('model', functionCallPart));
+
+          // Execute tool
+          let toolResult;
+          try {
+            const tool = this.tools.get(toolCall.function.name);
+            if (!tool) throw new Error(`Tool ${toolCall.function.name} not found`);
+            const result = await tool.execute(JSON.parse(toolCall.function.arguments));
+            toolResult = result.success ? result.output : { error: result.error };
+          } catch (err) {
+            toolResult = { error: err instanceof Error ? err.message : String(err) };
+          }
+
+          // Append function response as user message
+          const functionResponsePart = {
+            functionResponse: {
+              name: toolCall.function.name,
+              response: { result: toolResult }
+            }
+          };
+          contents.push(buildGeminiMessage('user', functionResponsePart));
+
+          continue;
+        }
+
+        // No tool call, return final response
+        if (verbose) {
+          console.log('✅ Final response received');
+        }
+        return result.content || '';
+
+      } catch (error) {
+        console.error(`❌ Error in Gemini chat loop iteration ${iterations}:`, error);
+        if (verbose) {
+          console.error('Contents that caused error:', JSON.stringify(contents, null, 2));
+        }
+        throw error;
+      }
+    }
+    throw new Error('Max Gemini tool call iterations reached');
   }
 }

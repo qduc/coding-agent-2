@@ -38,17 +38,34 @@ export class GeminiProvider implements LLMProvider {
   /**
    * Convert messages to Gemini parts format
    */
-  private convertMessagesToParts(messages: Message[]): Content[] {
+  /**
+   * Convert messages to Gemini parts format, allowing passthrough for Gemini-native messages
+   */
+  private convertMessagesToParts(messages: any[]): Content[] {
     return messages.map(msg => {
+      if (msg.parts) {
+        // Already Gemini-native format - ensure parts is not empty
+        if (!msg.parts || msg.parts.length === 0) {
+          throw new Error('Gemini message parts cannot be empty');
+        }
+        return msg;
+      }
       const parts: Part[] = [];
       if (msg.content) {
         parts.push({ text: msg.content });
       }
+
+      // Ensure we don't create messages with empty parts
+      if (parts.length === 0) {
+        // Skip messages with no content rather than creating empty parts
+        return null;
+      }
+
       return {
         role: msg.role === 'user' ? 'user' : 'model',
         parts
       };
-    });
+    }).filter(Boolean); // Remove null entries
   }
 
   /**
@@ -141,6 +158,10 @@ export class GeminiProvider implements LLMProvider {
     });
 
     const contents = this.convertMessagesToParts(messages);
+
+    // Debug logging
+    console.log('Sending to Gemini:', JSON.stringify(contents, null, 2));
+
     const result = await model.generateContent({ contents });
 
     // Handle tool calls
@@ -157,6 +178,7 @@ export class GeminiProvider implements LLMProvider {
           }
 
           toolCalls.push({
+            id: `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             function: {
               name,
               arguments: JSON.stringify(parsedArgs)
@@ -169,7 +191,7 @@ export class GeminiProvider implements LLMProvider {
     return {
       content: response.text(),
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-      finishReason: 'tool_calls'
+      finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop'
     };
   }
 
