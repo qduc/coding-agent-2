@@ -2,6 +2,8 @@ import * as path from 'path';
 import * as fs from 'fs-extra';
 
 import { CodeStructureAnalysis, ProjectCacheMetadata } from './codeStructure';
+import { CodeAnalyzer } from './codeAnalyzer';
+import { Logger } from './logger';
 
 /**
  * Project Discovery Result
@@ -13,7 +15,7 @@ export interface ProjectDiscoveryResult {
   summary: string;
   executedAt: Date;
   workingDirectory: string;
-  
+
   // NEW: Enhanced with code structure analysis
   codeStructure?: CodeStructureAnalysis;
   cacheMetadata?: ProjectCacheMetadata;
@@ -38,6 +40,7 @@ export class ProjectDiscovery {
   private workingDirectory: string;
   private codeAnalyzer: CodeAnalyzer;
   private enableCodeAnalysis: boolean;
+  private logger: Logger = Logger.getInstance();
 
   constructor(workingDirectory: string = process.cwd(), enableCodeAnalysis: boolean = true) {
     this.workingDirectory = workingDirectory;
@@ -69,9 +72,6 @@ export class ProjectDiscovery {
       const techStack = await this.getTechStack();
       const entryPoints = await this.getEntryPoints();
 
-      // Generate summary
-      const summary = this.generateSummary(projectStructure, techStack, entryPoints);
-
       let codeStructure: CodeStructureAnalysis | undefined;
       let analysisMetadata = {
         filesAnalyzed: 0,
@@ -93,10 +93,13 @@ export class ProjectDiscovery {
             ]
           };
         } catch (error) {
-          this.logger.error('Code analysis failed', error);
+          this.logger.error('Code analysis failed', error as Error);
           analysisMetadata.limitationsApplied.push('Code analysis failed');
         }
       }
+
+      // Generate summary (after code analysis is complete)
+      const summary = this.generateSummary(projectStructure, techStack, entryPoints, codeStructure);
 
       return {
         projectStructure,
@@ -310,7 +313,7 @@ export class ProjectDiscovery {
       for (const pattern of patterns) {
         const filePath = path.join(projectRoot, pattern);
         if (fs.existsSync(filePath)) {
-          entries.push('./' + pattern);
+          entries.push(pattern);
         }
       }
 
@@ -320,7 +323,7 @@ export class ProjectDiscovery {
         for (const pattern of patterns) {
           const filePath = path.join(srcDir, pattern);
           if (fs.existsSync(filePath)) {
-            entries.push('./src/' + pattern);
+            entries.push('src/' + pattern);
           }
         }
       }
@@ -335,7 +338,7 @@ export class ProjectDiscovery {
   /**
    * Generate a human-readable summary from discovery results
    */
-  private generateSummary(structure: string, techStack: string, entryPoints: string[]): string {
+  private generateSummary(structure: string, techStack: string, entryPoints: string[], codeStructure?: CodeStructureAnalysis): string {
     const projectName = path.basename(this.workingDirectory);
     let summary = `${projectName} project analysis:\n\n`;
 
@@ -373,6 +376,46 @@ export class ProjectDiscovery {
     }
     if (structure.includes('docs')) {
       summary += '📚 Has documentation directory\n';
+    }
+
+    // Add code structure analysis if available
+    if (codeStructure) {
+      summary += '\n🔍 Code Analysis:\n';
+
+      // Analyze languages used
+      const languages = new Set<string>();
+      codeStructure.files.forEach(file => {
+        if (file.language) {
+          languages.add(file.language);
+        }
+      });
+
+      if (languages.size > 0) {
+        const langDisplay = Array.from(languages)
+          .map(lang => {
+            // Capitalize properly for common languages
+            const langMap: Record<string, string> = {
+              'typescript': 'TypeScript',
+              'javascript': 'JavaScript',
+              'python': 'Python',
+              'rust': 'Rust'
+            };
+            return langMap[lang.toLowerCase()] || lang.charAt(0).toUpperCase() + lang.slice(1);
+          })
+          .join(', ');
+        summary += `   Languages: ${langDisplay}\n`;
+      }
+
+      // Count total symbols
+      const totalSymbols = codeStructure.files.reduce((total, file) => total + file.symbols.length, 0);
+      if (totalSymbols > 0) {
+        summary += `   ${totalSymbols} symbols found across ${codeStructure.files.length} files\n`;
+      }
+
+      // Show analysis timing
+      if (codeStructure.analysisTimeMs && codeStructure.analysisTimeMs > 0) {
+        summary += `   Analysis completed in ${codeStructure.analysisTimeMs}ms\n`;
+      }
     }
 
     return summary;

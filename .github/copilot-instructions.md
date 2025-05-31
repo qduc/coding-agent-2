@@ -16,6 +16,11 @@
 - Write fewer, focused tests that verify what the code actually does
 
 
+# Aider
+- You have a coding assistant name Aider that is good at doing isolated tasks that doesn't need to explore the codebase, only dealing with a set of files or create a new feature from scratch.
+- When delegate subtasks to Aider, provide clear and concise instructions, give him context of the task, specify the files to be modified, and outline the desired outcome.
+- If the task is very complex, use aider with a reasoner model.
+
 # Project Overview
 
 AI programming assistant CLI tool for natural language code interactions.

@@ -3,18 +3,18 @@ import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { TreeSitterParser } from './treeSitterParser';
 import { ProjectCacheManager } from './projectCache';
-import { 
-  CodeAnalysisConfig, 
-  CodeStructureAnalysis, 
+import {
+  CodeAnalysisConfig,
+  CodeStructureAnalysis,
   FileAnalysis,
-  ProjectCacheMetadata 
+  ProjectCacheMetadata
 } from './codeStructure';
 import { Logger } from './logger';
 
 export class CodeAnalyzer {
   private parser: TreeSitterParser;
   private cacheManager: ProjectCacheManager;
-  private config: CodeAnalysisConfig;
+  public readonly config: CodeAnalysisConfig;
   private logger: Logger = Logger.getInstance();
 
   constructor(config?: Partial<CodeAnalysisConfig>) {
@@ -53,28 +53,41 @@ export class CodeAnalyzer {
     isCached: boolean;
     metadata: ProjectCacheMetadata;
   }> {
+    const startTime = Date.now();
     const shouldInvalidate = await this.cacheManager.shouldInvalidateCache(projectPath);
-    
+
     if (!shouldInvalidate) {
-      const cached = await this.cacheManager.loadCache(projectPath);
-      return {
-        codeStructure: cached.codeStructure,
-        isCached: true,
-        metadata: cached.metadata
-      };
+      try {
+        const cached = await this.cacheManager.getCache(projectPath);
+        if (cached) {
+          return {
+            codeStructure: cached.codeStructure,
+            isCached: true,
+            metadata: cached.metadata
+          };
+        }
+      } catch (error) {
+        this.logger.warn('Failed to load cache, performing fresh analysis');
+      }
     }
 
     const analysis = await this.performAnalysis(projectPath);
+    analysis.analysisTimeMs = Date.now() - startTime;
+
     const metadata = await this.cacheManager.generateCacheMetadata(projectPath);
-    
-    await this.cacheManager.saveCache(projectPath, {
-      codeStructure: analysis,
-      metadata,
-      projectStructure: '',
-      techStack: '',
-      entryPoints: [],
-      summary: ''
-    });
+
+    try {
+      await this.cacheManager.saveCache(projectPath, {
+        codeStructure: analysis,
+        metadata,
+        projectStructure: '',
+        techStack: '',
+        entryPoints: [],
+        summary: ''
+      });
+    } catch (error) {
+      this.logger.warn('Failed to save cache', error as Error);
+    }
 
     return {
       codeStructure: analysis,
@@ -90,15 +103,40 @@ export class CodeAnalyzer {
   }
 
   private async discoverFiles(projectPath: string): Promise<string[]> {
-    const allFiles = await fs.readdir(projectPath, { recursive: true });
-    const filteredFiles = allFiles
-      .filter(file => {
-        const relativePath = path.relative(projectPath, file);
-        return !this.config.excludePatterns.some(pattern => minimatch(relativePath, pattern));
-      })
-      .map(file => path.join(projectPath, file));
+    try {
+      const allFiles = await this.getAllFiles(projectPath);
+      const filteredFiles = allFiles
+        .filter(file => {
+          const relativePath = path.relative(projectPath, file);
+          return !this.config.excludePatterns.some(pattern => minimatch(relativePath, pattern));
+        });
 
-    return this.prioritizeFiles(filteredFiles, projectPath);
+      return this.prioritizeFiles(filteredFiles, projectPath);
+    } catch (error) {
+      this.logger.error('Failed to discover files', error as Error);
+      return [];
+    }
+  }
+
+  private async getAllFiles(dir: string): Promise<string[]> {
+    const files: string[] = [];
+
+    const walk = async (currentDir: string) => {
+      const entries = await fs.readdir(currentDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+
+        if (entry.isDirectory()) {
+          await walk(fullPath);
+        } else if (entry.isFile()) {
+          files.push(fullPath);
+        }
+      }
+    };
+
+    await walk(dir);
+    return files;
   }
 
   private prioritizeFiles(files: string[], projectPath: string): string[] {
@@ -137,11 +175,10 @@ export class CodeAnalyzer {
           break;
         }
 
-        const content = await fs.readFile(file, 'utf8');
-        const analysis = await this.parser.parseFile(file, content);
+        const analysis = await this.parser.analyzeFile(file);
         analyses.push(analysis);
       } catch (error) {
-        this.logger.error(`Failed to analyze file ${file}`, error);
+        this.logger.error(`Failed to analyze file ${file}`, error as Error);
       }
     }
 
