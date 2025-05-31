@@ -26,10 +26,8 @@ export interface LSParams {
   pattern?: string;
   /** Include hidden files and directories */
   includeHidden?: boolean;
-  /** Recursively list subdirectories */
-  recursive?: boolean;
-  /** Maximum depth for recursive listing (default: 3) */
-  maxDepth?: number;
+  /** Directory traversal depth (0=current only, 1=one level, -1=unlimited) */
+  depth?: number;
 }
 
 /**
@@ -89,17 +87,10 @@ export class LSTool extends BaseTool {
         description: 'Include hidden files and directories',
         default: false
       },
-      recursive: {
-        type: 'boolean',
-        description: 'Recursively list subdirectories',
-        default: false
-      },
-      maxDepth: {
+      depth: {
         type: 'number',
-        description: 'Maximum depth for recursive listing',
-        minimum: 1,
-        maximum: 10,
-        default: 3
+        description: 'Directory traversal depth (0=current only, 1=one level, -1=unlimited)',
+        default: 1
       }
     },
     required: ['path'],
@@ -111,8 +102,7 @@ export class LSTool extends BaseTool {
       path: targetPath,
       pattern,
       includeHidden = false,
-      recursive = false,
-      maxDepth = 3
+      depth = 1
     } = params;
 
     try {
@@ -142,6 +132,12 @@ export class LSTool extends BaseTool {
       }
 
       // List directory contents
+      // depth=0 or depth=1: current directory only (non-recursive)
+      // depth>1: recursive to that depth
+      // depth=-1: unlimited recursive
+      const recursive = depth > 1 || depth === -1;
+      const maxDepth = depth === -1 ? 100 : (depth <= 1 ? 0 : depth - 1);
+
       const entries = await this.listDirectory(
         absolutePath,
         {

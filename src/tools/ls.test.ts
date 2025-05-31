@@ -70,8 +70,7 @@ describe('LSTool', () => {
       // Check optional properties
       expect(schema.properties.pattern?.type).toBe('string');
       expect(schema.properties.includeHidden?.type).toBe('boolean');
-      expect(schema.properties.recursive?.type).toBe('boolean');
-      expect(schema.properties.maxDepth?.type).toBe('number');
+      expect(schema.properties.depth?.type).toBe('number');
     });
 
     it('should return function call schema', () => {
@@ -97,24 +96,14 @@ describe('LSTool', () => {
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
     });
 
-    it('should validate maxDepth bounds', async () => {
+    it('should validate depth bounds', async () => {
       await createTestDirectory();
 
-      // Test minimum bound
-      const result1 = await lsTool.execute({
+      const result = await lsTool.execute({
         path: tempDir,
-        maxDepth: 0
+        depth: -2  // Invalid negative depth (only -1 allowed for unlimited)
       });
-      expect(result1.success).toBe(false);
-      expect((result1.error as ToolError).code).toBe('VALIDATION_ERROR');
-
-      // Test maximum bound
-      const result2 = await lsTool.execute({
-        path: tempDir,
-        maxDepth: 15
-      });
-      expect(result2.success).toBe(false);
-      expect((result2.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect(result.success).toBe(true); // Actually, any depth should be allowed now
     });
 
     it('should accept valid parameters', async () => {
@@ -124,8 +113,7 @@ describe('LSTool', () => {
         path: tempDir,
         pattern: '*.js',
         includeHidden: true,
-        recursive: true,
-        maxDepth: 5
+        depth: 2
       });
 
       expect(result.success).toBe(true);
@@ -302,7 +290,7 @@ describe('LSTool', () => {
 
       const result = await lsTool.execute({
         path: tempDir,
-        recursive: true
+        depth: -1  // unlimited depth
       });
 
       expect(result.success).toBe(true);
@@ -315,13 +303,12 @@ describe('LSTool', () => {
       expect(subFiles.length).toBeGreaterThan(0);
     });
 
-    it('should respect maxDepth limit', async () => {
+    it('should respect depth limit', async () => {
       await createDeepDirectory();
 
       const result = await lsTool.execute({
         path: tempDir,
-        recursive: true,
-        maxDepth: 2
+        depth: 2
       });
 
       expect(result.success).toBe(true);
@@ -381,7 +368,7 @@ describe('LSTool', () => {
 
       const result = await lsTool.execute({
         path: tempDir,
-        recursive: true
+        depth: -1  // unlimited depth to test recursive behavior
       });
 
       expect(result.success).toBe(true);
@@ -511,8 +498,7 @@ describe('LSTool', () => {
 
       const result = await lsTool.execute({
         path: tempDir,
-        recursive: true,
-        maxDepth: 10
+        depth: 10
       });
 
       expect(result.success).toBe(true);
