@@ -35,7 +35,7 @@ describe('AnthropicProvider', () => {
         content: [{ type: 'text', text: 'Hi' }],
         stop_reason: 'end_turn'
       });
-      
+
       const result = await provider.initialize();
       expect(result).toBe(true);
       expect(provider.isReady()).toBe(true);
@@ -43,7 +43,7 @@ describe('AnthropicProvider', () => {
 
     it('returns false when API key is missing', async () => {
       jest.spyOn(configManager, 'getConfig').mockReturnValue({} as any);
-      
+
       const result = await provider.initialize();
       expect(result).toBe(false);
       expect(provider.isReady()).toBe(false);
@@ -52,7 +52,7 @@ describe('AnthropicProvider', () => {
     it('returns false when connection test fails', async () => {
       jest.spyOn(configManager, 'getConfig').mockReturnValue({ anthropicApiKey: 'sk-ant-key' } as any);
       mockMessagesCreate.mockRejectedValue(new Error('API Error'));
-      
+
       const result = await provider.initialize();
       expect(result).toBe(false);
       expect(provider.isReady()).toBe(false);
@@ -61,7 +61,7 @@ describe('AnthropicProvider', () => {
 
   describe('sendMessage', () => {
     beforeEach(async () => {
-      jest.spyOn(configManager, 'getConfig').mockReturnValue({ 
+      jest.spyOn(configManager, 'getConfig').mockReturnValue({
         anthropicApiKey: 'sk-ant-key',
         model: 'claude-3-5-sonnet-20241022',
         maxTokens: 4000
@@ -85,7 +85,7 @@ describe('AnthropicProvider', () => {
       });
 
       const result = await provider.sendMessage(messages);
-      
+
       expect(result).toBe('Hello! How can I help you today?');
       expect(mockMessagesCreate).toHaveBeenCalledWith({
         model: 'claude-3-5-sonnet-20241022',
@@ -107,7 +107,7 @@ describe('AnthropicProvider', () => {
 
   describe('sendMessageWithTools', () => {
     beforeEach(async () => {
-      jest.spyOn(configManager, 'getConfig').mockReturnValue({ 
+      jest.spyOn(configManager, 'getConfig').mockReturnValue({
         anthropicApiKey: 'sk-ant-key',
         model: 'claude-3-5-sonnet-20241022',
         maxTokens: 4000,
@@ -165,7 +165,7 @@ describe('AnthropicProvider', () => {
         completionTokens: 50,
         totalTokens: 150
       });
-      
+
       expect(onToolCall).toHaveBeenCalledWith('list_files', { path: '.' });
       expect(mockLogToolCall).toHaveBeenCalledWith('list_files', { path: '.' });
     });
@@ -173,7 +173,7 @@ describe('AnthropicProvider', () => {
 
   describe('message conversion', () => {
     it('converts messages correctly', async () => {
-      jest.spyOn(configManager, 'getConfig').mockReturnValue({ 
+      jest.spyOn(configManager, 'getConfig').mockReturnValue({
         anthropicApiKey: 'sk-ant-key',
         model: 'claude-3-5-sonnet-20241022'
       } as any);

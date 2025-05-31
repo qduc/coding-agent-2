@@ -63,13 +63,13 @@ export class AnthropicProvider implements LLMProvider {
    */
   private convertMessages(messages: Message[]): Anthropic.MessageParam[] {
     const anthropicMessages: Anthropic.MessageParam[] = [];
-    
+
     for (const message of messages) {
       if (message.role === 'system') {
         // Anthropic handles system messages separately - we'll add them to the first user message
         continue;
       }
-      
+
       if (message.role === 'tool') {
         // Handle tool result messages
         anthropicMessages.push({
@@ -83,7 +83,7 @@ export class AnthropicProvider implements LLMProvider {
         });
       }
     }
-    
+
     return anthropicMessages;
   }
 
@@ -128,7 +128,7 @@ export class AnthropicProvider implements LLMProvider {
           fullContent += chunk.delta.text;
           onChunk(chunk.delta.text);
         }
-        
+
         if (chunk.type === 'message_stop') {
           finishReason = 'stop';
         }
@@ -172,7 +172,7 @@ export class AnthropicProvider implements LLMProvider {
         messages: anthropicMessages
       });
 
-      return response.content.map(block => 
+      return response.content.map(block =>
         block.type === 'text' ? block.text : ''
       ).join('');
     } catch (error) {
@@ -229,7 +229,7 @@ export class AnthropicProvider implements LLMProvider {
           if (!toolCalls) {
             toolCalls = [];
           }
-          
+
           // Convert Anthropic tool format to OpenAI-compatible format
           toolCalls.push({
             id: contentBlock.id,
@@ -324,7 +324,7 @@ export class AnthropicProvider implements LLMProvider {
           if (!toolCalls) {
             toolCalls = [];
           }
-          
+
           const toolBlock = chunk.content_block;
           toolCalls.push({
             id: toolBlock.id,

@@ -73,7 +73,7 @@ describe('LLMService', () => {
 
   describe('initialize', () => {
     it('returns true and sets service ready when OpenAI API key present and connection succeeds', async () => {
-      jest.spyOn(configManager, 'getConfig').mockReturnValue({ 
+      jest.spyOn(configManager, 'getConfig').mockReturnValue({
         openaiApiKey: 'key',
         provider: 'openai'
       } as any);
@@ -84,13 +84,13 @@ describe('LLMService', () => {
     });
 
     it('returns true and sets service ready when Anthropic API key present and connection succeeds', async () => {
-      jest.spyOn(configManager, 'getConfig').mockReturnValue({ 
+      jest.spyOn(configManager, 'getConfig').mockReturnValue({
         anthropicApiKey: 'sk-ant-key',
         provider: 'anthropic'
       } as any);
       mockAnthropicInitialize.mockResolvedValue(true);
       mockAnthropicIsReady.mockReturnValue(true);
-      
+
       const result = await service.initialize();
       expect(result).toBe(true);
       expect(service.isReady()).toBe(true);
@@ -105,12 +105,12 @@ describe('LLMService', () => {
     });
 
     it('returns false when Anthropic initialization fails', async () => {
-      jest.spyOn(configManager, 'getConfig').mockReturnValue({ 
+      jest.spyOn(configManager, 'getConfig').mockReturnValue({
         anthropicApiKey: 'sk-ant-key',
         provider: 'anthropic'
       } as any);
       mockAnthropicInitialize.mockResolvedValue(false);
-      
+
       const result = await service.initialize();
       expect(result).toBe(false);
       expect(service.isReady()).toBe(false);
@@ -119,7 +119,7 @@ describe('LLMService', () => {
     it('defaults to OpenAI when no provider is specified', async () => {
       jest.spyOn(configManager, 'getConfig').mockReturnValue({ openaiApiKey: 'key' } as any);
       mockModelsList.mockResolvedValue({});
-      
+
       const result = await service.initialize();
       expect(result).toBe(true);
       expect(service.getCurrentProvider()).toBe('openai');
@@ -204,10 +204,10 @@ describe('LLMService', () => {
         .mockReturnValue({ anthropicApiKey: 'sk-ant-key', provider: 'anthropic' } as any);
       mockAnthropicInitialize.mockResolvedValue(true);
       mockAnthropicSendMessage.mockResolvedValue('Anthropic response');
-      
+
       await service.initialize();
       const res = await service.sendMessage([{ role: 'user', content: 'hi' }]);
-      
+
       expect(res).toBe('Anthropic response');
       expect(mockAnthropicSendMessage).toHaveBeenCalledWith([{ role: 'user', content: 'hi' }]);
     });
@@ -220,12 +220,12 @@ describe('LLMService', () => {
         .mockReturnValue({ anthropicApiKey: 'sk-ant-key', provider: 'anthropic' } as any);
       mockAnthropicInitialize.mockResolvedValue(true);
       mockAnthropicStreamMessage.mockResolvedValue({ content: 'streamed', finishReason: 'stop' });
-      
+
       await service.initialize();
       const onChunk = jest.fn();
       const onComplete = jest.fn();
       const res = await service.streamMessage([{ role: 'user', content: 'hi' }], onChunk, onComplete);
-      
+
       expect(res).toEqual({ content: 'streamed', finishReason: 'stop' });
       expect(mockAnthropicStreamMessage).toHaveBeenCalledWith([{ role: 'user', content: 'hi' }], onChunk, onComplete);
     });
@@ -235,21 +235,21 @@ describe('LLMService', () => {
         .spyOn(configManager, 'getConfig')
         .mockReturnValue({ anthropicApiKey: 'sk-ant-key', provider: 'anthropic' } as any);
       mockAnthropicInitialize.mockResolvedValue(true);
-      mockAnthropicSendMessageWithTools.mockResolvedValue({ 
+      mockAnthropicSendMessageWithTools.mockResolvedValue({
         content: 'tool response',
         tool_calls: [],
         finishReason: 'stop'
       });
-      
+
       await service.initialize();
       const functions = [{ name: 'test_tool' }];
       const onToolCall = jest.fn();
       const res = await service.sendMessageWithTools([{ role: 'user', content: 'hi' }], functions, onToolCall);
-      
+
       expect(res).toEqual({ content: 'tool response', tool_calls: [], finishReason: 'stop' });
       expect(mockAnthropicSendMessageWithTools).toHaveBeenCalledWith(
-        [{ role: 'user', content: 'hi' }], 
-        functions, 
+        [{ role: 'user', content: 'hi' }],
+        functions,
         onToolCall
       );
     });
@@ -259,22 +259,22 @@ describe('LLMService', () => {
         .spyOn(configManager, 'getConfig')
         .mockReturnValue({ anthropicApiKey: 'sk-ant-key', provider: 'anthropic' } as any);
       mockAnthropicInitialize.mockResolvedValue(true);
-      mockAnthropicStreamMessageWithTools.mockResolvedValue({ 
+      mockAnthropicStreamMessageWithTools.mockResolvedValue({
         content: 'streaming tool response',
         tool_calls: [],
         finishReason: 'stop'
       });
-      
+
       await service.initialize();
       const functions = [{ name: 'test_tool' }];
       const onChunk = jest.fn();
       const onToolCall = jest.fn();
       const res = await service.streamMessageWithTools([{ role: 'user', content: 'hi' }], functions, onChunk, onToolCall);
-      
+
       expect(res).toEqual({ content: 'streaming tool response', tool_calls: [], finishReason: 'stop' });
       expect(mockAnthropicStreamMessageWithTools).toHaveBeenCalledWith(
-        [{ role: 'user', content: 'hi' }], 
-        functions, 
+        [{ role: 'user', content: 'hi' }],
+        functions,
         onChunk,
         onToolCall
       );
