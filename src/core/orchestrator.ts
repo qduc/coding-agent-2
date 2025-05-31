@@ -95,12 +95,25 @@ export class ToolOrchestrator {
       const messages = this.buildMessages();
 
       try {
-        // Send to LLM with streaming function calling support
-        const response = await this.llmService.streamMessageWithTools(
-          messages,
-          this.getFunctionSchemas(),
-          onChunk // Pass through streaming callback
-        );
+        // Check if we're using Anthropic and have tools available
+        const schemas = this.getFunctionSchemas();
+        const isAnthropicWithTools = this.llmService.getCurrentProvider() === 'anthropic' && schemas.length > 0;
+        
+        let response;
+        if (isAnthropicWithTools) {
+          // Use non-streaming for Anthropic with tools to avoid streaming tool input issues
+          response = await this.llmService.sendMessageWithTools(
+            messages,
+            schemas
+          );
+        } else {
+          // Use streaming for other providers or when no tools
+          response = await this.llmService.streamMessageWithTools(
+            messages,
+            schemas,
+            onChunk // Pass through streaming callback
+          );
+        }
 
         // Check if LLM wants to call tools
         if (response.tool_calls && response.tool_calls.length > 0) {
@@ -443,12 +456,25 @@ Use these tools when you need to access files or gather information about the pr
       }
 
       try {
-        // Send to LLM with tool schemas
-        const response = await this.llmService.streamMessageWithTools(
-          messages,
-          this.getFunctionSchemas(),
-          onChunk
-        );
+        // Check if we're using Anthropic and have tools available
+        const schemas = this.getFunctionSchemas();
+        const isAnthropicWithTools = this.llmService.getCurrentProvider() === 'anthropic' && schemas.length > 0;
+        
+        let response;
+        if (isAnthropicWithTools) {
+          // Use non-streaming for Anthropic with tools to avoid streaming tool input issues
+          response = await this.llmService.sendMessageWithTools(
+            messages,
+            schemas
+          );
+        } else {
+          // Use streaming for other providers or when no tools
+          response = await this.llmService.streamMessageWithTools(
+            messages,
+            schemas,
+            onChunk
+          );
+        }
 
         // Check if we have tool calls to execute
         if (response.tool_calls && response.tool_calls.length > 0) {

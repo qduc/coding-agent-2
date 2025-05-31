@@ -342,6 +342,9 @@ export class AnthropicProvider implements LLMProvider {
       let finishReason: string | null = null;
       let toolCalls: any[] | undefined;
       const { logToolUsage } = configManager.getConfig();
+      
+      // Track streaming tool input accumulation
+      const streamingToolInputs: Map<number, string> = new Map();
 
       for await (const chunk of stream) {
         // Handle content streaming
@@ -352,27 +355,70 @@ export class AnthropicProvider implements LLMProvider {
           }
         }
 
-        // Handle tool use
+        // Handle tool use start
         if (chunk.type === 'content_block_start' && chunk.content_block.type === 'tool_use') {
           if (!toolCalls) {
             toolCalls = [];
           }
 
           const toolBlock = chunk.content_block;
+          const toolCallIndex = chunk.index;
+          
+          // Initialize tool call with placeholder - we'll update the arguments later
           toolCalls.push({
             id: toolBlock.id,
             type: 'function',
             function: {
               name: toolBlock.name,
-              arguments: JSON.stringify(toolBlock.input)
+              arguments: '{}' // Will be updated when streaming completes
             }
           });
 
-          if (logToolUsage) {
-            ToolLogger.logToolCall(toolBlock.name, toolBlock.input);
-          }
-          if (onToolCall) {
-            onToolCall(toolBlock.name, toolBlock.input);
+          // Initialize streaming input accumulation for this tool
+          streamingToolInputs.set(toolCallIndex, '');
+        }
+
+        // Handle streaming tool input
+        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'input_json_delta') {
+          const toolCallIndex = chunk.index;
+          const currentInput = streamingToolInputs.get(toolCallIndex) || '';
+          streamingToolInputs.set(toolCallIndex, currentInput + chunk.delta.partial_json);
+        }
+
+        // Handle tool use completion
+        if (chunk.type === 'content_block_stop' && toolCalls) {
+          const toolCallIndex = chunk.index;
+          const fullInputJson = streamingToolInputs.get(toolCallIndex);
+          
+          if (fullInputJson !== undefined) {
+            // Find the tool call for this index and update its arguments
+            const toolCallArrayIndex = toolCalls.length - 1; // Assuming tools are added in order
+            if (toolCallArrayIndex >= 0) {
+              try {
+                const parsedInput = JSON.parse(fullInputJson);
+                toolCalls[toolCallArrayIndex].function.arguments = JSON.stringify(parsedInput);
+
+                if (logToolUsage) {
+                  ToolLogger.logToolCall(toolCalls[toolCallArrayIndex].function.name, parsedInput);
+                }
+                if (onToolCall) {
+                  onToolCall(toolCalls[toolCallArrayIndex].function.name, parsedInput);
+                }
+              } catch (e) {
+                // If JSON parsing fails, keep the raw input
+                toolCalls[toolCallArrayIndex].function.arguments = fullInputJson;
+                
+                if (logToolUsage) {
+                  ToolLogger.logToolCall(toolCalls[toolCallArrayIndex].function.name, {});
+                }
+                if (onToolCall) {
+                  onToolCall(toolCalls[toolCallArrayIndex].function.name, {});
+                }
+              }
+            }
+            
+            // Clean up streaming state
+            streamingToolInputs.delete(toolCallIndex);
           }
         }
 
