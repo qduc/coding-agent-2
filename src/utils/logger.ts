@@ -28,6 +28,7 @@ export interface LoggerConfig {
   level: LogLevel;
   enableConsole: boolean;
   enableFile: boolean;
+  enableToolConsole?: boolean; // Separate setting for tool messages
   logDirectory?: string;
   maxLogFiles?: number;
   maxLogSizeBytes?: number;
@@ -53,6 +54,7 @@ export class Logger {
       level: LogLevel.INFO,
       enableConsole: true,
       enableFile: true,
+      enableToolConsole: true, // Default to showing tool messages
       logDirectory: path.join(os.homedir(), '.coding-agent', 'logs'),
       maxLogFiles: 10,
       maxLogSizeBytes: 10 * 1024 * 1024, // 10MB
@@ -157,14 +159,15 @@ export class Logger {
   /**
    * Write log entry to console and/or file
    */
-  private writeLog(entry: LogEntry): void {
+  private writeLog(entry: LogEntry, forceConsole = false): void {
     // Check if this log level should be output
     if (entry.level > this.config.level) {
       return;
     }
 
-    // Console output
-    if (this.config.enableConsole) {
+    // Console output - respect forceConsole for tool messages
+    const shouldWriteToConsole = forceConsole || this.config.enableConsole;
+    if (shouldWriteToConsole) {
       this.writeToConsole(entry);
     }
 
@@ -344,10 +347,15 @@ export class Logger {
       executionTimeMs,
     };
 
+    // For tool logs, use enableToolConsole setting to determine console output
+    const forceConsole = this.config.enableToolConsole;
+
     if (error) {
-      this.error(`Tool execution failed: ${toolName}`, error, context, 'TOOL');
+      const entry = this.createLogEntry(LogLevel.ERROR, `Tool execution failed: ${toolName}`, context, error, 'TOOL');
+      this.writeLog(entry, forceConsole);
     } else {
-      this.debug(`Tool executed: ${toolName}`, context, 'TOOL');
+      const entry = this.createLogEntry(LogLevel.DEBUG, `Tool executed: ${toolName}`, context, undefined, 'TOOL');
+      this.writeLog(entry, forceConsole);
     }
   }
 
@@ -393,6 +401,13 @@ export class Logger {
    */
   isLevelEnabled(level: LogLevel): boolean {
     return level <= this.config.level;
+  }
+
+  /**
+   * Get tool console setting
+   */
+  isToolConsoleEnabled(): boolean {
+    return this.config.enableToolConsole ?? true;
   }
 }
 

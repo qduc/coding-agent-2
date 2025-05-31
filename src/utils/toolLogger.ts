@@ -9,18 +9,22 @@ import { logger } from './logger';
  * - Argument formatting
  * - Result truncation for readability
  * - Colorized output
+ * - Respects tool console logging setting
  */
 export class ToolLogger {
   /**
    * Log when a tool is being called by the LLM
    */
   static logToolCall(toolName: string, args: any): void {
-    console.log(chalk.blue('🔧 Tool Usage:'), chalk.cyan(toolName));
-    if (args && Object.keys(args).length > 0) {
-      console.log(chalk.gray('   Arguments:'), JSON.stringify(args, null, 2));
+    // Only show tool messages in console if tool console logging is enabled
+    if (logger.isToolConsoleEnabled()) {
+      console.log(chalk.blue('🔧 Tool Usage:'), chalk.cyan(toolName));
+      if (args && Object.keys(args).length > 0) {
+        console.log(chalk.gray('   Arguments:'), JSON.stringify(args, null, 2));
+      }
     }
 
-    // Also log to structured logger for debugging
+    // Always log to structured logger for debugging (goes to file)
     logger.debug(`Tool called: ${toolName}`, { toolName, args }, 'TOOL');
   }
 
@@ -28,10 +32,13 @@ export class ToolLogger {
    * Log the result of a tool execution
    */
   static logToolResult(toolName: string, success: boolean, result?: any): void {
-    const status = success ? chalk.green('✅') : chalk.red('❌');
-    console.log(status, chalk.cyan(toolName), success ? 'completed' : 'failed');
+    // Only show tool messages in console if tool console logging is enabled
+    if (logger.isToolConsoleEnabled()) {
+      const status = success ? chalk.green('✅') : chalk.red('❌');
+      console.log(status, chalk.cyan(toolName), success ? 'completed' : 'failed');
+    }
 
-    // Log to structured logger
+    // Always log to structured logger for debugging (goes to file)
     if (success) {
       logger.debug(`Tool completed: ${toolName}`, { toolName, success, result }, 'TOOL');
     } else {
@@ -39,7 +46,8 @@ export class ToolLogger {
       logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');
     }
 
-    if (result) {
+    // Only show result details in console if tool console logging is enabled
+    if (result && logger.isToolConsoleEnabled()) {
       // Special handling for Read tool - don't output file content
       if (toolName.toLowerCase().includes('read')) {
         if (typeof result === 'string' && result.length > 0) {

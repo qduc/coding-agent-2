@@ -18,6 +18,7 @@ export interface Config {
   logLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
   enableFileLogging?: boolean;
   enableConsoleLogging?: boolean;
+  enableToolConsoleLogging?: boolean; // Separate setting for tool messages
 }
 
 export class ConfigManager {
@@ -44,7 +45,8 @@ export class ConfigManager {
       // Default logging configuration
       logLevel: 'info',
       enableFileLogging: true,
-      enableConsoleLogging: true,
+      enableConsoleLogging: false, // Disable general console logging by default
+      enableToolConsoleLogging: true, // But keep tool messages in console
     };
 
     let fileConfig: Partial<Config> = {};
@@ -96,6 +98,9 @@ export class ConfigManager {
     }
     if (process.env.CODING_AGENT_CONSOLE_LOGGING) {
       envConfig.enableConsoleLogging = process.env.CODING_AGENT_CONSOLE_LOGGING === 'true';
+    }
+    if (process.env.CODING_AGENT_TOOL_CONSOLE_LOGGING) {
+      envConfig.enableToolConsoleLogging = process.env.CODING_AGENT_TOOL_CONSOLE_LOGGING === 'true';
     }
 
     const finalConfig = { ...defaultConfig, ...fileConfig, ...envConfig };
@@ -228,8 +233,9 @@ export class ConfigManager {
 
     logger.configure({
       level: logLevel,
-      enableConsole: config.enableConsoleLogging ?? true,
+      enableConsole: config.enableConsoleLogging ?? false, // Default to false for general logs
       enableFile: config.enableFileLogging ?? true,
+      enableToolConsole: config.enableToolConsoleLogging ?? true, // Default to true for tool logs
     });
   }
 

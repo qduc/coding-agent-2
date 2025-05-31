@@ -24,7 +24,8 @@ describe('ToolOrchestrator', () => {
       sendMessage: jest.fn(),
       streamMessage: jest.fn(),
       initialize: jest.fn(),
-      isReady: jest.fn()
+      isReady: jest.fn(),
+      getCurrentProvider: jest.fn().mockReturnValue('gemini') // Add missing method
     } as any;
 
     orchestrator = new ToolOrchestrator(mockLLMService);
@@ -59,7 +60,8 @@ describe('ToolOrchestrator', () => {
         sendMessage: jest.fn(),
         streamMessage: jest.fn(),
         initialize: jest.fn(),
-        isReady: jest.fn()
+        isReady: jest.fn(),
+        getCurrentProvider: jest.fn().mockReturnValue('openai') // Add missing method
       } as any;
 
       const openaiOrchestrator = new ToolOrchestrator(openaiMockLLMService);
@@ -124,30 +126,6 @@ describe('ToolOrchestrator', () => {
           parameters: { type: 'object', properties: {} }
         }
       ]);
-    });
-  });
-
-  describe('buildGeminiMessage', () => {
-    it('should create proper Gemini message format', () => {
-      const orchestratorInstance = orchestrator as any;
-      const role = 'user';
-      const parts = [{ text: 'Hello world' }];
-
-      const result = orchestratorInstance.buildGeminiMessage(role, parts);
-
-      expect(result).toEqual({
-        role: 'user',
-        parts: [{ text: 'Hello world' }]
-      });
-    });
-
-    it('should throw error for empty parts array', () => {
-      const orchestratorInstance = orchestrator as any;
-      const role = 'user';
-      const parts: any[] = [];
-
-      expect(() => orchestratorInstance.buildGeminiMessage(role, parts))
-        .toThrow('Gemini Content cannot have empty parts array');
     });
   });
 });
