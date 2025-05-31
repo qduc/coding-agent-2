@@ -192,8 +192,10 @@ export class ConfigManager {
     if (!this.hasValidProviderKey()) {
       if (provider === 'openai') {
         errors.push('OpenAI API key is required. Set it via OPENAI_API_KEY environment variable or run: coding-agent --setup');
-      } else {
+      } else if (provider === 'anthropic') {
         errors.push('Anthropic API key is required. Set it via ANTHROPIC_API_KEY environment variable or run: coding-agent --setup');
+      } else if (provider === 'gemini') {
+        errors.push('Gemini API key is required. Set it via GEMINI_API_KEY environment variable or run: coding-agent --setup');
       }
     }
 
