@@ -27,6 +27,7 @@ async function main() {
       .argument('[command]', 'Direct command to execute (e.g. "help me understand this file")')
       .option('-v, --verbose', 'Enable verbose output')
       .option('--no-color', 'Disable colored output')
+      .option('--streaming', 'Enable response streaming (real-time output)')
       .option('--setup', 'Run configuration setup wizard')
       .option('--config', 'Show current configuration')
       .helpOption('-h, --help', 'Display help information')
@@ -60,6 +61,11 @@ async function main() {
           process.exit(1);
         }
 
+        // Handle streaming setting from CLI or config
+        const shouldStream = options.streaming !== undefined ?
+          options.streaming :
+          configManager.getConfig().streaming;
+
         // Create and initialize agent
         const agent = new Agent();
         const initialized = await agent.initialize();
@@ -71,10 +77,10 @@ async function main() {
 
         if (command) {
           // Direct command mode
-          await handleDirectCommand(command, agent, options);
+          await handleDirectCommand(command, agent, options, shouldStream);
         } else {
           // Interactive chat mode
-          await startInteractiveMode(agent, options);
+          await startInteractiveMode(agent, options, shouldStream);
         }
       });
 
@@ -89,7 +95,7 @@ async function main() {
 /**
  * Handle direct command execution
  */
-async function handleDirectCommand(command: string, agent: Agent, options: any) {
+async function handleDirectCommand(command: string, agent: Agent, options: any, shouldStream: boolean = false) {
   if (options.verbose) {
     console.log(chalk.blue('Executing direct command:'), command);
   }
@@ -106,14 +112,49 @@ async function handleDirectCommand(command: string, agent: Agent, options: any) 
     console.log(chalk.cyan('📝 Response:'));
 
     // Process message with the agent
-    const response = await agent.processMessage(
-      command,
-      undefined, // No streaming for now
-      options.verbose
-    );
+    if (shouldStream) {
+      // Handle streaming mode
+      let accumulatedResponse = '';
+      let hasStartedStreaming = false;
 
-    // Print the response
-    console.log(renderResponse(response));
+      const response = await agent.processMessage(
+        command,
+        (chunk) => {
+          // On first chunk, start streaming
+          if (!hasStartedStreaming) {
+            hasStartedStreaming = true;
+          }
+
+          // Accumulate response and display immediately
+          accumulatedResponse += chunk;
+          process.stdout.write(chunk);
+        },
+        options.verbose
+      );
+
+      // Add a newline after streaming
+      console.log();
+
+      // If no content was streamed but we got a response, show it
+      if (!hasStartedStreaming && response.trim()) {
+        console.log(renderResponse(response));
+      }
+    } else {
+      // Non-streaming mode
+      console.log(chalk.gray('Processing...'));
+      const response = await agent.processMessage(
+        command,
+        undefined,
+        options.verbose
+      );
+
+      // Clear "Processing..." line
+      process.stdout.write('\x1b[1A\x1b[2K');
+
+      // Print the response
+      console.log(renderResponse(response));
+    }
+
     console.log();
 
     if (options.verbose) {
@@ -129,7 +170,7 @@ async function handleDirectCommand(command: string, agent: Agent, options: any) 
 /**
  * Start interactive chat mode
  */
-async function startInteractiveMode(agent: Agent, options: any) {
+async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false) {
   if (options.verbose) {
     console.log(chalk.blue('Starting interactive chat mode...'));
   }
@@ -202,51 +243,68 @@ async function startInteractiveMode(agent: Agent, options: any) {
           let hasStartedStreaming = false;
           let currentLine = '';
 
-          const response = await agent.processMessage(
-            trimmedMessage,
-            (chunk: string) => {
-              // Clear "Thinking..." on first chunk and start streaming
-              if (!hasStartedStreaming) {
-                process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
-                process.stdout.write(chalk.cyan('🤖 Agent: '));
-                hasStartedStreaming = true;
-              }
+          if (shouldStream) {
+            // Streaming mode
+            const response = await agent.processMessage(
+              trimmedMessage,
+              (chunk: string) => {
+                // Clear "Thinking..." on first chunk and start streaming
+                if (!hasStartedStreaming) {
+                  process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
+                  process.stdout.write(chalk.cyan('🤖 Agent: '));
+                  hasStartedStreaming = true;
+                }
 
-              // Accumulate content for final rendering
-              accumulatedResponse += chunk;
+                // Accumulate content for final rendering
+                accumulatedResponse += chunk;
 
-              // Stream raw text in real-time for immediate feedback
-              process.stdout.write(chunk);
-              currentLine += chunk;
+                // Stream raw text in real-time for immediate feedback
+                process.stdout.write(chunk);
+                currentLine += chunk;
 
-              // Track current line for proper cursor positioning
-              if (chunk.includes('\n')) {
-                currentLine = '';
-              }
-            },
-            options.verbose
-          );
-
-          // Replace raw streaming output with formatted version
-          if (hasStartedStreaming && accumulatedResponse.trim()) {
-            const terminalWidth = process.stdout.columns || 80;
-            const agentPrefix = '🤖 Agent: ';
-            
-            // Calculate and execute the clearing sequence
-            const clearSequence = calculateStreamingClearSequence(
-              accumulatedResponse, 
-              terminalWidth, 
-              agentPrefix
+                // Track current line for proper cursor positioning
+                if (chunk.includes('\n')) {
+                  currentLine = '';
+                }
+              },
+              options.verbose
             );
-            process.stdout.write(clearSequence);
 
-            // Show formatted response (this will overwrite the cleared space)
-            console.log(chalk.cyan('🤖 Agent:'), renderResponse(accumulatedResponse));
-          } else if (!hasStartedStreaming) {
-            // No streaming occurred (tools only), show complete response
-            process.stdout.write('\x1b[1A\x1b[2K'); // Clear "Thinking..." line
+            // Replace raw streaming output with formatted version
+            if (hasStartedStreaming && accumulatedResponse.trim()) {
+              const terminalWidth = process.stdout.columns || 80;
+              const agentPrefix = '🤖 Agent: ';
+
+              // Calculate and execute the clearing sequence
+              const clearSequence = calculateStreamingClearSequence(
+                accumulatedResponse,
+                terminalWidth,
+                agentPrefix
+              );
+              process.stdout.write(clearSequence);
+
+              // Show formatted response (this will overwrite the cleared space)
+              console.log(chalk.cyan('🤖 Agent:'), renderResponse(accumulatedResponse));
+            } else if (!hasStartedStreaming) {
+              // No streaming occurred (tools only), show complete response
+              process.stdout.write('\x1b[1A\x1b[2K'); // Clear "Thinking..." line
+              console.log(chalk.cyan('🤖 Agent:'), renderResponse(response));
+            }
+          } else {
+            // Non-streaming mode
+            const response = await agent.processMessage(
+              trimmedMessage,
+              undefined,
+              options.verbose
+            );
+
+            // Clear "Thinking..." line
+            process.stdout.write('\x1b[1A\x1b[2K');
+
+            // Show formatted response
             console.log(chalk.cyan('🤖 Agent:'), renderResponse(response));
           }
+
           console.log(); // Add spacing
 
         } catch (error) {

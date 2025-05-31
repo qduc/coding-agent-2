@@ -11,6 +11,7 @@ export interface Config {
   maxTokens?: number;
   model?: string;
   logToolUsage?: boolean;
+  streaming?: boolean;
 }
 
 export class ConfigManager {
@@ -32,7 +33,8 @@ export class ConfigManager {
       model: 'gpt-4o',
       provider: 'openai',
       verbose: false,
-      logToolUsage: true
+      logToolUsage: true,
+      streaming: false // Disable streaming by default
     };
 
     let fileConfig: Partial<Config> = {};
@@ -69,6 +71,9 @@ export class ConfigManager {
     }
     if (process.env.CODING_AGENT_LOG_TOOLS) {
       envConfig.logToolUsage = process.env.CODING_AGENT_LOG_TOOLS === 'true';
+    }
+    if (process.env.CODING_AGENT_STREAMING) {
+      envConfig.streaming = process.env.CODING_AGENT_STREAMING === 'true';
     }
 
     return { ...defaultConfig, ...fileConfig, ...envConfig };
@@ -183,14 +188,15 @@ export class ConfigManager {
     console.log(`Provider: ${chalk.white(config.provider)}`);
     console.log(`Model: ${chalk.white(config.model)}`);
     console.log(`Max Tokens: ${chalk.white(config.maxTokens)}`);
-    
+
     if (config.provider === 'openai') {
       console.log(`OpenAI API Key: ${config.openaiApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
     } else {
       console.log(`Anthropic API Key: ${config.anthropicApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
     }
-    
+
     console.log(`Tool Logging: ${config.logToolUsage ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
+    console.log(`Streaming: ${config.streaming ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
     console.log(`Config file: ${chalk.gray(this.configPath)}`);
     console.log();
   }
@@ -221,7 +227,7 @@ export class ConfigManager {
 
     // Get API key based on provider
     const needsApiKey = provider === 'openai' ? !this.hasOpenAIKey() : !this.hasAnthropicKey();
-    
+
     if (needsApiKey) {
       if (provider === 'openai') {
         console.log(chalk.cyan('OpenAI API Key:'));
@@ -261,7 +267,7 @@ export class ConfigManager {
     }
 
     // Get model choices based on provider
-    const modelChoices = provider === 'openai' 
+    const modelChoices = provider === 'openai'
       ? [
           { name: 'GPT-4o (Latest, Function Calling)', value: 'gpt-4o' },
           { name: 'GPT-4o 2024-08-06 (Structured Outputs)', value: 'gpt-4o-2024-08-06' },
@@ -274,7 +280,7 @@ export class ConfigManager {
         ];
 
     // Optional configuration
-    const { model, maxTokens, logToolUsage } = await inquirer.default.prompt([
+    const { model, maxTokens, logToolUsage, streaming } = await inquirer.default.prompt([
       {
         type: 'list',
         name: 'model',
@@ -299,11 +305,17 @@ export class ConfigManager {
         name: 'logToolUsage',
         message: 'Enable tool usage logging?',
         default: this.config.logToolUsage || false
+      },
+      {
+        type: 'confirm',
+        name: 'streaming',
+        message: 'Enable response streaming? (real-time output)',
+        default: this.config.streaming || false
       }
     ]);
 
     // Save configuration (excluding API key)
-    await this.saveConfig({ provider, model, maxTokens, logToolUsage });
+    await this.saveConfig({ provider, model, maxTokens, logToolUsage, streaming });
 
     console.log();
     console.log(chalk.green('✅ Configuration saved!'));
