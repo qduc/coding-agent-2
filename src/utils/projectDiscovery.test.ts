@@ -105,13 +105,33 @@ describe('ProjectDiscovery', () => {
   });
 
   describe('Fallback Methods', () => {
+    // Mock fs-extra for this describe block to control its behavior
+    jest.mock('fs-extra');
+    const mockFs = require('fs-extra'); // Get the mocked module
+
     // Mock the execSync function to simulate command not found
     let execSyncSpy: jest.SpyInstance;
 
     beforeEach(() => {
-      jest.resetModules();
+      // Reset all mocks before each test in this block
+      jest.resetAllMocks();
+
+      // Mock child_process.execSync
       const childProcess = require('child_process');
       execSyncSpy = jest.spyOn(childProcess, 'execSync');
+
+      // Default mock implementations for fs-extra that call the actual methods
+      // This allows other tests in this block to use normal fs operations unless overridden
+      mockFs.readdirSync.mockImplementation(jest.requireActual('fs-extra').readdirSync);
+      mockFs.existsSync.mockImplementation(jest.requireActual('fs-extra').existsSync);
+      mockFs.statSync.mockImplementation(jest.requireActual('fs-extra').statSync);
+      mockFs.pathExists.mockImplementation(jest.requireActual('fs-extra').pathExists);
+      mockFs.remove.mockImplementation(jest.requireActual('fs-extra').remove);
+      mockFs.mkdtemp.mockImplementation(jest.requireActual('fs-extra').mkdtemp);
+      mockFs.ensureDir.mockImplementation(jest.requireActual('fs-extra').ensureDir);
+      mockFs.writeFile.mockImplementation(jest.requireActual('fs-extra').writeFile);
+      mockFs.writeJSON.mockImplementation(jest.requireActual('fs-extra').writeJSON);
+      mockFs.readFileSync.mockImplementation(jest.requireActual('fs-extra').readFileSync);
     });
 
     afterEach(() => {
