@@ -86,6 +86,16 @@ export class WriteTool extends BaseTool {
         ['Use a valid mode: create, append, or overwrite']
       );
     }
+    
+    // Explicitly validate encoding
+    const allowedEncodings = ['utf8', 'binary', 'base64'];
+    if (typeof encoding !== 'string' || !allowedEncodings.includes(encoding)) {
+      return this.createErrorResult(
+        `Invalid encoding: ${encoding}. Must be one of: utf8, binary, base64`,
+        'VALIDATION_ERROR',
+        ['Use a valid encoding: utf8, binary, or base64']
+      );
+    }
 
     try {
       // Validate the path
