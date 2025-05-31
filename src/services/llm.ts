@@ -4,6 +4,7 @@ import { configManager } from '../core/config';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { ToolLogger } from '../utils/toolLogger';
+import { AnthropicProvider } from './anthropicProvider';
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -58,37 +59,72 @@ export interface LLMProvider {
 
 export class LLMService implements LLMProvider {
   private openai: OpenAI | null = null;
+  private anthropicProvider: AnthropicProvider | null = null;
   private initialized = false;
+  private currentProvider: LLMProvider | null = null;
 
   /**
-   * Initialize OpenAI client
+   * Initialize the appropriate provider based on configuration
    */
   async initialize(): Promise<boolean> {
     try {
       const config = configManager.getConfig();
+      const provider = config.provider || 'openai';
 
-      if (!config.openaiApiKey) {
-        return false;
+      if (provider === 'openai') {
+        return this.initializeOpenAI();
+      } else if (provider === 'anthropic') {
+        return this.initializeAnthropic();
+      } else {
+        throw new Error(`Unknown provider: ${provider}`);
       }
-
-      this.openai = new OpenAI({
-        apiKey: config.openaiApiKey
-      });
-
-      // Test the connection
-      await this.testConnection();
-      this.initialized = true;
-      return true;
     } catch (error) {
-      console.error(chalk.red('Failed to initialize OpenAI:'), error instanceof Error ? error.message : 'Unknown error');
+      console.error(chalk.red('Failed to initialize LLM provider:'), error instanceof Error ? error.message : 'Unknown error');
       return false;
     }
   }
 
   /**
+   * Initialize OpenAI provider
+   */
+  private async initializeOpenAI(): Promise<boolean> {
+    const config = configManager.getConfig();
+
+    if (!config.openaiApiKey) {
+      return false;
+    }
+
+    this.openai = new OpenAI({
+      apiKey: config.openaiApiKey
+    });
+
+    // Test the connection
+    await this.testOpenAIConnection();
+    this.currentProvider = this;
+    this.initialized = true;
+    return true;
+  }
+
+  /**
+   * Initialize Anthropic provider
+   */
+  private async initializeAnthropic(): Promise<boolean> {
+    if (!this.anthropicProvider) {
+      this.anthropicProvider = new AnthropicProvider();
+    }
+
+    const success = await this.anthropicProvider.initialize();
+    if (success) {
+      this.currentProvider = this.anthropicProvider;
+      this.initialized = true;
+    }
+    return success;
+  }
+
+  /**
    * Test OpenAI connection
    */
-  private async testConnection(): Promise<void> {
+  private async testOpenAIConnection(): Promise<void> {
     if (!this.openai) {
       throw new Error('OpenAI client not initialized');
     }
@@ -101,7 +137,15 @@ export class LLMService implements LLMProvider {
    * Check if service is ready
    */
   isReady(): boolean {
-    return this.initialized && this.openai !== null;
+    return this.initialized && this.currentProvider !== null;
+  }
+
+  /**
+   * Get the current provider name for debugging
+   */
+  getCurrentProvider(): string {
+    const config = configManager.getConfig();
+    return config.provider || 'openai';
   }
 
   /**
@@ -116,6 +160,25 @@ export class LLMService implements LLMProvider {
       throw new Error('LLM service not initialized. Run setup first.');
     }
 
+    const config = configManager.getConfig();
+    const provider = config.provider || 'openai';
+
+    if (provider === 'anthropic' && this.currentProvider) {
+      return this.currentProvider.streamMessage(messages, onChunk, onComplete);
+    }
+
+    // OpenAI implementation (keep existing code for backwards compatibility)
+    return this.streamMessageOpenAI(messages, onChunk, onComplete);
+  }
+
+  /**
+   * OpenAI-specific streaming implementation
+   */
+  private async streamMessageOpenAI(
+    messages: Message[],
+    onChunk: (chunk: string) => void,
+    onComplete?: (response: StreamingResponse) => void
+  ): Promise<StreamingResponse> {
     const config = configManager.getConfig();
 
     try {
@@ -170,6 +233,21 @@ export class LLMService implements LLMProvider {
     }
 
     const config = configManager.getConfig();
+    const provider = config.provider || 'openai';
+
+    if (provider === 'anthropic' && this.currentProvider) {
+      return this.currentProvider.sendMessage(messages);
+    }
+
+    // OpenAI implementation
+    return this.sendMessageOpenAI(messages);
+  }
+
+  /**
+   * OpenAI-specific sendMessage implementation
+   */
+  private async sendMessageOpenAI(messages: Message[]): Promise<string> {
+    const config = configManager.getConfig();
 
     try {
       const response = await this.openai!.chat.completions.create({
@@ -200,6 +278,25 @@ export class LLMService implements LLMProvider {
       throw new Error('LLM service not initialized. Run setup first.');
     }
 
+    const config = configManager.getConfig();
+    const provider = config.provider || 'openai';
+
+    if (provider === 'anthropic' && this.currentProvider) {
+      return this.currentProvider.sendMessageWithTools(messages, functions, onToolCall);
+    }
+
+    // OpenAI implementation
+    return this.sendMessageWithToolsOpenAI(messages, functions, onToolCall);
+  }
+
+  /**
+   * OpenAI-specific sendMessageWithTools implementation
+   */
+  private async sendMessageWithToolsOpenAI(
+    messages: Message[],
+    functions: any[] = [],
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse> {
     const config = configManager.getConfig();
 
     try {
@@ -276,6 +373,26 @@ export class LLMService implements LLMProvider {
       throw new Error('LLM service not initialized. Run setup first.');
     }
 
+    const config = configManager.getConfig();
+    const provider = config.provider || 'openai';
+
+    if (provider === 'anthropic' && this.currentProvider) {
+      return this.currentProvider.streamMessageWithTools(messages, functions, onChunk, onToolCall);
+    }
+
+    // OpenAI implementation
+    return this.streamMessageWithToolsOpenAI(messages, functions, onChunk, onToolCall);
+  }
+
+  /**
+   * OpenAI-specific streamMessageWithTools implementation
+   */
+  private async streamMessageWithToolsOpenAI(
+    messages: Message[],
+    functions: any[] = [],
+    onChunk?: (chunk: string) => void,
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse> {
     const config = configManager.getConfig();
 
     try {

@@ -12,7 +12,7 @@
     "start": "node dist/cli/index.js",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "jest --passWithNoTests --runInBand --no-watch"
+    "test": "jest --passWithNoTests --no-watch"
   },
   "keywords": [
     "ai",
@@ -25,6 +25,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "fs-extra": "^11.2.0",
