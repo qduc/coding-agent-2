@@ -180,26 +180,19 @@ describe('ProjectDiscovery', () => {
         throw new Error('command execution failed');
       });
       
-      // Mock fs methods to also fail using jest.spyOn
-      const readdirSyncSpy = jest.spyOn(fs, 'readdirSync').mockImplementation(() => {
-        throw new Error('fs operation failed');
-      });
-      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockImplementation(() => false);
-      const statSyncSpy = jest.spyOn(fs, 'statSync').mockImplementation(() => {
-        throw new Error('fs operation failed');
-      });
+      // Create a discovery instance pointing to a non-existent directory
+      // This will cause fs operations to fail naturally without mocking
+      const nonExistentDir = path.join(tempDir, 'non-existent-directory');
+      const failingDiscovery = new ProjectDiscovery(nonExistentDir);
 
-      const result = await discovery.discover();
-
-      // Restore fs method spies
-      readdirSyncSpy.mockRestore();
-      existsSyncSpy.mockRestore();
-      statSyncSpy.mockRestore();
+      const result = await failingDiscovery.discover();
 
       // Even if everything fails, we should get sensible defaults with silent handling
       expect(result.projectStructure).toBe('');
       expect(result.techStack).toBe('');
       expect(result.entryPoints).toEqual([]);
+      expect(result.summary).toContain('Basic project');
+      expect(result.workingDirectory).toBe(nonExistentDir);
     });
 
     it('should detect tech stack using file checks when commands fail', async () => {
