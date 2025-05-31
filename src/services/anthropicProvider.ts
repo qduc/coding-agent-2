@@ -71,16 +71,49 @@ export class AnthropicProvider implements LLMProvider {
       }
 
       if (message.role === 'tool') {
-        // Handle tool result messages
+        // Handle tool result messages - convert to proper tool_result format
         anthropicMessages.push({
           role: 'user',
-          content: message.content || ''
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: message.tool_call_id || '',
+              content: message.content || ''
+            }
+          ]
         });
       } else if (message.role === 'user' || message.role === 'assistant') {
-        anthropicMessages.push({
-          role: message.role,
-          content: message.content || ''
-        });
+        // Handle regular messages and assistant messages with tool calls
+        if (message.role === 'assistant' && message.tool_calls) {
+          // Convert assistant message with tool calls
+          const content: any[] = [];
+
+          if (message.content) {
+            content.push({
+              type: 'text',
+              text: message.content
+            });
+          }
+
+          for (const toolCall of message.tool_calls) {
+            content.push({
+              type: 'tool_use',
+              id: toolCall.id,
+              name: toolCall.function.name,
+              input: JSON.parse(toolCall.function.arguments)
+            });
+          }
+
+          anthropicMessages.push({
+            role: 'assistant',
+            content
+          });
+        } else {
+          anthropicMessages.push({
+            role: message.role,
+            content: message.content || ''
+          });
+        }
       }
     }
 
@@ -361,5 +394,59 @@ export class AnthropicProvider implements LLMProvider {
       }
       throw new Error('Unknown Anthropic API error');
     }
+  }
+
+  /**
+   * Send tool results back to Claude and get the final response
+   */
+  async sendToolResults(
+    messages: Message[],
+    toolResults: Array<{ tool_call_id: string; content: string }>,
+    functions: any[] = []
+  ): Promise<FunctionCallResponse> {
+    if (!this.isReady()) {
+      throw new Error('Anthropic service not initialized. Run setup first.');
+    }
+
+    // Add tool result messages to the conversation
+    const updatedMessages = [...messages];
+    for (const result of toolResults) {
+      updatedMessages.push({
+        role: 'tool',
+        content: result.content,
+        tool_call_id: result.tool_call_id
+      });
+    }
+
+    // Send the updated conversation back to Claude
+    return this.sendMessageWithTools(updatedMessages, functions);
+  }
+
+  /**
+   * Send tool results back to Claude and get streaming response
+   */
+  async streamToolResults(
+    messages: Message[],
+    toolResults: Array<{ tool_call_id: string; content: string }>,
+    functions: any[] = [],
+    onChunk?: (chunk: string) => void,
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse> {
+    if (!this.isReady()) {
+      throw new Error('Anthropic service not initialized. Run setup first.');
+    }
+
+    // Add tool result messages to the conversation
+    const updatedMessages = [...messages];
+    for (const result of toolResults) {
+      updatedMessages.push({
+        role: 'tool',
+        content: result.content,
+        tool_call_id: result.tool_call_id
+      });
+    }
+
+    // Send the updated conversation back to Claude with streaming
+    return this.streamMessageWithTools(updatedMessages, functions, onChunk, onToolCall);
   }
 }

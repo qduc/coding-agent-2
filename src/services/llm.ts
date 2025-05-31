@@ -56,6 +56,18 @@ export interface LLMProvider {
     onChunk?: (chunk: string) => void,
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
+  sendToolResults?(
+    messages: Message[],
+    toolResults: Array<{ tool_call_id: string; content: string }>,
+    functions?: any[]
+  ): Promise<FunctionCallResponse>;
+  streamToolResults?(
+    messages: Message[],
+    toolResults: Array<{ tool_call_id: string; content: string }>,
+    functions?: any[],
+    onChunk?: (chunk: string) => void,
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse>;
 }
 
 export class LLMService implements LLMProvider {
@@ -589,6 +601,78 @@ Focus on being precise, helpful, and aligned with software engineering best prac
       role: 'assistant',
       content
     };
+  }
+
+  /**
+   * Send tool results back to the LLM and get the final response
+   */
+  async sendToolResults(
+    messages: Message[],
+    toolResults: Array<{ tool_call_id: string; content: string }>,
+    functions: any[] = []
+  ): Promise<FunctionCallResponse> {
+    if (!this.isReady()) {
+      throw new Error('LLM service not initialized. Run setup first.');
+    }
+
+    const config = configManager.getConfig();
+    const provider = config.provider || 'openai';
+
+    if ((provider === 'anthropic' || provider === 'gemini') && this.currentProvider) {
+      // Use provider-specific implementation if available
+      if ('sendToolResults' in this.currentProvider && this.currentProvider.sendToolResults) {
+        return this.currentProvider.sendToolResults(messages, toolResults, functions);
+      }
+    }
+
+    // Fallback: Add tool result messages and call sendMessageWithTools
+    const updatedMessages = [...messages];
+    for (const result of toolResults) {
+      updatedMessages.push({
+        role: 'tool',
+        content: result.content,
+        tool_call_id: result.tool_call_id
+      });
+    }
+
+    return this.sendMessageWithTools(updatedMessages, functions);
+  }
+
+  /**
+   * Send tool results back to the LLM and get streaming response
+   */
+  async streamToolResults(
+    messages: Message[],
+    toolResults: Array<{ tool_call_id: string; content: string }>,
+    functions: any[] = [],
+    onChunk?: (chunk: string) => void,
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse> {
+    if (!this.isReady()) {
+      throw new Error('LLM service not initialized. Run setup first.');
+    }
+
+    const config = configManager.getConfig();
+    const provider = config.provider || 'openai';
+
+    if ((provider === 'anthropic' || provider === 'gemini') && this.currentProvider) {
+      // Use provider-specific implementation if available
+      if ('streamToolResults' in this.currentProvider && this.currentProvider.streamToolResults) {
+        return this.currentProvider.streamToolResults(messages, toolResults, functions, onChunk, onToolCall);
+      }
+    }
+
+    // Fallback: Add tool result messages and call streamMessageWithTools
+    const updatedMessages = [...messages];
+    for (const result of toolResults) {
+      updatedMessages.push({
+        role: 'tool',
+        content: result.content,
+        tool_call_id: result.tool_call_id
+      });
+    }
+
+    return this.streamMessageWithTools(updatedMessages, functions, onChunk, onToolCall);
   }
 }
 

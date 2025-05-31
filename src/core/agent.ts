@@ -6,6 +6,7 @@ import { GlobTool } from '../tools/glob';
 import { ReadTool } from '../tools/read';
 import { RipgrepTool } from '../tools/ripgrep';
 import { WriteTool } from '../tools/write';
+import { BashTool } from '../tools/bash';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
@@ -29,13 +30,14 @@ export class Agent {
     const globTool = new GlobTool();
     const readTool = new ReadTool();
     const writeTool = new WriteTool();
+    const bashTool = new BashTool();
 
     // Create ripgrep tool and check if ripgrep is available
     const ripgrepTool = new RipgrepTool();
     const ripgrepAvailable = ripgrepTool.isRipgrepAvailable();
 
     // Create the list of tools - only add ripgrep if available
-    const tools: BaseTool[] = [lsTool, globTool, readTool, writeTool];
+    const tools: BaseTool[] = [lsTool, globTool, readTool, writeTool, bashTool];
 
     if (ripgrepAvailable) {
       tools.push(ripgrepTool);
