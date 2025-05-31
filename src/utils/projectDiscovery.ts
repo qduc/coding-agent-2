@@ -1,6 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs-extra';
 
+import { CodeStructureAnalysis, ProjectCacheMetadata } from './codeStructure';
+
 /**
  * Project Discovery Result
  */
@@ -11,6 +13,17 @@ export interface ProjectDiscoveryResult {
   summary: string;
   executedAt: Date;
   workingDirectory: string;
+  
+  // NEW: Enhanced with code structure analysis
+  codeStructure?: CodeStructureAnalysis;
+  cacheMetadata?: ProjectCacheMetadata;
+  isCachedResult?: boolean;
+  partiallyUpdated?: string[];
+  analysisMetadata?: {
+    filesAnalyzed: number;
+    filesSkipped: number;
+    limitationsApplied: string[];
+  };
 }
 
 /**
