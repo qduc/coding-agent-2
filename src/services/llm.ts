@@ -271,9 +271,9 @@ export class LLMService implements LLMProvider {
 
     try {
       const response = await this.openai!.chat.completions.create({
-        model: config.model || 'gpt-4-turbo-preview',
+        model: config.model || 'gpt-4o-2024-11-20',
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-        max_tokens: config.maxTokens || 4000,
+        max_tokens: config.maxTokens || 8000,
         temperature: 0.7
       });
 
@@ -321,14 +321,14 @@ export class LLMService implements LLMProvider {
 
     try {
       const requestParams: any = {
-        model: config.model || 'gpt-4-turbo-preview',
+        model: config.model || 'gpt-4o-2024-11-20',
         messages: messages.map(msg => ({
           role: msg.role,
           content: msg.content,
           ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
           ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id })
         })),
-        max_tokens: config.maxTokens || 4000,
+        max_tokens: config.maxTokens || 8000,
         temperature: 0.7
       };
 

@@ -73,10 +73,10 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const config = configManager.getConfig();
-    const model = this.genAI.getGenerativeModel({ 
-      model: config.model || 'gemini-pro',
+    const model = this.genAI.getGenerativeModel({
+      model: config.model || 'gemini-2.5-flash',
       generationConfig: {
-        maxOutputTokens: config.maxTokens || 4000
+        maxOutputTokens: config.maxTokens || 8000
       }
     });
 
@@ -108,10 +108,10 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const config = configManager.getConfig();
-    const model = this.genAI.getGenerativeModel({ 
-      model: config.model || 'gemini-pro',
+    const model = this.genAI.getGenerativeModel({
+      model: config.model || 'gemini-2.5-flash',
       generationConfig: {
-        maxOutputTokens: config.maxTokens || 4000
+        maxOutputTokens: config.maxTokens || 8000
       }
     });
 
@@ -130,10 +130,10 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const config = configManager.getConfig();
-    const model = this.genAI.getGenerativeModel({ 
-      model: config.model || 'gemini-pro',
+    const model = this.genAI.getGenerativeModel({
+      model: config.model || 'gemini-2.5-flash',
       generationConfig: {
-        maxOutputTokens: config.maxTokens || 4000
+        maxOutputTokens: config.maxTokens || 8000
       },
       tools: this.convertToolsToGeminiFormat(functions)
     });
@@ -149,11 +149,11 @@ export class GeminiProvider implements LLMProvider {
         if (part.functionCall) {
           const { name, args } = part.functionCall;
           const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args;
-          
+
           if (onToolCall) {
             onToolCall(name, parsedArgs);
           }
-          
+
           toolCalls.push({
             function: {
               name,

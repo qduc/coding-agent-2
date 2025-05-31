@@ -30,8 +30,8 @@ export class ConfigManager {
    */
   private loadConfig(): Config {
     const defaultConfig: Config = {
-      maxTokens: 4000,
-      model: 'gpt-4o',
+      maxTokens: 8000,
+      model: 'gpt-4o-2024-11-20',
       provider: 'openai',
       verbose: false,
       logToolUsage: true,
@@ -61,8 +61,11 @@ export class ConfigManager {
     if (process.env.ANTHROPIC_API_KEY) {
       envConfig.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
     }
+    if (process.env.GEMINI_API_KEY) {
+      envConfig.geminiApiKey = process.env.GEMINI_API_KEY;
+    }
     if (process.env.CODING_AGENT_PROVIDER) {
-      envConfig.provider = process.env.CODING_AGENT_PROVIDER as 'openai' | 'anthropic';
+      envConfig.provider = process.env.CODING_AGENT_PROVIDER as 'openai' | 'anthropic' | 'gemini';
     }
     if (process.env.CODING_AGENT_MODEL) {
       envConfig.model = process.env.CODING_AGENT_MODEL;
@@ -93,6 +96,7 @@ export class ConfigManager {
     const configToSave = { ...this.config };
     delete configToSave.openaiApiKey; // Never save API key to file
     delete configToSave.anthropicApiKey; // Never save API key to file
+    delete configToSave.geminiApiKey; // Never save API key to file
 
     await fs.writeFile(this.configPath, JSON.stringify(configToSave, null, 2));
   }
@@ -199,8 +203,8 @@ export class ConfigManager {
       }
     }
 
-    if (this.config.maxTokens && (this.config.maxTokens < 100 || this.config.maxTokens > 8000)) {
-      errors.push('maxTokens must be between 100 and 8000');
+    if (this.config.maxTokens && (this.config.maxTokens < 100 || this.config.maxTokens > 32000)) {
+      errors.push('maxTokens must be between 100 and 32000');
     }
 
     return {
@@ -252,15 +256,17 @@ export class ConfigManager {
         message: 'Select LLM provider:',
         default: this.config.provider,
         choices: [
-          { name: 'OpenAI (GPT-4, GPT-4o)', value: 'openai' },
-          { name: 'Anthropic (Claude 3)', value: 'anthropic' },
-          { name: 'Gemini (Google AI)', value: 'gemini' }
+          { name: 'OpenAI (GPT-4o, o3-mini, GPT-4.1)', value: 'openai' },
+          { name: 'Anthropic (Claude 4, Claude 3.7)', value: 'anthropic' },
+          { name: 'Google Gemini (Gemini 2.5, 2.0)', value: 'gemini' }
         ]
       }
     ]);
 
     // Get API key based on provider
-    const needsApiKey = provider === 'openai' ? !this.hasOpenAIKey() : !this.hasAnthropicKey();
+    const needsApiKey = provider === 'openai' ? !this.hasOpenAIKey() :
+                       provider === 'anthropic' ? !this.hasAnthropicKey() :
+                       !this.hasGeminiKey();
 
     if (needsApiKey) {
       if (provider === 'openai') {
@@ -279,7 +285,7 @@ export class ConfigManager {
         {
           type: 'password',
           name: 'apiKey',
-          message: `Enter your ${provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key:`,
+          message: `Enter your ${provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key:`,
           mask: '*',
           validate: (input: string) => {
             if (!input.trim()) {
@@ -311,20 +317,26 @@ export class ConfigManager {
     // Get model choices based on provider
     const modelChoices = provider === 'openai'
       ? [
-          { name: 'GPT-4o (Latest, Function Calling)', value: 'gpt-4o' },
-          { name: 'GPT-4o 2024-08-06 (Structured Outputs)', value: 'gpt-4o-2024-08-06' },
-          { name: 'GPT-4.1 (Advanced Reasoning)', value: 'gpt-4.1' }
+          { name: 'o3-mini (Latest Reasoning Model)', value: 'o3-mini' },
+          { name: 'GPT-4.1 (Advanced Reasoning)', value: 'gpt-4.1' },
+          { name: 'GPT-4o 2024-11-20 (Latest, Enhanced)', value: 'gpt-4o-2024-11-20' },
+          { name: 'GPT-4o (Stable)', value: 'gpt-4o' },
+          { name: 'GPT-4o Mini (Fast & Efficient)', value: 'gpt-4o-mini' }
         ]
       : provider === 'anthropic'
         ? [
-            { name: 'Claude 3.5 Sonnet (Latest)', value: 'claude-3-5-sonnet-20241022' },
-            { name: 'Claude 3 Opus (Most Capable)', value: 'claude-3-opus-20240229' },
-            { name: 'Claude 3 Haiku (Fast)', value: 'claude-3-haiku-20240307' }
+            { name: 'Claude 4 Opus (Latest, Most Capable)', value: 'claude-opus-4-20250514' },
+            { name: 'Claude 4 Sonnet (Latest, Balanced)', value: 'claude-sonnet-4-20250514' },
+            { name: 'Claude 3.7 Sonnet (Enhanced)', value: 'claude-3-7-sonnet-20250219' },
+            { name: 'Claude 3.5 Sonnet (Stable)', value: 'claude-3-5-sonnet-20241022' },
+            { name: 'Claude 3.5 Haiku (Fast)', value: 'claude-3-5-haiku-20241022' }
           ]
         : [
-            { name: 'Gemini 1.5 Pro (Latest)', value: 'gemini-1.5-pro-latest' },
-            { name: 'Gemini 1.5 Flash (Fast)', value: 'gemini-1.5-flash-latest' },
-            { name: 'Gemini Pro (General Purpose)', value: 'gemini-pro' }
+            { name: 'Gemini 2.5 Flash (Latest, Fast)', value: 'gemini-2.5-flash' },
+            { name: 'Gemini 2.5 Pro (Latest, Most Capable)', value: 'gemini-2.5-pro' },
+            { name: 'Gemini 2.0 Flash (Multimodal)', value: 'gemini-2.0-flash-exp' },
+            { name: 'Gemini 1.5 Pro (Stable)', value: 'gemini-1.5-pro-002' },
+            { name: 'Gemini 1.5 Flash (Fast)', value: 'gemini-1.5-flash-002' }
           ];
 
     // Optional configuration
@@ -332,7 +344,7 @@ export class ConfigManager {
       {
         type: 'list',
         name: 'model',
-        message: `Select ${provider === 'openai' ? 'OpenAI' : 'Anthropic'} model:`,
+        message: `Select ${provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Google Gemini'} model:`,
         default: this.config.model,
         choices: modelChoices
       },
@@ -342,8 +354,8 @@ export class ConfigManager {
         message: 'Maximum tokens per response:',
         default: this.config.maxTokens,
         validate: (input: number) => {
-          if (input < 100 || input > 8000) {
-            return 'Must be between 100 and 8000';
+          if (input < 100 || input > 32000) {
+            return 'Must be between 100 and 32000';
           }
           return true;
         }
@@ -368,10 +380,10 @@ export class ConfigManager {
     console.log();
     console.log(chalk.green('✅ Configuration saved!'));
     console.log(chalk.gray('Note: API key is stored in memory only for security.'));
-    const envVar = provider === 'openai' 
-      ? 'OPENAI_API_KEY' 
-      : provider === 'anthropic' 
-        ? 'ANTHROPIC_API_KEY' 
+    const envVar = provider === 'openai'
+      ? 'OPENAI_API_KEY'
+      : provider === 'anthropic'
+        ? 'ANTHROPIC_API_KEY'
         : 'GEMINI_API_KEY';
     console.log(chalk.gray(`Set ${envVar} environment variable for persistent usage.`));
     console.log();

@@ -114,7 +114,7 @@ export class AnthropicProvider implements LLMProvider {
     try {
       const stream = await this.anthropic!.messages.create({
         model: config.model || 'claude-3-5-sonnet-20241022',
-        max_tokens: config.maxTokens || 4000,
+        max_tokens: config.maxTokens || 8000,
         system: systemMessage,
         messages: anthropicMessages,
         stream: true
@@ -167,7 +167,7 @@ export class AnthropicProvider implements LLMProvider {
     try {
       const response = await this.anthropic!.messages.create({
         model: config.model || 'claude-3-5-sonnet-20241022',
-        max_tokens: config.maxTokens || 4000,
+        max_tokens: config.maxTokens || 8000,
         system: systemMessage,
         messages: anthropicMessages
       });
@@ -203,7 +203,7 @@ export class AnthropicProvider implements LLMProvider {
     try {
       const requestParams: any = {
         model: config.model || 'claude-3-5-sonnet-20241022',
-        max_tokens: config.maxTokens || 4000,
+        max_tokens: config.maxTokens || 8000,
         system: systemMessage,
         messages: anthropicMessages
       };
@@ -288,7 +288,7 @@ export class AnthropicProvider implements LLMProvider {
     try {
       const requestParams: any = {
         model: config.model || 'claude-3-5-sonnet-20241022',
-        max_tokens: config.maxTokens || 4000,
+        max_tokens: config.maxTokens || 8000,
         system: systemMessage,
         messages: anthropicMessages,
         stream: true
