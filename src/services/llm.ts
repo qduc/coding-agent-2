@@ -33,7 +33,24 @@ export interface FunctionCallResponse {
   };
 }
 
-export class LLMService {
+/** Interface for LLM providers. */
+export interface LLMProvider {
+  initialize(): Promise<boolean>;
+  isReady(): boolean;
+  streamMessage(
+    messages: Message[],
+    onChunk: (chunk: string) => void,
+    onComplete?: (response: StreamingResponse) => void
+  ): Promise<StreamingResponse>;
+  sendMessage(messages: Message[]): Promise<string>;
+  sendMessageWithTools(
+    messages: Message[],
+    functions?: any[],
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse>;
+}
+
+export class LLMService implements LLMProvider {
   private openai: OpenAI | null = null;
   private initialized = false;
 
