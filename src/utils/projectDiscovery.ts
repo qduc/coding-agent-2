@@ -83,6 +83,11 @@ export class ProjectDiscovery {
    */
   private createTreeRepresentationNodeJS(): string {
     try {
+      // First check if directory exists
+      if (!fs.existsSync(this.workingDirectory)) {
+        return '';
+      }
+
       const projectName = path.basename(this.workingDirectory);
       const ignoreDirs = new Set(['node_modules', '.git', '__pycache__', 'venv', 'env', 'dist', 'build']);
 
@@ -124,15 +129,7 @@ export class ProjectDiscovery {
 
       return `${projectName}/\n${projectTree}\n${directoryCount} director${directoryCount === 1 ? 'y' : 'ies'}, ${fileCount} file${fileCount === 1 ? '' : 's'}`;
     } catch (error) {
-      // Fallback to basic directory listing
-      try {
-        const items = fs.readdirSync(this.workingDirectory, { withFileTypes: true })
-          .filter(item => !item.name.startsWith('.'))
-          .map(item => item.name + (item.isDirectory() ? '/' : ''));
-        return `${path.basename(this.workingDirectory)}/\n${items.join('\n')}`;
-      } catch (fallbackError) {
-        return '';
-      }
+      return '';
     }
   }
 
@@ -155,6 +152,11 @@ export class ProjectDiscovery {
    */
   private detectTechStackWithNodeJS(): string {
     try {
+      // First check if directory exists
+      if (!fs.existsSync(this.workingDirectory)) {
+        return '';
+      }
+
       let result = '';
       const projectRoot = this.workingDirectory;
 
@@ -229,6 +231,11 @@ export class ProjectDiscovery {
    */
   private findEntryPointsWithNodeJS(): string[] {
     try {
+      // First check if directory exists
+      if (!fs.existsSync(this.workingDirectory)) {
+        return [];
+      }
+
       const entries: string[] = [];
       const projectRoot = this.workingDirectory;
 
