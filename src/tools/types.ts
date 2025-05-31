@@ -74,7 +74,14 @@ export type ToolErrorCode =
   | 'UNKNOWN_ERROR'
   | 'INVALID_PATTERN'
   | 'INVALID_FILE_TYPE'
-  | 'BINARY_FILE';
+  | 'BINARY_FILE'
+  | 'INVALID_COMMAND'
+  | 'DANGEROUS_COMMAND'
+  | 'UNSAFE_COMMAND'
+  | 'COMMAND_FAILED'
+  | 'EXECUTION_ERROR'
+  | 'TIMEOUT'
+  | 'SPAWN_ERROR';
 
 /**
  * Tool execution context for security and limits

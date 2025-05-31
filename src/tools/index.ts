@@ -14,6 +14,9 @@ export type { LSParams, FileEntry, LSResult } from './ls';
 
 export { ReadTool } from './read';
 export type { ReadParams, ReadResult } from './read';
+
+export { BashTool } from './bash';
+export type { BashParams, BashResult } from './bash';
 /**
  * Tools module index
  *
@@ -31,6 +34,7 @@ export * from './ls';
 export * from './glob';
 export * from './read';
 export * from './ripgrep';
+export * from './bash';
 
 // Tool registry for dynamic tool loading
 import { BaseTool } from './base';
@@ -38,6 +42,7 @@ import { LSTool } from './ls';
 import { GlobTool } from './glob';
 import { ReadTool } from './read';
 import { RipgrepTool } from './ripgrep';
+import { BashTool } from './bash';
 
 /**
  * Registry of all available tools
@@ -46,7 +51,8 @@ export const tools: Record<string, new (...args: any[]) => BaseTool> = {
   ls: LSTool,
   glob: GlobTool,
   read: ReadTool,
-  ripgrep: RipgrepTool
+  ripgrep: RipgrepTool,
+  bash: BashTool
 };
 export { GlobTool } from './glob';
 export type { GlobParams, GlobMatch, GlobResult } from './glob';

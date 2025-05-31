@@ -12,7 +12,7 @@
     "start": "node dist/cli/index.js",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "jest --passWithNoTests --runInBand"
+    "test": "jest --passWithNoTests --runInBand --no-watch"
   },
   "keywords": [
     "ai",
