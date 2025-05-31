@@ -12,40 +12,23 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { BaseTool } from './base';
-import { ToolSchema, ToolResult, ToolError } from './types';
+import { ToolSchema, ToolResult, ToolError, ToolContext } from './types';
 import { validatePath } from './validation';
 
-/**
- * Parameters for the Write tool
- */
 export interface WriteParams {
-  /** File path to write to */
   path: string;
-  /** Content to write */
   content: string;
-  /** File encoding (default: utf8) */
   encoding?: 'utf8' | 'binary' | 'base64';
-  /** Write mode: create, append, or overwrite */
   mode?: 'create' | 'append' | 'overwrite';
-  /** Create backup before overwriting */
   backup?: boolean;
-  /** Create directories if they don't exist */
   createDirs?: boolean;
 }
 
-/**
- * Write tool result
- */
 export interface WriteResult {
-  /** File path that was written */
   filePath: string;
-  /** Number of bytes written */
   bytesWritten: number;
-  /** Whether the file was newly created */
   created: boolean;
-  /** Path to backup file if created */
   backupPath?: string;
-  /** Write mode used */
   mode: string;
 }
 
@@ -55,14 +38,8 @@ export class WriteTool extends BaseTool {
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
-      path: {
-        type: 'string',
-        description: 'File path to write to'
-      },
-      content: {
-        type: 'string',
-        description: 'Content to write to the file'
-      },
+      path: { type: 'string', description: 'File path to write to' },
+      content: { type: 'string', description: 'Content to write to the file' },
       encoding: {
         type: 'string',
         description: 'File encoding',
@@ -100,63 +77,105 @@ export class WriteTool extends BaseTool {
       createDirs = true
     } = params;
 
+    // Explicitly validate mode
+    const allowedModes = ['create', 'append', 'overwrite'];
+    if (typeof mode !== 'string' || !allowedModes.includes(mode)) {
+      return this.createErrorResult(
+        `Invalid mode: ${mode}. Must be one of: create, append, overwrite`,
+        'VALIDATION_ERROR',
+        ['Use a valid mode: create, append, or overwrite']
+      );
+    }
+
     try {
       // Validate the path
       try {
         validatePath(filePath, { allowAbsolute: true });
       } catch (error) {
-        if (error instanceof ToolError) {
-          throw error;
-        }
-        throw new ToolError(
-          `Invalid file path: ${filePath}`,
-          'INVALID_PATH',
-          ['Ensure the path is valid and not blocked']
-        );
+        if (error instanceof ToolError) throw error;
+        throw new ToolError(`Invalid file path: ${filePath}`, 'INVALID_PATH', ['Ensure the path is valid and not blocked']);
       }
-
-      // Resolve to absolute path
       const absolutePath = path.resolve(filePath);
+      const parentDir = path.dirname(absolutePath);
 
-      // Check for blocked paths
+      // Blocked path check (should come before extension and parent dir checks)
       if (this.isBlockedPath(absolutePath)) {
         return this.createErrorResult(
-          `Writing to this path is restricted: ${filePath}`,
+          `Access to file is restricted: ${filePath}`,
           'PERMISSION_DENIED',
-          ['Choose a different file path that is not in the blocked list']
+          ['Choose a different file that is not in the blocked list']
         );
       }
 
-      // Check if content exceeds size limits
+      // Check if parent directory exists or can be created
+      const parentExists = await fs.pathExists(parentDir);
+      if (!parentExists && !createDirs) {
+        return this.createErrorResult(
+          `Parent directory does not exist: ${parentDir}`,
+          'INVALID_PATH',
+          ['Set createDirs: true to create parent directories']
+        );
+      }
+      // If parent directory does not exist and createDirs is true, try to create it
+      if (!parentExists && createDirs) {
+        try {
+          await fs.ensureDir(parentDir);
+        } catch (error) {
+          return this.createErrorResult(
+            `Cannot create parent directory: ${parentDir}`,
+            'INVALID_PATH',
+            ['Check if the path is valid and you have permissions']
+          );
+        }
+      }
+      // After ensureDir, check if parentDir is a directory
+      let parentStats: fs.Stats | undefined;
+      try {
+        parentStats = await fs.stat(parentDir);
+      } catch (error) {
+        return this.createErrorResult(
+          `Parent directory does not exist or is not accessible: ${parentDir}`,
+          'INVALID_PATH',
+          ['Check if the path is valid and you have permissions']
+        );
+      }
+      if (!parentStats.isDirectory()) {
+        return this.createErrorResult(
+          `Parent path is not a directory: ${parentDir}`,
+          'INVALID_PATH',
+          ['Check if the path is valid and you have permissions']
+        );
+      }
+      // Only check extension if path and parent are valid and not blocked
+      if (
+        this.context.allowedExtensions.length > 0 &&
+        !this.context.allowedExtensions.some(ext => absolutePath.endsWith(ext))
+      ) {
+        return this.createErrorResult(
+          `File extension not allowed: ${filePath}`,
+          'INVALID_FILE_TYPE',
+          ['Use an allowed file extension']
+        );
+      }
+      // Check content size
       const contentSize = Buffer.byteLength(content, encoding as BufferEncoding);
       if (contentSize > this.context.maxFileSize) {
         return this.createErrorResult(
           `Content size (${contentSize} bytes) exceeds maximum allowed size (${this.context.maxFileSize} bytes)`,
           'FILE_TOO_LARGE',
-          [
-            `Reduce content size to under ${this.context.maxFileSize} bytes`,
-            'Consider writing the content in smaller chunks'
-          ]
+          [`Reduce content size to under ${this.context.maxFileSize} bytes`, 'Consider writing the content in smaller chunks']
         );
       }
-
       const fileExists = await fs.pathExists(absolutePath);
-      const parentDir = path.dirname(absolutePath);
       let backupPath: string | undefined;
-
-      // Handle different write modes
+      // Handle create mode
       if (mode === 'create' && fileExists) {
         return this.createErrorResult(
           `File already exists: ${filePath}`,
           'VALIDATION_ERROR',
-          [
-            'Use mode "overwrite" to replace the existing file',
-            'Use mode "append" to add content to the end',
-            'Choose a different file name'
-          ]
+          ['Use mode "overwrite" to replace the existing file', 'Use mode "append" to add content to the end', 'Choose a different file name']
         );
       }
-
       // Create parent directories if needed
       if (createDirs && !await fs.pathExists(parentDir)) {
         try {
@@ -169,7 +188,6 @@ export class WriteTool extends BaseTool {
           );
         }
       }
-
       // Create backup if overwriting and backup is enabled
       if (mode === 'overwrite' && fileExists && backup) {
         backupPath = `${absolutePath}.backup.${Date.now()}`;
@@ -177,14 +195,11 @@ export class WriteTool extends BaseTool {
           await fs.copy(absolutePath, backupPath);
         } catch (error) {
           // Non-fatal error - continue without backup
-          console.warn(`Warning: Could not create backup file: ${error}`);
         }
       }
-
       // Write the content
       let bytesWritten = 0;
       const created = !fileExists || mode === 'overwrite';
-
       try {
         if (mode === 'append') {
           await fs.appendFile(absolutePath, content, encoding as BufferEncoding);
@@ -197,13 +212,11 @@ export class WriteTool extends BaseTool {
         // If we created a backup, try to restore it
         if (backupPath && await fs.pathExists(backupPath)) {
           try {
-            await fs.move(backupPath, absolutePath);
+            await fs.move(backupPath, absolutePath, { overwrite: true });
           } catch (restoreError) {
             // Log restore failure but don't mask original error
-            console.warn(`Warning: Could not restore backup after write failure: ${restoreError}`);
           }
         }
-
         return this.createErrorResult(
           `Failed to write file: ${error instanceof Error ? error.message : 'Unknown error'}`,
           'PERMISSION_DENIED',
@@ -214,7 +227,6 @@ export class WriteTool extends BaseTool {
           ]
         );
       }
-
       const result: WriteResult = {
         filePath: absolutePath,
         bytesWritten,
@@ -222,17 +234,13 @@ export class WriteTool extends BaseTool {
         mode,
         ...(backupPath && { backupPath })
       };
-
       return this.createSuccessResult(result, {
         operation: mode,
         fileSize: bytesWritten,
         encoding
       });
-
     } catch (error) {
-      if (error instanceof ToolError) {
-        throw error;
-      }
+      if (error instanceof ToolError) throw error;
       throw new ToolError(
         `Failed to write file: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'UNKNOWN_ERROR'
@@ -240,20 +248,14 @@ export class WriteTool extends BaseTool {
     }
   }
 
-  /**
-   * Check if a path is in the blocked list
-   */
   private isBlockedPath(targetPath: string): boolean {
     const normalizedPath = path.normalize(targetPath);
     const pathParts = normalizedPath.split(path.sep);
-
     return this.context.blockedPaths.some(blockedPattern => {
-      // Check if any part of the path matches the blocked pattern
       return pathParts.some(part => {
         return (
           part === blockedPattern ||
           normalizedPath.includes(blockedPattern) ||
-          // Special check for system directories
           normalizedPath.startsWith('/etc/') ||
           normalizedPath.startsWith('/usr/') ||
           normalizedPath.startsWith('/bin/') ||

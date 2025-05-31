@@ -1,12 +1,15 @@
 /**
- * Tests for Write Tool - File creation and modification
+ * Tests for Write Tool - File writing and modification with safety features
  *
  * Comprehensive test suite covering:
- * - File creation with different modes
- * - Content validation and size limits
- * - Backup creation and restoration
- * - Error handling and security validation
- * - Different encoding support
+ * - Basic file writing (create, append, overwrite)
+ * - Backup creation and restore
+ * - Directory creation
+ * - Encoding support (utf8, binary, base64)
+ * - File size limits
+ * - Security validation and blocked paths
+ * - Error cases (file exists, permission denied, invalid params, etc.)
+ * - Edge cases and boundary conditions
  */
 
 import * as fs from 'fs-extra';
@@ -21,23 +24,19 @@ describe('WriteTool', () => {
   let testContext: ToolContext;
 
   beforeEach(async () => {
-    // Create a temporary directory for testing
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'write-tool-test-'));
-
     testContext = {
       workingDirectory: tempDir,
       maxFileSize: 1024 * 1024, // 1MB
       timeout: 30000,
       allowHidden: false,
-      allowedExtensions: [],
-      blockedPaths: ['node_modules', '.git', '.env', 'system32']
+      allowedExtensions: ['.txt', '.md', '.json'],
+      blockedPaths: ['node_modules', '.git', '.env']
     };
-
     writeTool = new WriteTool(testContext);
   });
 
   afterEach(async () => {
-    // Clean up temporary directory
     if (tempDir && await fs.pathExists(tempDir)) {
       await fs.remove(tempDir);
     }
@@ -47,343 +46,207 @@ describe('WriteTool', () => {
     it('should have correct tool name', () => {
       expect(writeTool.name).toBe('write');
     });
-
     it('should have a description', () => {
       expect(writeTool.description).toBeDefined();
       expect(typeof writeTool.description).toBe('string');
       expect(writeTool.description.length).toBeGreaterThan(0);
     });
-
     it('should have valid schema', () => {
       const schema = writeTool.schema;
       expect(schema.type).toBe('object');
       expect(schema.properties).toBeDefined();
       expect(schema.required).toContain('path');
       expect(schema.required).toContain('content');
-    });
-  });
-
-  describe('File Creation', () => {
-    it('should create a new file with content', async () => {
-      const testFile = path.join(tempDir, 'test.txt');
-      const content = 'Hello, World!';
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content,
-        mode: 'create'
-      });
-
-      expect(result.success).toBe(true);
-      const output = result.output as WriteResult;
-      expect(output.created).toBe(true);
-      expect(output.bytesWritten).toBe(Buffer.byteLength(content));
-      expect(output.mode).toBe('create');
-
-      // Verify file was created with correct content
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(content);
-    });
-
-    it('should fail to create file if it already exists', async () => {
-      const testFile = path.join(tempDir, 'existing.txt');
-      await fs.writeFile(testFile, 'existing content');
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: 'new content',
-        mode: 'create'
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(ToolError);
-      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
-    });
-
-    it('should create parent directories when createDirs is true', async () => {
-      const testFile = path.join(tempDir, 'nested', 'deep', 'test.txt');
-      const content = 'nested content';
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content,
-        createDirs: true
-      });
-
-      expect(result.success).toBe(true);
-      expect(await fs.pathExists(testFile)).toBe(true);
-
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(content);
-    });
-  });
-
-  describe('File Overwriting', () => {
-    it('should overwrite existing file', async () => {
-      const testFile = path.join(tempDir, 'overwrite.txt');
-      const originalContent = 'original content';
-      const newContent = 'new content';
-
-      // Create original file
-      await fs.writeFile(testFile, originalContent);
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: newContent,
-        mode: 'overwrite'
-      });
-
-      expect(result.success).toBe(true);
-      const output = result.output as WriteResult;
-      expect(output.created).toBe(true); // overwrite counts as created
-      expect(output.mode).toBe('overwrite');
-
-      // Verify content was overwritten
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(newContent);
-    });
-
-    it('should create backup when overwriting with backup enabled', async () => {
-      const testFile = path.join(tempDir, 'backup-test.txt');
-      const originalContent = 'original content';
-      const newContent = 'new content';
-
-      // Create original file
-      await fs.writeFile(testFile, originalContent);
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: newContent,
-        mode: 'overwrite',
-        backup: true
-      });
-
-      expect(result.success).toBe(true);
-      const output = result.output as WriteResult;
-      expect(output.backupPath).toBeDefined();
-
-      // Verify backup exists and has original content
-      if (output.backupPath) {
-        expect(await fs.pathExists(output.backupPath)).toBe(true);
-        const backupContent = await fs.readFile(output.backupPath, 'utf8');
-        expect(backupContent).toBe(originalContent);
-      }
-
-      // Verify file has new content
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(newContent);
-    });
-  });
-
-  describe('File Appending', () => {
-    it('should append content to existing file', async () => {
-      const testFile = path.join(tempDir, 'append.txt');
-      const originalContent = 'original content';
-      const appendContent = '\nappended content';
-
-      // Create original file
-      await fs.writeFile(testFile, originalContent);
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: appendContent,
-        mode: 'append'
-      });
-
-      expect(result.success).toBe(true);
-      const output = result.output as WriteResult;
-      expect(output.created).toBe(false);
-      expect(output.mode).toBe('append');
-
-      // Verify content was appended
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(originalContent + appendContent);
-    });
-
-    it('should create file when appending to non-existent file', async () => {
-      const testFile = path.join(tempDir, 'new-append.txt');
-      const content = 'appended content';
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content,
-        mode: 'append'
-      });
-
-      expect(result.success).toBe(true);
-      const output = result.output as WriteResult;
-      expect(output.created).toBe(true);
-
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(content);
-    });
-  });
-
-  describe('Encoding Support', () => {
-    it('should handle different encodings', async () => {
-      const testFile = path.join(tempDir, 'encoded.txt');
-      const content = 'Hello, 世界!';
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content,
-        encoding: 'utf8'
-      });
-
-      expect(result.success).toBe(true);
-
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(content);
-    });
-
-    it('should handle base64 encoding', async () => {
-      const testFile = path.join(tempDir, 'base64.txt');
-      const content = Buffer.from('Hello, World!').toString('base64');
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content,
-        encoding: 'base64'
-      });
-
-      expect(result.success).toBe(true);
-
-      const fileContent = await fs.readFile(testFile, 'base64');
-      expect(fileContent).toBe(content);
-    });
-  });
-
-  describe('Security and Validation', () => {
-    it('should reject blocked paths', async () => {
-      const blockedFile = path.join(tempDir, 'node_modules', 'test.js');
-
-      const result = await writeTool.execute({
-        path: blockedFile,
-        content: 'malicious content'
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(ToolError);
-      expect((result.error as ToolError).code).toBe('PERMISSION_DENIED');
-    });
-
-    it('should reject files exceeding size limit', async () => {
-      const testFile = path.join(tempDir, 'large.txt');
-      const largeContent = 'x'.repeat(testContext.maxFileSize + 1);
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: largeContent
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(ToolError);
-      expect((result.error as ToolError).code).toBe('FILE_TOO_LARGE');
-    });
-
-    it('should reject invalid file paths', async () => {
-      const result = await writeTool.execute({
-        path: '',
-        content: 'content'
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(ToolError);
-    });
-
-    it('should handle permission errors gracefully', async () => {
-      // Try to write to a read-only directory (simulate permission error)
-      const readOnlyDir = path.join(tempDir, 'readonly');
-      await fs.ensureDir(readOnlyDir);
-
-      // This test might be platform-specific, so we'll skip detailed permission testing
-      // and just verify the tool handles errors properly
-      expect(writeTool).toBeDefined();
+      expect(schema.properties.path.type).toBe('string');
+      expect(schema.properties.content.type).toBe('string');
+      expect(schema.properties.encoding.enum).toContain('utf8');
+      expect(schema.properties.mode.enum).toContain('create');
     });
   });
 
   describe('Parameter Validation', () => {
     it('should validate required parameters', async () => {
-      const result = await writeTool.execute({
-        content: 'content without path'
-      });
-
+      const result = await writeTool.execute({});
       expect(result.success).toBe(false);
       expect(result.error).toBeInstanceOf(ToolError);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
     });
-
-    it('should validate mode parameter', async () => {
-      const testFile = path.join(tempDir, 'mode-test.txt');
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: 'test content',
-        mode: 'invalid' as any
-      });
-
+    it('should validate path type', async () => {
+      const result = await writeTool.execute({ path: 123, content: 'abc' });
       expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(ToolError);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
     });
-
-    it('should validate encoding parameter', async () => {
-      const testFile = path.join(tempDir, 'encoding-test.txt');
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: 'test content',
-        encoding: 'invalid' as any
-      });
-
+    it('should validate encoding enum', async () => {
+      const result = await writeTool.execute({ path: 'file.txt', content: 'abc', encoding: 'invalid' });
       expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(ToolError);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+    });
+    it('should validate mode enum', async () => {
+      const result = await writeTool.execute({ path: 'file.txt', content: 'abc', mode: 'invalid' });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('Basic File Writing', () => {
+    it('should create a new file', async () => {
+      const filePath = path.join(tempDir, 'test.txt');
+      const result = await writeTool.execute({ path: filePath, content: 'hello' });
+      expect(result.success).toBe(true);
+      expect(await fs.readFile(filePath, 'utf8')).toBe('hello');
+    });
+    it('should not overwrite existing file in create mode', async () => {
+      const filePath = path.join(tempDir, 'test.txt');
+      await fs.writeFile(filePath, 'old');
+      const result = await writeTool.execute({ path: filePath, content: 'new', mode: 'create' });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect(await fs.readFile(filePath, 'utf8')).toBe('old');
+    });
+    it('should overwrite file in overwrite mode', async () => {
+      const filePath = path.join(tempDir, 'test.txt');
+      await fs.writeFile(filePath, 'old');
+      const result = await writeTool.execute({ path: filePath, content: 'new', mode: 'overwrite' });
+      expect(result.success).toBe(true);
+      expect(await fs.readFile(filePath, 'utf8')).toBe('new');
+    });
+    it('should append to file in append mode', async () => {
+      const filePath = path.join(tempDir, 'test.txt');
+      await fs.writeFile(filePath, 'a');
+      const result = await writeTool.execute({ path: filePath, content: 'b', mode: 'append' });
+      expect(result.success).toBe(true);
+      expect(await fs.readFile(filePath, 'utf8')).toBe('ab');
+    });
+    it('should create parent directories if needed', async () => {
+      const filePath = path.join(tempDir, 'a', 'b', 'c.txt');
+      const result = await writeTool.execute({ path: filePath, content: 'x', createDirs: true });
+      expect(result.success).toBe(true);
+      expect(await fs.readFile(filePath, 'utf8')).toBe('x');
+    });
+  });
+
+  describe('Backup and Restore', () => {
+    it('should create a backup when overwriting', async () => {
+      const filePath = path.join(tempDir, 'test.txt');
+      await fs.writeFile(filePath, 'old');
+      const result = await writeTool.execute({ path: filePath, content: 'new', mode: 'overwrite', backup: true });
+      expect(result.success).toBe(true);
+      const backupPath = (result.output as WriteResult).backupPath;
+      expect(backupPath).toBeDefined();
+      expect(await fs.readFile(backupPath!, 'utf8')).toBe('old');
+    });
+  });
+
+  describe('Encoding Support', () => {
+    it('should write utf8 by default', async () => {
+      const filePath = path.join(tempDir, 'utf8.txt');
+      const result = await writeTool.execute({ path: filePath, content: 'héllo' });
+      expect(result.success).toBe(true);
+      expect(await fs.readFile(filePath, 'utf8')).toBe('héllo');
+    });
+    it('should write binary content', async () => {
+      const filePath = path.join(tempDir, 'bin.txt');
+      const content = Buffer.from([0x00, 0x01, 0x02, 0x03]).toString('binary');
+      const result = await writeTool.execute({ path: filePath, content, encoding: 'binary' });
+      expect(result.success).toBe(true);
+      const buf = await fs.readFile(filePath);
+      expect(buf[0]).toBe(0x00);
+      expect(buf[1]).toBe(0x01);
+    });
+    it('should write base64 content', async () => {
+      const filePath = path.join(tempDir, 'b64.txt');
+      const content = Buffer.from('hello').toString('base64');
+      const result = await writeTool.execute({ path: filePath, content, encoding: 'base64' });
+      expect(result.success).toBe(true);
+      const buf = await fs.readFile(filePath);
+      expect(buf.toString('base64')).toBe(content);
+    });
+  });
+
+  describe('File Size Limits', () => {
+    it('should enforce file size limits', async () => {
+      const smallContext = { ...testContext, maxFileSize: 10 };
+      const smallTool = new WriteTool(smallContext);
+      const filePath = path.join(tempDir, 'big.txt');
+      const result = await smallTool.execute({ path: filePath, content: 'x'.repeat(100) });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('FILE_TOO_LARGE');
+    });
+  });
+
+  describe('Security and Blocked Paths', () => {
+    it('should block writing to node_modules', async () => {
+      const filePath = path.join(tempDir, 'node_modules', 'bad.txt');
+      const result = await writeTool.execute({ path: filePath, content: 'x' });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('PERMISSION_DENIED');
+    });
+    it('should block writing to .env', async () => {
+      const filePath = path.join(tempDir, '.env');
+      const result = await writeTool.execute({ path: filePath, content: 'SECRET' });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('PERMISSION_DENIED');
+    });
+    it('should respect allowedExtensions', async () => {
+      const restrictiveContext = { ...testContext, allowedExtensions: ['.md'] };
+      const restrictiveTool = new WriteTool(restrictiveContext);
+      const filePath = path.join(tempDir, 'file.txt');
+      const result = await restrictiveTool.execute({ path: filePath, content: 'x' });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('INVALID_FILE_TYPE');
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle invalid path', async () => {
+      const result = await writeTool.execute({ path: '/dev/null/invalid', content: 'x' });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('INVALID_PATH');
+    });
+    it('should handle permission denied', async () => {
+      if (process.platform !== 'win32') {
+        const filePath = path.join(tempDir, 'restricted.txt');
+        await fs.writeFile(filePath, 'x');
+        await fs.chmod(filePath, 0o000);
+        const result = await writeTool.execute({ path: filePath, content: 'y', mode: 'overwrite' });
+        expect(result.success).toBe(false);
+        expect((result.error as ToolError).code).toBe('PERMISSION_DENIED');
+        await fs.chmod(filePath, 0o644);
+      }
     });
   });
 
   describe('Edge Cases', () => {
     it('should handle empty content', async () => {
-      const testFile = path.join(tempDir, 'empty.txt');
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content: ''
-      });
-
+      const filePath = path.join(tempDir, 'empty.txt');
+      const result = await writeTool.execute({ path: filePath, content: '' });
       expect(result.success).toBe(true);
-      const output = result.output as WriteResult;
-      expect(output.bytesWritten).toBe(0);
+      expect(await fs.readFile(filePath, 'utf8')).toBe('');
     });
-
     it('should handle relative paths', async () => {
-      const originalCwd = process.cwd();
-
+      const filePath = 'rel.txt';
+      const cwd = process.cwd();
+      process.chdir(tempDir);
       try {
-        process.chdir(tempDir);
-
-        const result = await writeTool.execute({
-          path: './relative.txt',
-          content: 'relative path content'
-        });
-
+        const result = await writeTool.execute({ path: filePath, content: 'rel' });
         expect(result.success).toBe(true);
-        expect(await fs.pathExists(path.join(tempDir, 'relative.txt'))).toBe(true);
+        expect(await fs.readFile(path.join(tempDir, filePath), 'utf8')).toBe('rel');
       } finally {
-        process.chdir(originalCwd);
+        process.chdir(cwd);
       }
     });
-
-    it('should handle special characters in content', async () => {
-      const testFile = path.join(tempDir, 'special.txt');
-      const content = 'Special chars: 🚀 \n\t\r"\'\\';
-
-      const result = await writeTool.execute({
-        path: testFile,
-        content
-      });
-
-      expect(result.success).toBe(true);
-
-      const fileContent = await fs.readFile(testFile, 'utf8');
-      expect(fileContent).toBe(content);
+    it('should handle symlinks if supported', async () => {
+      const target = path.join(tempDir, 'target.txt');
+      const symlink = path.join(tempDir, 'link.txt');
+      await fs.writeFile(target, 'target');
+      try {
+        await fs.symlink(target, symlink);
+        const result = await writeTool.execute({ path: symlink, content: 'new', mode: 'overwrite' });
+        expect(result.success).toBe(true);
+        expect(await fs.readFile(target, 'utf8')).toBe('new');
+      } catch (e) {
+        if ((e as any).code !== 'EPERM') throw e;
+      }
     });
   });
 });

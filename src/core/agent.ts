@@ -1,9 +1,11 @@
 import { LLMService } from '../services/llm';
 import { configManager } from './config';
+import { BaseTool } from '../tools/base';
 import { LSTool } from '../tools/ls';
 import { GlobTool } from '../tools/glob';
 import { ReadTool } from '../tools/read';
 import { RipgrepTool } from '../tools/ripgrep';
+import { WriteTool } from '@/tools/write';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
@@ -26,10 +28,24 @@ export class Agent {
     const lsTool = new LSTool();
     const globTool = new GlobTool();
     const readTool = new ReadTool();
-    const ripgrepTool = new RipgrepTool();
+    const writeTool = new WriteTool();
 
-    // Initialize the orchestrator with all tools
-    this.orchestrator = new ToolOrchestrator(this.llmService, [lsTool, globTool, readTool, ripgrepTool]);
+    // Create ripgrep tool and check if ripgrep is available
+    const ripgrepTool = new RipgrepTool();
+    const ripgrepAvailable = ripgrepTool.isRipgrepAvailable();
+
+    // Create the list of tools - only add ripgrep if available
+    const tools: BaseTool[] = [lsTool, globTool, readTool, writeTool];
+
+    if (ripgrepAvailable) {
+      tools.push(ripgrepTool);
+    } else {
+      console.warn('System ripgrep (rg) command not found. Ripgrep tool will not be available.');
+      console.warn('For better search capabilities, install ripgrep: https://github.com/BurntSushi/ripgrep#installation');
+    }
+
+    // Initialize the orchestrator with available tools
+    this.orchestrator = new ToolOrchestrator(this.llmService, tools);
 
     // Initialize project discovery
     this.projectDiscovery = new ProjectDiscovery();
