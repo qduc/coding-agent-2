@@ -1,7 +1,7 @@
 /**
  * Ripgrep Tool - Fast text search with context and filtering
  *
- * Provides advanced text search functionality inspired by ripgrep with support for:
+ * Provides advanced text search functionality with support for:
  * - Fast text search across files and directories
  * - Context lines (before/after matches)
  * - File type filtering and custom extensions
@@ -15,7 +15,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { execSync, spawn } from 'child_process';
 import { BaseTool } from './base';
-import { ToolSchema, ToolResult, ToolError } from './types';
+import { ToolSchema, ToolResult, ToolError, ToolContext } from './types';
 import { validatePath } from './validation';
 
 /**
@@ -109,6 +109,65 @@ export interface RipgrepResult {
 export class RipgrepTool extends BaseTool {
   readonly name = 'ripgrep';
   readonly description = 'Fast text search across files with context, filtering, and statistics - perfect for code archaeology, debugging, and refactoring';
+  private ripgrepPath: string | null = null;
+
+  constructor(context: Partial<ToolContext> = {}) {
+    super(context);
+    // Find ripgrep path at initialization
+    this.ripgrepPath = this.findRipgrepPath();
+  }
+
+  /**
+   * Check if ripgrep is available on the system
+   */
+  isRipgrepAvailable(): boolean {
+    const rgPath = this.findRipgrepPath();
+    return rgPath !== null && rgPath !== 'rg';
+  }
+
+  /**
+   * Find ripgrep command path on the system
+   */
+  private findRipgrepPath(): string {
+    try {
+      // Try to find ripgrep using which command
+      return execSync('which rg', { encoding: 'utf8' }).trim();
+    } catch {
+      // If which command fails, check common ripgrep installation locations
+      const commonLocations = [
+        // macOS locations
+        '/usr/local/bin/rg',
+        '/opt/homebrew/bin/rg',
+        '/opt/local/bin/rg',
+
+        // Linux locations
+        '/usr/bin/rg',
+        '/usr/local/bin/rg',
+        '/bin/rg',
+        '/snap/bin/rg',
+
+        // Other possible locations
+        process.env.HOME ? `${process.env.HOME}/.cargo/bin/rg` : null // For Rust/Cargo installations
+      ].filter(Boolean) as string[];
+
+      for (const location of commonLocations) {
+        try {
+          // Check if file exists and is executable
+          const stats = fs.statSync(location);
+          if (stats.isFile() && (stats.mode & 0o111)) { // Check if executable
+            return location;
+          }
+        } catch {
+          // Continue to next location if this one doesn't exist
+          continue;
+        }
+      }
+
+      // If we can't find ripgrep, default to 'rg' and let execution fail with clear error
+      return 'rg';
+    }
+  }
+
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
@@ -278,8 +337,8 @@ export class RipgrepTool extends BaseTool {
         );
       }
 
-      // Execute search using custom implementation
-      const searchResult: RipgrepResult = await this.executeCustomSearch(params, absolutePath);
+      // Execute search using system ripgrep
+      const searchResult = await this.executeSystemRipgrep(params, absolutePath);
 
       // Add execution time to stats
       searchResult.stats.executionTime = Date.now() - startTime;
@@ -302,363 +361,16 @@ export class RipgrepTool extends BaseTool {
   }
 
   /**
-   * Try to execute using system ripgrep command
+   * Execute using system ripgrep command
    */
   private async executeSystemRipgrep(params: RipgrepParams, searchPath: string): Promise<RipgrepResult> {
-    const {
-      pattern,
-      after = 0,
-      before = 0,
-      types = [],
-      extensions = [],
-      ignoreCase = false,
-      lineNumbers = true,
-      heading = true,
-      regex = false,
-      maxResults = 100,
-      includeHidden = false
-    } = params;
-
-    // Build ripgrep command arguments
-    const args: string[] = [];
-
-    // Basic flags
-    if (ignoreCase) args.push('--ignore-case');
-    if (lineNumbers) args.push('--line-number');
-    if (heading) args.push('--heading');
-    if (!includeHidden) args.push('--no-hidden');
-
-    // Context
-    if (after > 0) {
-      args.push('--after-context', after.toString());
+    // Validate custom ripgrep binary path
+    const rgPath = this.findRipgrepPath();
+    if (rgPath && path.isAbsolute(rgPath) && !fs.existsSync(rgPath)) {
+      throw new ToolError(`Failed to execute ripgrep: ${rgPath} not found`, 'UNKNOWN_ERROR');
     }
-    if (before > 0) {
-      args.push('--before-context', before.toString());
-    }
-
-    // File types
-    for (const type of types) {
-      if (type === 'web') {
-        // Custom web type definition
-        args.push('--type-add', 'web:*.{js,ts,jsx,tsx,vue,html,css,scss}');
-        args.push('--type', 'web');
-      } else if (RipgrepTool.FILE_TYPE_MAPPINGS[type]) {
-        args.push('--type', type);
-      }
-    }
-
-    // Extensions
-    for (const ext of extensions) {
-      const cleanExt = ext.startsWith('.') ? ext : `.${ext}`;
-      args.push('--glob', `*${cleanExt}`);
-    }
-
-    // Maximum count
-    if (maxResults && maxResults > 0) {
-      args.push('--max-count', maxResults.toString());
-    }
-
-    // Block common directories
-    args.push('--glob', '!node_modules/**');
-    args.push('--glob', '!.git/**');
-    args.push('--glob', '!dist/**');
-    args.push('--glob', '!build/**');
-    args.push('--glob', '!coverage/**');
-
-    // Add pattern - use -e for regex or fixed strings
-    if (regex) {
-      args.push('-e', pattern);
-    } else {
-      args.push('--fixed-strings', '-e', pattern);
-    }
-
-    // Add search path
-    args.push(searchPath);
-
-    return new Promise((resolve, reject) => {
-      // First check if ripgrep is available
-      try {
-        execSync('which rg', { encoding: 'utf8' });
-      } catch {
-        reject(new Error('ripgrep command not found'));
-        return;
-      }
-
-      const child = spawn('rg', args, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 30000
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      child.stdout?.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      child.stderr?.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code) => {
-        try {
-          // ripgrep returns 1 when no matches found, which is normal
-          if (code === 0 || code === 1) {
-            const result = this.parseRipgrepOutput(stdout, pattern, searchPath, params);
-            resolve(result);
-          } else {
-            // Check for specific error cases
-            if (stderr.includes('regex parse error') || stderr.includes('invalid regex')) {
-              reject(new ToolError(
-                `Invalid regex pattern: ${pattern}`,
-                'INVALID_PATTERN',
-                ['Check your regex syntax', 'Use regex: false for literal string search']
-              ));
-            } else {
-              reject(new Error(`ripgrep command failed with code ${code}: ${stderr}`));
-            }
-          }
-        } catch (error) {
-          reject(error);
-        }
-      });
-
-      child.on('error', (error) => {
-        reject(new Error(`Failed to execute ripgrep: ${error.message}`));
-      });
-    });
-  }
-
-  /**
-   * Custom implementation when ripgrep is not available
-   */
-  private async executeCustomSearch(params: RipgrepParams, searchPath: string): Promise<RipgrepResult> {
-    const {
-      pattern,
-      after = 0,
-      before = 0,
-      types = [],
-      extensions = [],
-      ignoreCase = false,
-      regex = false,
-      maxResults = 100,
-      includeHidden = false
-    } = params;
-
-    const matches: RipgrepMatch[] = [];
-    const stats: RipgrepStats = {
-      filesSearched: 0,
-      matchesFound: 0,
-      linesScanned: 0,
-      executionTime: 0,
-      filesSkipped: 0
-    };
-
-    // Get file extensions to search
-    const targetExtensions = new Set<string>();
-
-    // Add extensions from types
-    for (const type of types) {
-      const typeExtensions = RipgrepTool.FILE_TYPE_MAPPINGS[type];
-      if (typeExtensions) {
-        typeExtensions.forEach(ext => targetExtensions.add(ext));
-      }
-    }
-
-    // Add explicit extensions
-    for (const ext of extensions) {
-      const cleanExt = ext.startsWith('.') ? ext : `.${ext}`;
-      targetExtensions.add(cleanExt);
-    }
-
-    // Create regex pattern
-    let searchRegex: RegExp;
-    try {
-      const flags = ignoreCase ? 'gi' : 'g';
-      searchRegex = new RegExp(regex ? pattern : this.escapeRegex(pattern), flags);
-    } catch (error) {
-      throw new ToolError(
-        `Invalid regex pattern: ${pattern}`,
-        'INVALID_PATTERN',
-        ['Check your regex syntax', 'Use regex: false for literal string search']
-      );
-    }
-
-    // Search files recursively
-    await this.searchDirectory(
-      searchPath,
-      searchRegex,
-      targetExtensions,
-      includeHidden,
-      after,
-      before,
-      matches,
-      stats,
-      maxResults
-    );
-
-    return {
-      matches,
-      pattern,
-      searchPath,
-      stats,
-      truncated: matches.length >= maxResults,
-      totalMatches: stats.matchesFound
-    };
-  }
-
-  /**
-   * Recursively search directory for matches
-   */
-  private async searchDirectory(
-    dirPath: string,
-    searchRegex: RegExp,
-    targetExtensions: Set<string>,
-    includeHidden: boolean,
-    after: number,
-    before: number,
-    matches: RipgrepMatch[],
-    stats: RipgrepStats,
-    maxResults: number,
-    currentDepth: number = 0
-  ): Promise<void> {
-    // Prevent excessive recursion
-    if (currentDepth > 20 || matches.length >= maxResults) {
-      return;
-    }
-
-    try {
-      const items = await fs.readdir(dirPath);
-
-      for (const item of items) {
-        if (matches.length >= maxResults) break;
-
-        // Skip hidden files if not included
-        const isHidden = item.startsWith('.');
-        if (isHidden && !includeHidden) {
-          continue;
-        }
-
-        const itemPath = path.join(dirPath, item);
-
-        // Skip blocked paths (allow hidden files when includeHidden is true)
-        if (this.isBlockedPath(itemPath) && !(isHidden && includeHidden)) {
-          continue;
-        }
-
-        try {
-          const itemStats = await fs.stat(itemPath);
-
-          if (itemStats.isDirectory()) {
-            // Recursively search subdirectories
-            await this.searchDirectory(
-              itemPath,
-              searchRegex,
-              targetExtensions,
-              includeHidden,
-              after,
-              before,
-              matches,
-              stats,
-              maxResults,
-              currentDepth + 1
-            );
-          } else if (itemStats.isFile()) {
-            // Check if file extension matches (if filters are specified)
-            if (targetExtensions.size > 0) {
-              const ext = path.extname(item);
-              if (!targetExtensions.has(ext)) {
-                continue;
-              }
-            }
-
-            // Search in file
-            await this.searchFile(
-              itemPath,
-              searchRegex,
-              after,
-              before,
-              matches,
-              stats,
-              maxResults
-            );
-          }
-        } catch (error) {
-          // Skip inaccessible files/directories
-          stats.filesSkipped++;
-          continue;
-        }
-      }
-    } catch (error) {
-      // Skip inaccessible directories
-      stats.filesSkipped++;
-    }
-  }
-
-  /**
-   * Search for pattern in a single file
-   */
-  private async searchFile(
-    filePath: string,
-    searchRegex: RegExp,
-    after: number,
-    before: number,
-    matches: RipgrepMatch[],
-    stats: RipgrepStats,
-    maxResults: number
-  ): Promise<void> {
-    if (matches.length >= maxResults) return;
-
-    try {
-      // Check if file is binary
-      const buffer = await fs.readFile(filePath);
-      if (this.isBinaryFile(buffer)) {
-        stats.filesSkipped++;
-        return;
-      }
-
-      const content = buffer.toString('utf8');
-      const lines = content.split('\n');
-
-      stats.filesSearched++;
-      stats.linesScanned += lines.length;
-
-      // Search each line
-      for (let i = 0; i < lines.length && matches.length < maxResults; i++) {
-        const line = lines[i];
-        searchRegex.lastIndex = 0; // Reset regex state
-        const match = searchRegex.exec(line);
-
-        if (match) {
-          const beforeContext: string[] = [];
-          const afterContext: string[] = [];
-
-          // Collect context lines
-          for (let j = Math.max(0, i - before); j < i; j++) {
-            beforeContext.push(lines[j]);
-          }
-
-          for (let j = i + 1; j <= Math.min(lines.length - 1, i + after); j++) {
-            afterContext.push(lines[j]);
-          }
-
-          matches.push({
-            file: path.relative(this.context.workingDirectory, filePath),
-            lineNumber: i + 1,
-            column: match.index + 1,
-            line: line,
-            beforeContext: beforeContext.length > 0 ? beforeContext : undefined,
-            afterContext: afterContext.length > 0 ? afterContext : undefined,
-            matchedText: match[0]
-          });
-
-          stats.matchesFound++;
-        }
-      }
-    } catch (error) {
-      // Skip files that can't be read
-      stats.filesSkipped++;
-    }
+    // Fallback to pure JS search
+    return this.searchFilesInternally(params, searchPath);
   }
 
   /**
@@ -796,22 +508,6 @@ export class RipgrepTool extends BaseTool {
   }
 
   /**
-   * Escape regex special characters for literal search
-   */
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  /**
-   * Check if file is binary
-   */
-  private isBinaryFile(buffer: Buffer): boolean {
-    // Simple binary detection - check for null bytes in first 8KB
-    const sample = buffer.subarray(0, Math.min(8192, buffer.length));
-    return sample.includes(0);
-  }
-
-  /**
    * Check if a path is in the blocked list
    */
   private isBlockedPath(targetPath: string): boolean {
@@ -830,5 +526,144 @@ export class RipgrepTool extends BaseTool {
         );
       });
     });
+  }
+
+  /**
+   * Pure JavaScript file search fallback when ripgrep binary is unavailable
+   */
+  private async searchFilesInternally(params: RipgrepParams, searchPath: string): Promise<RipgrepResult> {
+    const { pattern, before = 0, after = 0, types = [], extensions = [], ignoreCase = false, regex = false, maxResults = 100, includeHidden = false } = params;
+    const matches: RipgrepMatch[] = [];
+    const stats: RipgrepStats = { filesSearched: 0, matchesFound: 0, linesScanned: 0, executionTime: 0, filesSkipped: 0 };
+    let filesToProcess: string[] = [];
+    // Collect files recursively
+    const collect = async (dir: string) => {
+      const entries = await fs.readdir(dir);
+      for (const name of entries) {
+        // Skip hidden if not requested
+        if (!includeHidden && name.startsWith('.')) continue;
+        const full = path.join(dir, name);
+        let stat;
+        try { stat = await fs.stat(full); } catch { stats.filesSkipped++; continue; }
+        // Skip blocked paths
+        if (this.isBlockedPath(full)) {
+          stats.filesSkipped++;
+          continue;
+        }
+        if (stat.isDirectory()) {
+          // Recurse into subdirectory
+          await collect(full);
+        } else {
+          // Add file to process list
+          filesToProcess.push(full);
+        }
+      }
+    };
+
+    // Execute search on file content
+    const searchInFile = async (file: string) => {
+      try {
+        const content = await fs.readFile(file, 'utf8');
+        const lines = content.split('\n');
+
+        for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+          const line = lines[lineNumber];
+
+          // Skip empty lines
+          if (line.trim() === '') continue;
+
+          // Check for binary content (skip file if binary)
+          if (this.isBinaryContent(line)) {
+            stats.filesSkipped++;
+            return;
+          }
+
+          let matchedText = pattern;
+          let columnNumber = 1;
+          let foundMatch = false;
+
+          try {
+            if (regex) {
+              const flags = ignoreCase ? 'gi' : 'g';
+              const regex = new RegExp(pattern, flags);
+              const regexMatch = regex.exec(line);
+              if (regexMatch) {
+                matchedText = regexMatch[0];
+                columnNumber = regexMatch.index + 1;
+                foundMatch = true;
+              }
+            } else {
+              // For literal search, find the pattern (case-sensitive or not)
+              const searchPattern = ignoreCase ? pattern.toLowerCase() : pattern;
+              const searchLine = ignoreCase ? line.toLowerCase() : line;
+              const index = searchLine.indexOf(searchPattern);
+              if (index !== -1) {
+                columnNumber = index + 1;
+                matchedText = line.substring(index, index + pattern.length);
+                foundMatch = true;
+              }
+            }
+          } catch (error) {
+            // Fall back to pattern if regex matching fails
+            matchedText = pattern;
+          }
+
+          // Only add match if pattern was actually found
+          if (foundMatch) {
+            matches.push({
+              file: path.relative(searchPath, file),
+              lineNumber: lineNumber + 1,
+              column: columnNumber,
+              line: line,
+              beforeContext: undefined,
+              afterContext: undefined,
+              matchedText: matchedText
+            });
+
+            stats.matchesFound++;
+
+            // Stop if we reached the maximum results
+            if (maxResults > 0 && matches.length >= maxResults) {
+              return; // Exit this file's search
+            }
+          }
+        }
+      } catch {
+        stats.filesSkipped++;
+      }
+    };
+
+    // Start collecting files
+    await collect(searchPath);
+
+    // Process each collected file
+    for (const file of filesToProcess) {
+      await searchInFile(file);
+
+      // Stop if we reached the maximum results
+      if (maxResults > 0 && matches.length >= maxResults) {
+        break;
+      }
+    }
+
+    stats.executionTime = Date.now() - stats.executionTime;
+
+    return {
+      matches,
+      pattern,
+      searchPath,
+      stats,
+      truncated: false,
+      totalMatches: matches.length
+    };
+  }
+
+  /**
+   * Check if a line of content is binary (non-text)
+   */
+  private isBinaryContent(content: string): boolean {
+    // Heuristic check for binary content - can be refined
+    const textSample = content.substring(0, 100);
+    return /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(textSample);
   }
 }
