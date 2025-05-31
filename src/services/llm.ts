@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 import { ToolLogger } from '../utils/toolLogger';
 import { AnthropicProvider } from './anthropicProvider';
 import { GeminiProvider } from './geminiProvider';
+import { logger } from '../utils/logger';
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -91,6 +92,8 @@ export class LLMService implements LLMProvider {
       const config = configManager.getConfig();
       const provider = config.provider || 'openai';
 
+      logger.info('Initializing LLM provider', { provider }, 'LLMService');
+
       if (provider === 'openai') {
         return this.initializeOpenAI();
       } else if (provider === 'anthropic') {
@@ -101,7 +104,9 @@ export class LLMService implements LLMProvider {
         throw new Error(`Unknown provider: ${provider}`);
       }
     } catch (error) {
-      console.error(chalk.red('Failed to initialize LLM provider:'), error instanceof Error ? error.message : 'Unknown error');
+      const errorObj = error instanceof Error ? error : new Error('Unknown error');
+      logger.error('Failed to initialize LLM provider', errorObj, { provider: configManager.getConfig().provider }, 'LLMService');
+      console.error(chalk.red('Failed to initialize LLM provider:'), errorObj.message);
       return false;
     }
   }
@@ -110,6 +115,8 @@ export class LLMService implements LLMProvider {
    * Initialize Gemini provider
    */
   private async initializeGemini(): Promise<boolean> {
+    logger.debug('Initializing Gemini provider', {}, 'LLMService');
+
     if (!this.geminiProvider) {
       this.geminiProvider = new GeminiProvider();
     }
@@ -118,6 +125,9 @@ export class LLMService implements LLMProvider {
     if (success) {
       this.currentProvider = this.geminiProvider;
       this.initialized = true;
+      logger.info('Gemini provider initialized successfully', {}, 'LLMService');
+    } else {
+      logger.error('Failed to initialize Gemini provider', undefined, {}, 'LLMService');
     }
     return success;
   }
@@ -128,7 +138,10 @@ export class LLMService implements LLMProvider {
   private async initializeOpenAI(): Promise<boolean> {
     const config = configManager.getConfig();
 
+    logger.debug('Initializing OpenAI provider', { model: config.model }, 'LLMService');
+
     if (!config.openaiApiKey) {
+      logger.error('OpenAI API key not configured', undefined, {}, 'LLMService');
       return false;
     }
 
@@ -136,17 +149,26 @@ export class LLMService implements LLMProvider {
       apiKey: config.openaiApiKey
     });
 
-    // Test the connection
-    await this.testOpenAIConnection();
-    this.currentProvider = this;
-    this.initialized = true;
-    return true;
+    try {
+      // Test the connection
+      await this.testOpenAIConnection();
+      this.currentProvider = this;
+      this.initialized = true;
+      logger.info('OpenAI provider initialized successfully', { model: config.model }, 'LLMService');
+      return true;
+    } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error('Unknown error');
+      logger.error('Failed to initialize OpenAI provider', errorObj, { model: config.model }, 'LLMService');
+      return false;
+    }
   }
 
   /**
    * Initialize Anthropic provider
    */
   private async initializeAnthropic(): Promise<boolean> {
+    logger.debug('Initializing Anthropic provider', {}, 'LLMService');
+
     if (!this.anthropicProvider) {
       this.anthropicProvider = new AnthropicProvider();
     }
@@ -155,6 +177,9 @@ export class LLMService implements LLMProvider {
     if (success) {
       this.currentProvider = this.anthropicProvider;
       this.initialized = true;
+      logger.info('Anthropic provider initialized successfully', {}, 'LLMService');
+    } else {
+      logger.error('Failed to initialize Anthropic provider', undefined, {}, 'LLMService');
     }
     return success;
   }
@@ -259,12 +284,24 @@ export class LLMService implements LLMProvider {
         finishReason
       };
 
+      logger.debug('Streaming message completed', {
+        messageCount: messages.length,
+        responseLength: fullContent.length,
+        finishReason
+      }, 'LLMService');
+
       if (onComplete) {
         onComplete(response);
       }
 
       return response;
     } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error('Unknown OpenAI API error');
+      logger.error('OpenAI streaming API error', errorObj, {
+        messageCount: messages.length,
+        model: config.model
+      }, 'LLMService');
+
       if (error instanceof Error) {
         throw new Error(`OpenAI API error: ${error.message}`);
       }
@@ -305,8 +342,23 @@ export class LLMService implements LLMProvider {
         temperature: 0.7
       });
 
-      return response.choices[0]?.message?.content || '';
+      const responseContent = response.choices[0]?.message?.content || '';
+
+      logger.debug('OpenAI message sent successfully', {
+        messageCount: messages.length,
+        responseLength: responseContent.length,
+        model: config.model,
+        usage: response.usage
+      }, 'LLMService');
+
+      return responseContent;
     } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error('Unknown OpenAI API error');
+      logger.error('OpenAI API error in sendMessage', errorObj, {
+        messageCount: messages.length,
+        model: config.model
+      }, 'LLMService');
+
       if (error instanceof Error) {
         throw new Error(`OpenAI API error: ${error.message}`);
       }

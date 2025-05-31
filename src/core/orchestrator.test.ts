@@ -17,7 +17,7 @@ describe('Gemini Enhanced Tool Calling', () => {
   it('should route to Gemini chat loop when provider is gemini', async () => {
     const userInput = 'test message';
     const mockResult = 'test response';
-    
+
     mockLLMService.processWithChatLoop.mockResolvedValue(mockResult);
 
     const result = await orchestrator.processWithEnhancedNativeCalling(userInput);

@@ -2,6 +2,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 import chalk from 'chalk';
+import { Logger, LogLevel } from '../utils/logger';
 
 export interface Config {
   openaiApiKey?: string;
@@ -13,6 +14,10 @@ export interface Config {
   model?: string;
   logToolUsage?: boolean;
   streaming?: boolean;
+  // Logging configuration
+  logLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  enableFileLogging?: boolean;
+  enableConsoleLogging?: boolean;
 }
 
 export class ConfigManager {
@@ -35,7 +40,11 @@ export class ConfigManager {
       provider: 'openai',
       verbose: false,
       logToolUsage: true,
-      streaming: false // Disable streaming by default
+      streaming: false, // Disable streaming by default
+      // Default logging configuration
+      logLevel: 'info',
+      enableFileLogging: true,
+      enableConsoleLogging: true,
     };
 
     let fileConfig: Partial<Config> = {};
@@ -79,8 +88,22 @@ export class ConfigManager {
     if (process.env.CODING_AGENT_STREAMING) {
       envConfig.streaming = process.env.CODING_AGENT_STREAMING === 'true';
     }
+    if (process.env.CODING_AGENT_LOG_LEVEL) {
+      envConfig.logLevel = process.env.CODING_AGENT_LOG_LEVEL as 'error' | 'warn' | 'info' | 'debug' | 'trace';
+    }
+    if (process.env.CODING_AGENT_FILE_LOGGING) {
+      envConfig.enableFileLogging = process.env.CODING_AGENT_FILE_LOGGING === 'true';
+    }
+    if (process.env.CODING_AGENT_CONSOLE_LOGGING) {
+      envConfig.enableConsoleLogging = process.env.CODING_AGENT_CONSOLE_LOGGING === 'true';
+    }
 
-    return { ...defaultConfig, ...fileConfig, ...envConfig };
+    const finalConfig = { ...defaultConfig, ...fileConfig, ...envConfig };
+
+    // Initialize logger with configuration
+    this.initializeLogger(finalConfig);
+
+    return finalConfig;
   }
 
   /**
@@ -184,6 +207,30 @@ export class ConfigManager {
    */
   setGeminiKey(apiKey: string): void {
     this.config.geminiApiKey = apiKey;
+  }
+
+  /**
+   * Initialize logger with configuration settings
+   */
+  private initializeLogger(config: Config): void {
+    const logger = Logger.getInstance();
+
+    // Convert string log level to enum
+    const logLevelMap: Record<string, LogLevel> = {
+      error: LogLevel.ERROR,
+      warn: LogLevel.WARN,
+      info: LogLevel.INFO,
+      debug: LogLevel.DEBUG,
+      trace: LogLevel.TRACE,
+    };
+
+    const logLevel = config.logLevel ? logLevelMap[config.logLevel] : LogLevel.INFO;
+
+    logger.configure({
+      level: logLevel,
+      enableConsole: config.enableConsoleLogging ?? true,
+      enableFile: config.enableFileLogging ?? true,
+    });
   }
 
   /**

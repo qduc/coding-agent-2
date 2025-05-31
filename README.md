@@ -6,7 +6,7 @@
 
 ### MVP Goals (COMPLETED) ✅
 - ✅ Basic `coding-agent "help me understand this file"` command
-- ✅ Simple chat mode with context awareness  
+- ✅ Simple chat mode with context awareness
 - ✅ File reading and comprehensive code analysis capabilities
 
 ### Recent Improvements ✅
@@ -78,7 +78,7 @@ coding-agent/
 }
 ```
 
-## Core Features 
+## Core Features
 
 ### File Operations ✅
 - **Read** - File content reading with encoding support and line range selection
@@ -112,7 +112,7 @@ Agent: "I'll update the test file to fix the assertion error..."
 Agent: "✅ Fixed test assertion in Button.test.tsx (backup created)"
 
 User: "Find all TODO comments in the codebase"
-Agent: [Uses ripgrep with pattern "TODO|FIXME"] 
+Agent: [Uses ripgrep with pattern "TODO|FIXME"]
 "Found 12 TODO comments across 8 files. Here's a summary by priority..."
 
 User: "Create a new utility function for date formatting"
@@ -184,7 +184,7 @@ Tools are automatically converted to Gemini's `functionDeclarations` format:
 // Gemini format
 {
   name: 'read_file',
-  description: 'Read file contents', 
+  description: 'Read file contents',
   parameters: { ... }
 }
 ```
@@ -210,7 +210,7 @@ All existing functionality remains unchanged. Enhanced calling is opt-in via:
 
 ✅ **Complete**
 - Provider detection and routing
-- Gemini function declarations conversion  
+- Gemini function declarations conversion
 - Chat loop with tool execution integration
 - Error handling and fallback mechanisms
 

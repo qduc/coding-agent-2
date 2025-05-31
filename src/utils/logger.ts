@@ -35,7 +35,7 @@ export interface LoggerConfig {
 
 /**
  * Centralized logging system for debugging and monitoring
- * 
+ *
  * Features:
  * - Multiple log levels (ERROR, WARN, INFO, DEBUG, TRACE)
  * - Console and file output with rotation
@@ -101,10 +101,10 @@ export class Logger {
 
     try {
       fs.ensureDirSync(this.config.logDirectory);
-      
+
       const timestamp = new Date().toISOString().split('T')[0];
       this.logFilePath = path.join(this.config.logDirectory, `coding-agent-${timestamp}.log`);
-      
+
       // Rotate logs if needed
       this.rotateLogs();
     } catch (error) {
@@ -181,7 +181,7 @@ export class Logger {
     const timestamp = chalk.gray(entry.timestamp);
     const level = this.formatLogLevel(entry.level);
     const source = entry.source ? chalk.cyan(`[${entry.source}]`) : '';
-    
+
     let message = `${timestamp} ${level} ${source} ${entry.message}`;
 
     if (entry.context && Object.keys(entry.context).length > 0) {
@@ -209,7 +209,7 @@ export class Logger {
       if (this.config.logDirectory) {
         fs.ensureDirSync(this.config.logDirectory);
       }
-      
+
       const logLine = JSON.stringify(entry) + '\n';
       fs.appendFileSync(this.logFilePath, logLine);
     } catch (error) {

@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { logger } from './logger';
 
 /**
  * Tool Logger - Utility for logging tool usage by the LLM
@@ -18,6 +19,9 @@ export class ToolLogger {
     if (args && Object.keys(args).length > 0) {
       console.log(chalk.gray('   Arguments:'), JSON.stringify(args, null, 2));
     }
+
+    // Also log to structured logger for debugging
+    logger.debug(`Tool called: ${toolName}`, { toolName, args }, 'TOOL');
   }
 
   /**
@@ -26,6 +30,14 @@ export class ToolLogger {
   static logToolResult(toolName: string, success: boolean, result?: any): void {
     const status = success ? chalk.green('✅') : chalk.red('❌');
     console.log(status, chalk.cyan(toolName), success ? 'completed' : 'failed');
+
+    // Log to structured logger
+    if (success) {
+      logger.debug(`Tool completed: ${toolName}`, { toolName, success, result }, 'TOOL');
+    } else {
+      const error = result instanceof Error ? result : undefined;
+      logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');
+    }
 
     if (result) {
       // Special handling for Read tool - don't output file content

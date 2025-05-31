@@ -12,6 +12,7 @@ import * as path from 'path';
 import { configManager } from './config';
 import { ToolLogger } from '../utils/toolLogger';
 import { ProjectDiscoveryResult } from '../utils/projectDiscovery';
+import { logger } from '../utils/logger';
 
 export interface ConversationMessage extends Message {
   tool_calls?: any[];
@@ -151,9 +152,15 @@ export class ToolOrchestrator {
   private async executeToolCall(toolCall: ToolCall, verbose: boolean): Promise<void> {
     const { function: func } = toolCall;
     const tool = this.tools.get(func.name);
+    const startTime = Date.now();
 
     if (!tool) {
       const errorMessage = `Tool '${func.name}' not found`;
+      logger.error('Tool not found', new Error(errorMessage), {
+        toolName: func.name,
+        availableTools: Array.from(this.tools.keys())
+      }, 'ORCHESTRATOR');
+
       if (verbose) {
         console.error(chalk.red(`❌ ${errorMessage}`));
       }
@@ -182,11 +189,21 @@ export class ToolOrchestrator {
       try {
         args = JSON.parse(func.arguments);
       } catch (error) {
-        throw new Error(`Invalid JSON arguments: ${func.arguments}`);
+        const parseError = new Error(`Invalid JSON arguments: ${func.arguments}`);
+        logger.error('Tool argument parsing failed', parseError, {
+          toolName: func.name,
+          arguments: func.arguments
+        }, 'ORCHESTRATOR');
+        throw parseError;
       }
+
+      logger.debug('Executing tool', { toolName: func.name, args }, 'ORCHESTRATOR');
 
       // Execute the tool
       const result = await tool.execute(args);
+      const executionTime = Date.now() - startTime;
+
+      logger.logToolExecution(func.name, args, result, undefined, executionTime);
 
       if (verbose) {
         if (result.success) {
@@ -210,7 +227,11 @@ export class ToolOrchestrator {
         tool_call_id: toolCall.id
       });
     } catch (error) {
-      const errorMessage = `Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      const executionTime = Date.now() - startTime;
+      const errorObj = error instanceof Error ? error : new Error('Unknown error');
+      const errorMessage = `Tool execution failed: ${errorObj.message}`;
+
+      logger.logToolExecution(func.name, {}, undefined, errorObj, executionTime);
 
       if (verbose) {
         console.error(chalk.red(`❌ ${errorMessage}`));
@@ -578,16 +599,16 @@ Use these tools when you need to access files or gather information about the pr
     }
 
     const tools = await this.getToolSchemas();
-    
+
     // Use provider-specific native calling
     if (this.llmService.provider === 'gemini') {
       // Convert tools to Gemini function declarations format
       const functionDeclarations = this.convertToGeminiFunctionDeclarations(tools);
-      
+
       if (verbose) {
         console.log('🔧 Using Gemini chat loop for tool calling');
       }
-      
+
       // Create a connected version of processWithChatLoop that can execute tools
       return await this.processGeminiChatLoop(userInput, functionDeclarations, onChunk, verbose);
     } else {
@@ -638,9 +659,9 @@ Use these tools when you need to access files or gather information about the pr
       };
 
       // Check if we have the enhanced Gemini provider
-      if (this.llmService.provider === 'gemini' && 
+      if (this.llmService.provider === 'gemini' &&
           typeof (this.llmService as any).processWithChatLoop === 'function') {
-        
+
         // Use the enhanced Gemini chat loop
         return await (this.llmService as any).processWithChatLoop(
           userInput,
@@ -657,7 +678,7 @@ Use these tools when you need to access files or gather information about the pr
         }
         return await this.processMessage(userInput, onChunk, verbose);
       }
-      
+
     } catch (error) {
       console.error('❌ Gemini chat loop error:', error);
       throw error;
