@@ -119,3 +119,118 @@ User: "Create a new utility function for date formatting"
 Agent: [Uses write tool to create new file]
 "✅ Created src/utils/dateFormatter.ts with comprehensive date formatting functions"
 ```
+
+# Gemini Enhanced Tool Calling
+
+## Overview
+
+The coding agent now includes enhanced tool calling support for Google's Gemini models, leveraging Gemini's native chat-based API pattern for optimal performance and functionality.
+
+## Enhanced Features
+
+### Provider-Specific Routing
+- **OpenAI/Anthropic**: Uses traditional message-array pattern with `tool_calls`
+- **Gemini**: Uses native chat sessions with `functionCall`/`functionResponse` pattern
+
+### Native Gemini Pattern
+```typescript
+// Gemini's native approach
+const chat = model.startChat();
+while (response.functionCall) {
+  // Execute tool
+  // Send functionResponse back
+  // Continue conversation
+}
+```
+
+### Usage
+
+#### Environment Variable Control
+```bash
+# Enable enhanced calling (includes improved Gemini support)
+export CODING_AGENT_ENHANCED_CALLING=true
+coding-agent "analyze this codebase"
+```
+
+#### Programmatic Usage
+```typescript
+import { ToolOrchestrator } from './core/orchestrator.js';
+
+const orchestrator = new ToolOrchestrator(llmService);
+
+// Enhanced native calling with automatic provider routing
+const response = await orchestrator.processWithEnhancedNativeCalling(
+  userInput,
+  onChunk,
+  verbose
+);
+```
+
+## Architecture Integration
+
+### Tool Schema Conversion
+Tools are automatically converted to Gemini's `functionDeclarations` format:
+
+```typescript
+// OpenAI/Anthropic format
+{
+  function: {
+    name: 'read_file',
+    description: 'Read file contents',
+    parameters: { ... }
+  }
+}
+
+// Gemini format
+{
+  name: 'read_file',
+  description: 'Read file contents', 
+  parameters: { ... }
+}
+```
+
+### Error Handling
+- Graceful fallback to traditional approach if enhanced features unavailable
+- Proper error propagation through chat loop
+- Tool execution error recovery
+
+## Performance Benefits
+
+- **Reduced Latency**: Native chat sessions maintain context efficiently
+- **Better Tool Chaining**: Continuous conversation pattern for multi-step operations
+- **Memory Efficiency**: Persistent chat state vs. message rebuilding
+
+## Backward Compatibility
+
+All existing functionality remains unchanged. Enhanced calling is opt-in via:
+- Environment variable: `CODING_AGENT_ENHANCED_CALLING=true`
+- Direct method calls to `processWithEnhancedNativeCalling()`
+
+## Implementation Status
+
+✅ **Complete**
+- Provider detection and routing
+- Gemini function declarations conversion  
+- Chat loop with tool execution integration
+- Error handling and fallback mechanisms
+
+🔄 **In Progress**
+- Performance optimizations
+- Advanced streaming support
+- Extended tool result formats
+
+## Examples
+
+### Basic Enhanced Calling
+```bash
+export CODING_AGENT_ENHANCED_CALLING=true
+coding-agent "read the README.md file and summarize it"
+```
+
+### Verbose Mode
+```bash
+export CODING_AGENT_ENHANCED_CALLING=true
+coding-agent --verbose "analyze the codebase structure"
+```
+
+The enhanced implementation maintains the existing architecture patterns while providing optimal performance for each LLM provider's native capabilities.

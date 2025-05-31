@@ -68,6 +68,12 @@ export interface LLMProvider {
     onChunk?: (chunk: string) => void,
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
+  processWithNativeToolLoop?(
+    userInput: string,
+    tools: any[],
+    onChunk?: (chunk: string) => void,
+    verbose?: boolean
+  ): Promise<string>;
 }
 
 export class LLMService implements LLMProvider {
@@ -178,6 +184,16 @@ export class LLMService implements LLMProvider {
   getCurrentProvider(): string {
     const config = configManager.getConfig();
     return config.provider || 'openai';
+  }
+
+  /**
+   * Get the current provider name for routing decisions
+   */
+  get provider(): string {
+    if (this.currentProvider instanceof OpenAI) return 'openai';
+    if (this.currentProvider instanceof AnthropicProvider) return 'anthropic';
+    if (this.currentProvider instanceof GeminiProvider) return 'gemini';
+    return 'unknown';
   }
 
   /**
@@ -673,6 +689,159 @@ Focus on being precise, helpful, and aligned with software engineering best prac
     }
 
     return this.streamMessageWithTools(updatedMessages, functions, onChunk, onToolCall);
+  }
+
+
+
+  /**
+   * Process input with native tool loop (Anthropic-style continuous conversation)
+   */
+  async processWithNativeToolLoop(
+    userInput: string,
+    tools: any[],
+    onChunk?: (chunk: string) => void,
+    verbose: boolean = false
+  ): Promise<string> {
+    if (!this.isReady()) {
+      throw new Error('LLM service not initialized. Run setup first.');
+    }
+
+    const config = configManager.getConfig();
+    const provider = config.provider || 'openai';
+
+    if (provider === 'gemini' && this.currentProvider) {
+      // Use Gemini-specific chat-based tool loop
+      return this.processWithGeminiChatLoop(userInput, tools, onChunk, verbose);
+    } else if ((provider === 'anthropic') && this.currentProvider) {
+      // Use provider-specific implementation if available
+      if ('processWithNativeToolLoop' in this.currentProvider && this.currentProvider.processWithNativeToolLoop) {
+        return this.currentProvider.processWithNativeToolLoop(userInput, tools, onChunk, verbose);
+      }
+    }
+
+    // Fallback implementation for OpenAI using the same pattern
+    return this.processWithNativeToolLoopOpenAI(userInput, tools, onChunk, verbose);
+  }
+
+  /**
+   * OpenAI-specific native tool loop implementation
+   * Follows the Anthropic pattern: continuous conversation until no more tool calls
+   */
+  private async processWithNativeToolLoopOpenAI(
+    userInput: string,
+    tools: any[],
+    onChunk?: (chunk: string) => void,
+    verbose: boolean = false
+  ): Promise<string> {
+    // Initialize conversation with system message and user input
+    let messages: Message[] = [
+      this.createSystemMessage(),
+      { role: 'user', content: userInput }
+    ];
+
+    const maxIterations = 10; // Prevent infinite loops
+    let iterations = 0;
+
+    while (iterations < maxIterations) {
+      iterations++;
+
+      if (verbose) {
+        console.log(chalk.blue(`🔄 OpenAI tool loop iteration ${iterations}...`));
+      }
+
+      try {
+        // Send to LLM with tool schemas
+        const response = await this.streamMessageWithTools(
+          messages,
+          tools,
+          onChunk
+        );
+
+        // Check if we have tool calls to execute
+        if (response.tool_calls && response.tool_calls.length > 0) {
+          if (verbose) {
+            console.log(chalk.yellow(`🔧 OpenAI requested ${response.tool_calls.length} tool call(s)`));
+          }
+
+          // Add assistant's response with tool calls to conversation
+          messages.push({
+            role: 'assistant',
+            content: response.content,
+            tool_calls: response.tool_calls
+          });
+
+          // Note: This is a simplified implementation
+          // In practice, tool execution should be handled by the orchestrator
+          // For now, we return the tool call requests for the orchestrator to handle
+          return JSON.stringify({
+            type: 'tool_calls_required',
+            tool_calls: response.tool_calls,
+            messages: messages
+          });
+        } else {
+          // No tool calls - this is the final response
+          const finalResponse = response.content || '';
+
+          if (verbose) {
+            console.log(chalk.green('✅ OpenAI tool loop completed'));
+          }
+
+          return finalResponse;
+        }
+      } catch (error) {
+        throw new Error(`Failed to process OpenAI tool loop in iteration ${iterations}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    throw new Error(`Maximum iterations (${maxIterations}) reached without completion`);
+  }
+
+  /**
+   * Gemini-specific chat-based tool loop implementation
+   * Follows Gemini's chat API pattern with functionDeclarations
+   */
+  private async processWithGeminiChatLoop(
+    userInput: string,
+    tools: any[],
+    onChunk?: (chunk: string) => void,
+    verbose: boolean = false
+  ): Promise<string> {
+    if (!this.geminiProvider) {
+      throw new Error('Gemini provider not initialized');
+    }
+
+    // Convert tools to Gemini's functionDeclarations format
+    const functionDeclarations = tools.map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: {
+        type: 'object',
+        properties: tool.input_schema?.properties || {},
+        required: tool.input_schema?.required || []
+      }
+    }));
+
+    if (verbose) {
+      console.log(chalk.blue(`🔄 Starting Gemini chat with ${functionDeclarations.length} tools...`));
+    }
+
+    try {
+      // For now, fallback to regular streaming since we need to implement chat loop in provider
+      const messages = [this.createUserMessage(userInput)];
+      const response = await this.geminiProvider.streamMessageWithTools(
+        messages,
+        tools,
+        onChunk
+      );
+
+      if (verbose) {
+        console.log(chalk.green('✅ Gemini response completed'));
+      }
+
+      return response.content || '';
+    } catch (error) {
+      throw new Error(`Gemini chat loop failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 }
 

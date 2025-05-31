@@ -372,4 +372,295 @@ Use these tools when you need to access files or gather information about the pr
       })
       .join('\n');
   }
+
+  /**
+   * Get tool schemas in the format expected by native tool calling
+   * This supports both OpenAI and Anthropic tool schema formats
+   */
+  getToolSchemas(): any[] {
+    return Array.from(this.tools.values()).map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: {
+        type: "object",
+        properties: tool.schema.properties || {},
+        required: tool.schema.required || []
+      }
+    }));
+  }
+
+  /**
+   * Process message using native tool calling loop pattern (similar to Anthropic example)
+   * This follows the continuous conversation pattern where tool calls happen in a loop
+   */
+  async processWithNativeToolLoop(
+    userInput: string,
+    onChunk?: (chunk: string) => void,
+    verbose: boolean = false
+  ): Promise<string> {
+    if (!this.llmService.isReady()) {
+      throw new Error('LLM service not initialized');
+    }
+
+    // Initialize conversation with system message and user input
+    let messages: ConversationMessage[] = [
+      this.createSystemMessageWithTools(),
+      {
+        role: 'user',
+        content: userInput
+      }
+    ];
+
+    const maxIterations = 10; // Prevent infinite loops
+    let iterations = 0;
+
+    while (iterations < maxIterations) {
+      iterations++;
+
+      if (verbose) {
+        console.log(chalk.blue(`🔄 Processing iteration ${iterations}...`));
+      }
+
+      try {
+        // Send to LLM with tool schemas
+        const response = await this.llmService.streamMessageWithTools(
+          messages,
+          this.getFunctionSchemas(),
+          onChunk
+        );
+
+        // Check if we have tool calls to execute
+        if (response.tool_calls && response.tool_calls.length > 0) {
+          if (verbose) {
+            console.log(chalk.yellow(`🔧 Executing ${response.tool_calls.length} tool call(s)`));
+          }
+
+          // Add assistant's response with tool calls to conversation
+          messages.push({
+            role: 'assistant',
+            content: response.content,
+            tool_calls: response.tool_calls
+          });
+
+          // Execute each tool call and add results
+          for (const toolCall of response.tool_calls) {
+            const toolResult = await this.executeToolCallNative(toolCall, verbose);
+
+            // Add tool result to conversation
+            messages.push({
+              role: 'tool',
+              content: JSON.stringify(toolResult),
+              tool_call_id: toolCall.id
+            });
+          }
+
+          // Continue the loop for next iteration
+          continue;
+        } else {
+          // No tool calls - this is the final response
+          const finalResponse = response.content || '';
+
+          if (verbose) {
+            console.log(chalk.green('✅ Final response generated'));
+          }
+
+          // Update conversation history for future calls
+          this.conversationHistory = messages.slice(1); // Remove system message
+          this.conversationHistory.push({
+            role: 'assistant',
+            content: finalResponse
+          });
+
+          return finalResponse;
+        }
+      } catch (error) {
+        throw new Error(`Failed to process message in iteration ${iterations}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    throw new Error(`Maximum iterations (${maxIterations}) reached without completion`);
+  }
+
+  /**
+   * Execute a single tool call and return formatted result
+   * Used by the native tool loop
+   */
+  private async executeToolCallNative(toolCall: ToolCall, verbose: boolean): Promise<any> {
+    const { function: func } = toolCall;
+    const tool = this.tools.get(func.name);
+
+    if (!tool) {
+      const errorResult = {
+        error: `Tool '${func.name}' not found`,
+        available_tools: Array.from(this.tools.keys())
+      };
+
+      if (verbose) {
+        console.error(chalk.red(`❌ ${errorResult.error}`));
+      }
+
+      return errorResult;
+    }
+
+    try {
+      if (verbose) {
+        console.log(chalk.cyan(`🛠️  Executing: ${func.name}`));
+        console.log(chalk.gray(`   Arguments: ${func.arguments}`));
+      }
+
+      // Parse arguments
+      let args: any;
+      try {
+        args = JSON.parse(func.arguments);
+      } catch (error) {
+        throw new Error(`Invalid JSON arguments: ${func.arguments}`);
+      }
+
+      // Execute the tool
+      const result = await tool.execute(args);
+
+      // Log tool usage if enabled
+      const { logToolUsage } = configManager.getConfig();
+      if (logToolUsage) {
+        ToolLogger.logToolResult(func.name, result.success, result.success ? result.output : result.error);
+      }
+
+      if (verbose) {
+        if (result.success) {
+          console.log(chalk.green(`✅ Tool executed successfully`));
+          if (result.metadata?.executionTime) {
+            console.log(chalk.gray(`   Execution time: ${result.metadata.executionTime}ms`));
+          }
+        } else {
+          console.log(chalk.red(`❌ Tool execution failed: ${result.error}`));
+        }
+      }
+
+      // Return formatted result for LLM consumption
+      return this.formatToolResult(result);
+    } catch (error) {
+      const errorResult = {
+        error: `Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        tool: func.name,
+        arguments: func.arguments
+      };
+
+      if (verbose) {
+        console.error(chalk.red(`❌ ${errorResult.error}`));
+      }
+
+      return errorResult;
+    }
+  }
+
+  /**
+   * Convert tool schemas to Gemini function declarations format
+   */
+  private convertToGeminiFunctionDeclarations(tools: any[]): any[] {
+    return tools.map(tool => ({
+      name: tool.function?.name || tool.name,
+      description: tool.function?.description || tool.description,
+      parameters: tool.function?.parameters || tool.parameters
+    }));
+  }
+
+  /**
+   * Enhanced native calling that routes to provider-specific implementations
+   */
+  async processWithEnhancedNativeCalling(
+    userInput: string,
+    onChunk?: (chunk: string) => void,
+    verbose?: boolean
+  ): Promise<string> {
+    if (verbose) {
+      console.log('🚀 Starting enhanced native tool calling process');
+      console.log(`🔧 Provider: ${this.llmService.provider}`);
+    }
+
+    const tools = await this.getToolSchemas();
+    
+    // Use provider-specific native calling
+    if (this.llmService.provider === 'gemini') {
+      // Convert tools to Gemini function declarations format
+      const functionDeclarations = this.convertToGeminiFunctionDeclarations(tools);
+      
+      if (verbose) {
+        console.log('🔧 Using Gemini chat loop for tool calling');
+      }
+      
+      // Create a connected version of processWithChatLoop that can execute tools
+      return await this.processGeminiChatLoop(userInput, functionDeclarations, onChunk, verbose);
+    } else {
+      // Use existing approach for OpenAI/Anthropic
+      if (verbose) {
+        console.log('🔧 Using traditional tool calling approach');
+      }
+      return await this.processMessage(userInput, onChunk, verbose);
+    }
+  }
+
+  /**
+   * Gemini-specific chat loop with integrated tool execution
+   */
+  private async processGeminiChatLoop(
+    userInput: string,
+    functionDeclarations: any[],
+    onChunk?: (chunk: string) => void,
+    verbose?: boolean,
+    maxIterations: number = 10
+  ): Promise<string> {
+    try {
+      if (verbose) {
+        console.log('🔧 Starting integrated Gemini chat loop');
+        console.log(`🛠️ Available tools: ${functionDeclarations.map(f => f.name).join(', ')}`);
+      }
+
+      // Create tool executor that uses our orchestrator's tool execution
+      const toolExecutor = async (toolName: string, args: any) => {
+        if (verbose) {
+          console.log(`🔧 Executing tool: ${toolName}`);
+        }
+
+        // Find the tool in our registry
+        const tool = this.tools.get(toolName);
+        if (!tool) {
+          throw new Error(`Tool ${toolName} not found in registry`);
+        }
+
+        // Execute the tool with proper error handling
+        try {
+          const result = await tool.execute(args);
+          return result;
+        } catch (error) {
+          console.error(`❌ Tool execution failed for ${toolName}:`, error);
+          throw error;
+        }
+      };
+
+      // Check if we have the enhanced Gemini provider
+      if (this.llmService.provider === 'gemini' && 
+          typeof (this.llmService as any).processWithChatLoop === 'function') {
+        
+        // Use the enhanced Gemini chat loop
+        return await (this.llmService as any).processWithChatLoop(
+          userInput,
+          functionDeclarations,
+          toolExecutor,
+          onChunk,
+          verbose,
+          maxIterations
+        );
+      } else {
+        // Fall back to traditional approach
+        if (verbose) {
+          console.log('⚠️ Enhanced Gemini chat loop not available, using traditional approach');
+        }
+        return await this.processMessage(userInput, onChunk, verbose);
+      }
+      
+    } catch (error) {
+      console.error('❌ Gemini chat loop error:', error);
+      throw error;
+    }
+  }
 }
