@@ -180,25 +180,21 @@ describe('ProjectDiscovery', () => {
         throw new Error('command execution failed');
       });
       
-      // Mock fs methods to also fail by temporarily replacing them
-      const originalReaddirSync = fs.readdirSync;
-      const originalExistsSync = fs.existsSync;
-      const originalStatSync = fs.statSync;
-
-      (fs as any).readdirSync = jest.fn(() => {
+      // Mock fs methods to also fail using jest.spyOn
+      const readdirSyncSpy = jest.spyOn(fs, 'readdirSync').mockImplementation(() => {
         throw new Error('fs operation failed');
       });
-      (fs as any).existsSync = jest.fn(() => false);
-      (fs as any).statSync = jest.fn(() => {
+      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockImplementation(() => false);
+      const statSyncSpy = jest.spyOn(fs, 'statSync').mockImplementation(() => {
         throw new Error('fs operation failed');
       });
 
       const result = await discovery.discover();
 
-      // Restore original fs methods
-      (fs as any).readdirSync = originalReaddirSync;
-      (fs as any).existsSync = originalExistsSync;
-      (fs as any).statSync = originalStatSync;
+      // Restore fs method spies
+      readdirSyncSpy.mockRestore();
+      existsSyncSpy.mockRestore();
+      statSyncSpy.mockRestore();
 
       // Even if everything fails, we should get sensible defaults with silent handling
       expect(result.projectStructure).toBe('');
