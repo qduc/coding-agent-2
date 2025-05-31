@@ -105,33 +105,13 @@ describe('ProjectDiscovery', () => {
   });
 
   describe('Fallback Methods', () => {
-    // Mock fs-extra for this describe block to control its behavior
-    jest.mock('fs-extra');
-    const mockFs = require('fs-extra'); // Get the mocked module
-
     // Mock the execSync function to simulate command not found
     let execSyncSpy: jest.SpyInstance;
 
     beforeEach(() => {
-      // Reset all mocks before each test in this block
-      jest.resetAllMocks();
-
       // Mock child_process.execSync
       const childProcess = require('child_process');
       execSyncSpy = jest.spyOn(childProcess, 'execSync');
-
-      // Default mock implementations for fs-extra that call the actual methods
-      // This allows other tests in this block to use normal fs operations unless overridden
-      mockFs.readdirSync.mockImplementation(jest.requireActual('fs-extra').readdirSync);
-      mockFs.existsSync.mockImplementation(jest.requireActual('fs-extra').existsSync);
-      mockFs.statSync.mockImplementation(jest.requireActual('fs-extra').statSync);
-      mockFs.pathExists.mockImplementation(jest.requireActual('fs-extra').pathExists);
-      mockFs.remove.mockImplementation(jest.requireActual('fs-extra').remove);
-      mockFs.mkdtemp.mockImplementation(jest.requireActual('fs-extra').mkdtemp);
-      mockFs.ensureDir.mockImplementation(jest.requireActual('fs-extra').ensureDir);
-      mockFs.writeFile.mockImplementation(jest.requireActual('fs-extra').writeFile);
-      mockFs.writeJSON.mockImplementation(jest.requireActual('fs-extra').writeJSON);
-      mockFs.readFileSync.mockImplementation(jest.requireActual('fs-extra').readFileSync);
     });
 
     afterEach(() => {
@@ -200,21 +180,25 @@ describe('ProjectDiscovery', () => {
         throw new Error('command execution failed');
       });
       
-      // Mock fs methods to also fail
-      const fsSpies = {
-        readdirSync: jest.spyOn(fs, 'readdirSync').mockImplementation(() => {
-          throw new Error('fs operation failed');
-        }),
-        existsSync: jest.spyOn(fs, 'existsSync').mockImplementation(() => false),
-        statSync: jest.spyOn(fs, 'statSync').mockImplementation(() => {
-          throw new Error('fs operation failed');
-        })
-      };
+      // Mock fs methods to also fail by temporarily replacing them
+      const originalReaddirSync = fs.readdirSync;
+      const originalExistsSync = fs.existsSync;
+      const originalStatSync = fs.statSync;
+
+      (fs as any).readdirSync = jest.fn(() => {
+        throw new Error('fs operation failed');
+      });
+      (fs as any).existsSync = jest.fn(() => false);
+      (fs as any).statSync = jest.fn(() => {
+        throw new Error('fs operation failed');
+      });
 
       const result = await discovery.discover();
 
-      // Clean up fs mocks
-      Object.values(fsSpies).forEach(spy => spy.mockRestore());
+      // Restore original fs methods
+      (fs as any).readdirSync = originalReaddirSync;
+      (fs as any).existsSync = originalExistsSync;
+      (fs as any).statSync = originalStatSync;
 
       // Even if everything fails, we should get sensible defaults with silent handling
       expect(result.projectStructure).toBe('');
