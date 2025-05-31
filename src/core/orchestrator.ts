@@ -13,6 +13,7 @@ import { configManager } from './config';
 import { ToolLogger } from '../utils/toolLogger';
 import { ProjectDiscoveryResult } from '../utils/projectDiscovery';
 import { logger } from '../utils/logger';
+import { SchemaAdapter } from '../services/schemaAdapter';
 
 export interface ConversationMessage extends Message {
   tool_calls?: any[];
@@ -98,7 +99,7 @@ export class ToolOrchestrator {
         // Check if we're using Anthropic and have tools available
         const schemas = this.getFunctionSchemas();
         const isAnthropicWithTools = this.llmService.getCurrentProvider() === 'anthropic' && schemas.length > 0;
-        
+
         let response;
         if (isAnthropicWithTools) {
           // Use non-streaming for Anthropic with tools to avoid streaming tool input issues
@@ -372,10 +373,32 @@ Use these tools when you need to access files or gather information about the pr
   }
 
   /**
-   * Get function schemas for OpenAI function calling
+   * Get function schemas for the current provider
+   * Uses SchemaAdapter to transform schemas based on provider requirements
    */
   private getFunctionSchemas(): any[] {
-    return Array.from(this.tools.values()).map(tool => tool.getFunctionCallSchema());
+    const provider = this.llmService.getCurrentProvider();
+    const toolSchemas = Array.from(this.tools.values()).map(tool => tool.getFunctionCallSchema());
+
+    // Convert to normalized format first
+    const normalizedTools = toolSchemas.map(schema => ({
+      name: schema.name,
+      description: schema.description,
+      input_schema: schema.parameters
+    }));
+
+    // Transform based on provider
+    switch (provider) {
+      case 'openai':
+        return SchemaAdapter.convertToOpenAI(normalizedTools);
+      case 'anthropic':
+        return SchemaAdapter.convertToAnthropic(normalizedTools);
+      case 'gemini':
+        return SchemaAdapter.convertToGemini(normalizedTools);
+      default:
+        // Default to OpenAI format for backwards compatibility
+        return SchemaAdapter.convertToOpenAI(normalizedTools);
+    }
   }
 
   /**
@@ -409,18 +432,37 @@ Use these tools when you need to access files or gather information about the pr
 
   /**
    * Get tool schemas in the format expected by native tool calling
-   * This supports both OpenAI and Anthropic tool schema formats
+   * Uses SchemaAdapter to ensure compatibility with different providers
    */
   getToolSchemas(): any[] {
-    return Array.from(this.tools.values()).map(tool => ({
+    const provider = this.llmService.getCurrentProvider();
+    const toolSchemas = Array.from(this.tools.values()).map(tool => ({
       name: tool.name,
       description: tool.description,
-      input_schema: {
-        type: "object",
-        properties: tool.schema.properties || {},
-        required: tool.schema.required || []
-      }
+      input_schema: tool.schema
     }));
+
+    // Transform based on provider
+    switch (provider) {
+      case 'anthropic':
+        return SchemaAdapter.convertToAnthropic(toolSchemas);
+      case 'gemini':
+        // For Gemini, we need to convert to function declarations
+        // but this method is used for Anthropic-style schemas
+        return toolSchemas.map(tool => ({
+          name: tool.name,
+          description: tool.description,
+          input_schema: {
+            type: tool.input_schema.type,
+            properties: tool.input_schema.properties || {},
+            required: tool.input_schema.required || []
+            // Strip additionalProperties for Gemini compatibility
+          }
+        }));
+      default:
+        // Default format (also works for OpenAI when needed)
+        return toolSchemas;
+    }
   }
 
   /**
@@ -459,7 +501,7 @@ Use these tools when you need to access files or gather information about the pr
         // Check if we're using Anthropic and have tools available
         const schemas = this.getFunctionSchemas();
         const isAnthropicWithTools = this.llmService.getCurrentProvider() === 'anthropic' && schemas.length > 0;
-        
+
         let response;
         if (isAnthropicWithTools) {
           // Use non-streaming for Anthropic with tools to avoid streaming tool input issues

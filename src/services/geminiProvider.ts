@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { configManager } from '../core/config';
 import { LLMProvider, Message, StreamingResponse, FunctionCallResponse } from './llm';
 import { ToolLogger } from '../utils/toolLogger';
+import { SchemaAdapter } from './schemaAdapter';
 
 /**
  * Google Gemini provider implementation
@@ -51,16 +52,17 @@ export class GeminiProvider implements LLMProvider {
   }
 
   /**
-   * Convert Gemini function declarations to our format
+   * Convert tools to Gemini function declarations format
+   * Uses SchemaAdapter to handle schema transformation and strip unsupported fields
    */
   private convertToolsToGeminiFormat(functions: any[]): Tool[] {
-    return functions.map(func => ({
-      functionDeclarations: [{
-        name: func.name,
-        description: func.description,
-        parameters: func.parameters
-      } as FunctionDeclaration]
-    }));
+    // Normalize tools first, then convert to Gemini format
+    const normalizedTools = SchemaAdapter.normalizeAll(functions);
+    const geminiDeclarations = SchemaAdapter.convertToGemini(normalizedTools);
+
+    return [{
+      functionDeclarations: geminiDeclarations
+    }];
   }
 
   async streamMessage(
