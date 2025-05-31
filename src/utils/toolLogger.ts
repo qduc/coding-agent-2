@@ -13,6 +13,42 @@ import { logger } from './logger';
  */
 export class ToolLogger {
   /**
+   * Filter out long parameters that shouldn't be displayed in console
+   */
+  private static filterLongParams(args: any): any {
+    if (!args || typeof args !== 'object') {
+      return args;
+    }
+
+    const filtered = { ...args };
+    const longParamKeys = ['content', 'data', 'text', 'body', 'payload'];
+
+    for (const key of Object.keys(filtered)) {
+      const value = filtered[key];
+
+      // Check if it's a long parameter by key name
+      if (longParamKeys.some(longKey => key.toLowerCase().includes(longKey))) {
+        if (typeof value === 'string' && value.length > 100) {
+          filtered[key] = `[${value.length} characters]`;
+        }
+        continue;
+      }
+
+      // Check if it's a long string value
+      if (typeof value === 'string' && value.length > 200) {
+        filtered[key] = `[${value.length} characters]`;
+      }
+
+      // Recursively filter nested objects
+      if (typeof value === 'object' && value !== null) {
+        filtered[key] = this.filterLongParams(value);
+      }
+    }
+
+    return filtered;
+  }
+
+  /**
    * Log when a tool is being called by the LLM
    */
   static logToolCall(toolName: string, args: any): void {
@@ -20,7 +56,8 @@ export class ToolLogger {
     if (logger.isToolConsoleEnabled()) {
       console.log(chalk.blue('🔧 Tool Usage:'), chalk.cyan(toolName));
       if (args && Object.keys(args).length > 0) {
-        console.log(chalk.gray('   Arguments:'), JSON.stringify(args, null, 2));
+        const filteredArgs = this.filterLongParams(args);
+        console.log(chalk.gray('   Arguments:'), JSON.stringify(filteredArgs, null, 2));
       }
     }
 
@@ -46,50 +83,85 @@ export class ToolLogger {
       logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');
     }
 
-    // Only show result details in console if tool console logging is enabled
+    // Only show result metrics in console if tool console logging is enabled
     if (result && logger.isToolConsoleEnabled()) {
-      // Special handling for Read tool - don't output file content
-      if (toolName.toLowerCase().includes('read')) {
-        if (typeof result === 'string' && result.length > 0) {
-          const lineCount = result.split('\n').length;
-          console.log(chalk.gray('   Result:'), `[File content loaded successfully, ${lineCount} lines]`);
-        } else {
-          console.log(chalk.gray('   Result:'), result);
-        }
-        return;
-      }
-
-      // Format different result types appropriately
-      if (typeof result === 'string') {
-        const lines = result.split('\n');
-        if (lines.length > 4 || result.length > 300) {
-          const preview = lines.slice(0, 4).join('\n');
-          const truncatedInfo = lines.length > 4 ? `... (+${lines.length - 4} more lines)` : '...';
-          console.log(chalk.gray('   Result: [truncated]'));
-          console.log(preview + '\n' + chalk.gray(truncatedInfo));
-        } else {
-          console.log(chalk.gray('   Result:'), result);
-        }
-      } else if (result instanceof Error) {
-        console.log(chalk.gray('   Error:'), chalk.red(result.message));
-      } else if (typeof result === 'object') {
-        try {
-          const formatted = JSON.stringify(result, null, 2);
-          const lines = formatted.split('\n');
-          if (lines.length > 8 || formatted.length > 400) {
-            const preview = lines.slice(0, 8).join('\n');
-            const truncatedInfo = `... (+${lines.length - 8} more lines)`;
-            console.log(chalk.gray('   Result: [truncated object]'));
-            console.log(preview + '\n' + chalk.gray(truncatedInfo));
-          } else {
-            console.log(chalk.gray('   Result:'), formatted);
-          }
-        } catch (e) {
-          console.log(chalk.gray('   Result:'), '[Complex object]');
-        }
-      } else {
-        console.log(chalk.gray('   Result:'), result);
+      const metrics = this.getResultMetrics(toolName, result);
+      if (metrics) {
+        console.log(chalk.gray('   Result:'), metrics);
       }
     }
+  }
+
+  /**
+   * Extract meaningful metrics from tool results
+   */
+  private static getResultMetrics(toolName: string, result: any): string | null {
+    if (result instanceof Error) {
+      return chalk.red(result.message);
+    }
+
+    // Handle string results (file content, command output, etc.)
+    if (typeof result === 'string') {
+      const lines = result.split('\n');
+      const chars = result.length;
+
+      if (toolName.toLowerCase().includes('read')) {
+        return `📄 File loaded: ${lines.length} lines, ${chars} characters`;
+      } else if (toolName.toLowerCase().includes('ls') || toolName.toLowerCase().includes('list')) {
+        // Try to count files and directories from ls-style output
+        const items = lines.filter(line => line.trim().length > 0);
+        const dirs = items.filter(line => line.includes('/') || line.endsWith('/')).length;
+        const files = items.length - dirs;
+        return `📁 Listed: ${files} files, ${dirs} directories`;
+      } else if (toolName.toLowerCase().includes('grep') || toolName.toLowerCase().includes('search')) {
+        const matches = lines.filter(line => line.trim().length > 0).length;
+        return `🔍 Found: ${matches} matches`;
+      } else {
+        return `📝 Output: ${lines.length} lines, ${chars} characters`;
+      }
+    }
+
+    // Handle array results
+    if (Array.isArray(result)) {
+      if (toolName.toLowerCase().includes('glob') || toolName.toLowerCase().includes('find')) {
+        const files = result.filter(item => !item.endsWith('/')).length;
+        const dirs = result.length - files;
+        return `🔍 Found: ${files} files, ${dirs} directories`;
+      }
+      return `📋 Items: ${result.length} entries`;
+    }
+
+    // Handle object results
+    if (typeof result === 'object') {
+      const keys = Object.keys(result);
+      if (keys.length === 0) {
+        return `📦 Empty object`;
+      }
+
+      // Check for common object patterns
+      if (result.files && Array.isArray(result.files)) {
+        return `📁 Found: ${result.files.length} files`;
+      }
+      if (result.directories && Array.isArray(result.directories)) {
+        return `📁 Found: ${result.directories.length} directories`;
+      }
+      if (result.matches && Array.isArray(result.matches)) {
+        return `🔍 Found: ${result.matches.length} matches`;
+      }
+
+      return `📦 Object: ${keys.length} properties`;
+    }
+
+    // Handle boolean results
+    if (typeof result === 'boolean') {
+      return result ? '✓ Success' : '✗ Failed';
+    }
+
+    // Handle number results
+    if (typeof result === 'number') {
+      return `🔢 Result: ${result}`;
+    }
+
+    return null;
   }
 }

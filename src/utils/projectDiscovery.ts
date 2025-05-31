@@ -103,7 +103,7 @@ export class ProjectDiscovery {
       const projectName = path.basename(this.workingDirectory);
       const ignoreDirs = new Set(['node_modules', '.git', '__pycache__', 'venv', 'env', 'dist', 'build']);
 
-      const buildTree = (dir: string, prefix: string = '', maxDepth: number = 2, currentDepth: number = 0): string => {
+      const buildTree = (dir: string, prefix: string = '', maxDepth: number = 10, currentDepth: number = 0): string => {
         if (currentDepth >= maxDepth) return '';
 
         try {

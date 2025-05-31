@@ -20,18 +20,36 @@ export class MarkdownRenderer {
       const language = lines[0].replace('```', '').trim();
       const code = lines.slice(1, -1).join('\n');
       const langDisplay = language || 'code';
-      const borderLength = 57;
-      const topBorder = '┌─ ' + langDisplay + ' ' + '─'.repeat(Math.max(0, borderLength - langDisplay.length - 4));
 
-      return chalk.gray(topBorder) + '\n' +
-             chalk.gray('│ ') + code.split('\n').join('\n' + chalk.gray('│ ')) + '\n' +
-             chalk.gray('└' + '─'.repeat(borderLength - 1));
+      // Enhanced code block with rounded corners and line numbers
+      const codeLines = code.split('\n');
+      const maxLineNumWidth = codeLines.length.toString().length;
+      const borderLength = Math.min(60, process.stdout.columns - 10 || 60);
+
+      // Create header with language and copy indicator
+      const headerText = `${langDisplay}`;
+      const copyIndicator = '📋';
+      const headerPadding = Math.max(0, borderLength - headerText.length - copyIndicator.length - 6);
+      const topBorder = '╭─ ' + chalk.cyan(headerText) + ' ' + '─'.repeat(headerPadding) + ' ' + chalk.gray(copyIndicator) + ' ╮';
+
+      // Format code lines with line numbers
+      const formattedLines = codeLines.map((line, index) => {
+        const lineNum = (index + 1).toString().padStart(maxLineNumWidth, ' ');
+        const lineNumFormatted = chalk.gray.dim(lineNum + ' │ ');
+        return chalk.gray('│ ') + lineNumFormatted + line;
+      }).join('\n');
+
+      const bottomBorder = '╰' + '─'.repeat(borderLength + 1) + '╯';
+
+      return '\n' + chalk.gray(topBorder) + '\n' +
+             formattedLines + '\n' +
+             chalk.gray(bottomBorder) + '\n';
     });
 
-    // Headers
-    output = output.replace(/^### (.*$)/gm, chalk.yellow.bold('$1'));
-    output = output.replace(/^## (.*$)/gm, chalk.cyan.bold('$1'));
-    output = output.replace(/^# (.*$)/gm, chalk.blue.bold('$1'));
+    // Headers with enhanced visual hierarchy
+    output = output.replace(/^### (.*$)/gm, '\n' + chalk.yellow.bold('▸ $1') + '\n');
+    output = output.replace(/^## (.*$)/gm, '\n' + chalk.cyan.bold('▸▸ $1') + '\n');
+    output = output.replace(/^# (.*$)/gm, '\n' + chalk.blue.bold('▸▸▸ $1') + '\n');
 
     // Bold text
     output = output.replace(/\*\*(.*?)\*\*/g, chalk.bold('$1'));
@@ -41,21 +59,22 @@ export class MarkdownRenderer {
     output = output.replace(/(?<!\*)\*(?!\*)(.*?)\*(?!\*)/g, chalk.italic('$1'));
     output = output.replace(/(?<!_)_(?!_)(.*?)_(?!_)/g, chalk.italic('$1'));
 
-    // Inline code (after code blocks)
-    output = output.replace(/`(.*?)`/g, chalk.gray.inverse(' $1 '));
+    // Enhanced inline code with better contrast
+    output = output.replace(/`(.*?)`/g, chalk.bgGray.black(' $1 '));
 
-    // Links
-    output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, chalk.blue.underline('$1') + chalk.gray(' ($2)'));
+    // Links with better formatting
+    output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, chalk.blue.underline('$1') + chalk.gray.dim(' ↗ $2'));
 
-    // Unordered lists (fix spacing)
-    output = output.replace(/^[\s]*[-*+] (.*)$/gm, chalk.green('  • ') + ' $1');
-    output = output.replace(/^[\s]*\d+\. (.*)$/gm, chalk.green('  $&'));
+    // Enhanced unordered lists with better indentation
+    output = output.replace(/^[\s]*[-*+] (.*)$/gm, '  ' + chalk.green('●') + '  $1');
+    // Enhanced ordered lists with better formatting
+    output = output.replace(/^[\s]*(\d+)\. (.*)$/gm, '  ' + chalk.green('$1.') + '  $2');
 
-    // Blockquotes
-    output = output.replace(/^> (.*)$/gm, chalk.gray('│ ') + chalk.italic('$1'));
+    // Enhanced blockquotes with left border
+    output = output.replace(/^> (.*)$/gm, chalk.blue('┃ ') + chalk.italic.gray('$1'));
 
-    // Horizontal rules
-    output = output.replace(/^---$/gm, chalk.gray('─'.repeat(56)));
+    // Enhanced horizontal rules
+    output = output.replace(/^---$/gm, '\n' + chalk.gray('─'.repeat(Math.min(56, process.stdout.columns - 4 || 56))) + '\n');
 
     return output;
   }
@@ -64,17 +83,34 @@ export class MarkdownRenderer {
    * Render markdown with enhanced code syntax highlighting
    */
   static renderWithCodeHighlight(markdownText: string): string {
-    // Enhanced code block handling with basic syntax highlighting
+    // Enhanced code block handling with basic syntax highlighting and line numbers
     let output = markdownText.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
       const lang = language || 'text';
       const highlightedCode = this.highlightCode(code.trim(), lang);
-      const borderLength = 57;
-      const topBorder = '┌─ ' + lang + ' ' + '─'.repeat(Math.max(0, borderLength - lang.length - 4));
-      const bottomBorder = '└' + '─'.repeat(borderLength - 1);
 
-      return chalk.gray(topBorder) + '\n' +
-             highlightedCode.split('\n').map(line => chalk.gray('│ ') + line).join('\n') + '\n' +
-             chalk.gray(bottomBorder);
+      // Enhanced code block with rounded corners and line numbers
+      const codeLines = highlightedCode.split('\n');
+      const maxLineNumWidth = codeLines.length.toString().length;
+      const borderLength = Math.min(60, process.stdout.columns - 10 || 60);
+
+      // Create header with language and copy indicator
+      const headerText = `${lang}`;
+      const copyIndicator = '📋';
+      const headerPadding = Math.max(0, borderLength - headerText.length - copyIndicator.length - 6);
+      const topBorder = '╭─ ' + chalk.cyan(headerText) + ' ' + '─'.repeat(headerPadding) + ' ' + chalk.gray(copyIndicator) + ' ╮';
+
+      // Format code lines with line numbers
+      const formattedLines = codeLines.map((line, index) => {
+        const lineNum = (index + 1).toString().padStart(maxLineNumWidth, ' ');
+        const lineNumFormatted = chalk.gray.dim(lineNum + ' │ ');
+        return chalk.gray('│ ') + lineNumFormatted + line;
+      }).join('\n');
+
+      const bottomBorder = '╰' + '─'.repeat(borderLength + 1) + '╯';
+
+      return '\n' + chalk.gray(topBorder) + '\n' +
+             formattedLines + '\n' +
+             chalk.gray(bottomBorder) + '\n';
     });
 
     return this.render(output);

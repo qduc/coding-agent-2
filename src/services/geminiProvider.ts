@@ -159,9 +159,6 @@ export class GeminiProvider implements LLMProvider {
 
     const contents = this.convertMessagesToParts(messages);
 
-    // Debug logging
-    console.log('Sending to Gemini:', JSON.stringify(contents, null, 2));
-
     const result = await model.generateContent({ contents });
 
     // Handle tool calls

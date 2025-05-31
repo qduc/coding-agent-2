@@ -100,16 +100,24 @@ async function handleDirectCommand(command: string, agent: Agent, options: any, 
     console.log(chalk.blue('Executing direct command:'), command);
   }
 
-  console.log(chalk.yellow('🤖 Coding Agent'));
-  console.log(chalk.gray('Processing your request...'));
+  // Enhanced visual hierarchy with better spacing
+  console.log();
+  console.log(chalk.yellow('┌─────────────────────────────────────────────┐'));
+  console.log(chalk.yellow('│') + chalk.yellow.bold('  🤖 Coding Agent') + chalk.yellow('                     │'));
+  console.log(chalk.yellow('└─────────────────────────────────────────────┘'));
+  console.log();
+  console.log(chalk.cyan('📥 Request:'), chalk.white(command));
+  console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
   try {
     if (options.verbose) {
       console.log(chalk.blue('🛠️  Registered tools:'), agent.getRegisteredTools().map(t => t.name).join(', '));
+      console.log();
     }
 
-    console.log(chalk.cyan('📝 Response:'));
+    // Enhanced status indicator
+    console.log(chalk.cyan('🤖 Agent:'), chalk.gray('🔍 Analyzing your request...'));
 
     // Process message with the agent
     if (shouldStream) {
@@ -120,8 +128,10 @@ async function handleDirectCommand(command: string, agent: Agent, options: any, 
       const response = await agent.processMessage(
         command,
         (chunk) => {
-          // On first chunk, start streaming
+          // On first chunk, clear status and start streaming
           if (!hasStartedStreaming) {
+            process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
+            console.log(chalk.cyan('🤖 Agent:'), chalk.gray('⚡ Responding...'));
             hasStartedStreaming = true;
           }
 
@@ -132,30 +142,40 @@ async function handleDirectCommand(command: string, agent: Agent, options: any, 
         options.verbose
       );
 
-      // Add a newline after streaming
+      // Add spacing after streaming
+      console.log();
+      console.log(chalk.gray('─'.repeat(50)));
       console.log();
 
       // If no content was streamed but we got a response, show it
       if (!hasStartedStreaming && response.trim()) {
+        process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
+        console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+        console.log();
         console.log(renderResponse(response));
+        console.log();
+        console.log(chalk.gray('─'.repeat(50)));
+        console.log();
       }
     } else {
       // Non-streaming mode
-      console.log(chalk.gray('Processing...'));
       const response = await agent.processMessage(
         command,
         undefined,
         options.verbose
       );
 
-      // Clear "Processing..." line
+      // Clear status line and show enhanced response
       process.stdout.write('\x1b[1A\x1b[2K');
+      console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+      console.log();
 
-      // Print the response
+      // Print the response with enhanced formatting
       console.log(renderResponse(response));
+      console.log();
+      console.log(chalk.gray('─'.repeat(50)));
+      console.log();
     }
-
-    console.log();
 
     if (options.verbose) {
       console.log(chalk.gray('Conversation summary:'));
@@ -175,8 +195,13 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
     console.log(chalk.blue('Starting interactive chat mode...'));
   }
 
-  console.log(chalk.yellow('🤖 Coding Agent - Interactive Mode'));
-  console.log(chalk.gray('Starting a conversation session...'));
+  // Enhanced welcome with better visual hierarchy
+  console.log();
+  console.log(chalk.yellow('┌─────────────────────────────────────────────┐'));
+  console.log(chalk.yellow('│') + chalk.yellow.bold('  🤖 Coding Agent - Interactive Mode') + chalk.yellow('     │'));
+  console.log(chalk.yellow('└─────────────────────────────────────────────┘'));
+  console.log();
+  console.log(chalk.cyan('🚀 Starting conversation session...'));
   console.log();
 
   try {
@@ -185,14 +210,16 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
 
     if (options.verbose) {
       console.log(chalk.blue('🛠️  Registered tools:'), agent.getRegisteredTools().map(t => t.name).join(', '));
+      console.log();
     }
 
-    // Display welcome message and instructions
-    console.log(chalk.cyan('💬 Welcome to interactive chat mode!'));
-    console.log(chalk.gray('• Type your questions about the code or project'));
-    console.log(chalk.gray('• Use "help" for suggestions'));
-    console.log(chalk.gray('• Use "exit" or "quit" to leave'));
-    console.log(chalk.gray('• Use Ctrl+C to exit anytime'));
+    // Enhanced welcome message with better visual structure
+    console.log(chalk.cyan('┌─ 💬 Welcome to Interactive Chat Mode ─────────┐'));
+    console.log(chalk.cyan('│') + chalk.white('  • Type your questions about code or project  ') + chalk.cyan('│'));
+    console.log(chalk.cyan('│') + chalk.white('  • Use "help" for suggestions                 ') + chalk.cyan('│'));
+    console.log(chalk.cyan('│') + chalk.white('  • Use "exit" or "quit" to leave              ') + chalk.cyan('│'));
+    console.log(chalk.cyan('│') + chalk.white('  • Use Ctrl+C to exit anytime                ') + chalk.cyan('│'));
+    console.log(chalk.cyan('└───────────────────────────────────────────────┘'));
     console.log();
 
     // Set up graceful exit handler for Ctrl+C
@@ -237,7 +264,7 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
 
         // Process the message with the AI
         try {
-          console.log(chalk.cyan('🤖 Agent:'), chalk.gray('Thinking...'));
+          console.log(chalk.cyan('🤖 Agent:'), chalk.gray('🔍 Analyzing your message...'));
 
           let accumulatedResponse = '';
           let hasStartedStreaming = false;
@@ -248,10 +275,10 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
             const response = await agent.processMessage(
               trimmedMessage,
               (chunk: string) => {
-                // Clear "Thinking..." on first chunk and start streaming
+                // Clear status and start streaming on first chunk
                 if (!hasStartedStreaming) {
                   process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
-                  process.stdout.write(chalk.cyan('🤖 Agent: '));
+                  process.stdout.write(chalk.cyan('🤖 Agent: ') + chalk.gray('⚡ '));
                   hasStartedStreaming = true;
                 }
 
@@ -273,7 +300,7 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
             // Replace raw streaming output with formatted version
             if (hasStartedStreaming && accumulatedResponse.trim()) {
               const terminalWidth = process.stdout.columns || 80;
-              const agentPrefix = '🤖 Agent: ';
+              const agentPrefix = '🤖 Agent: ⚡ ';
 
               // Calculate and execute the clearing sequence
               const clearSequence = calculateStreamingClearSequence(
@@ -283,12 +310,20 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
               );
               process.stdout.write(clearSequence);
 
-              // Show formatted response (this will overwrite the cleared space)
-              console.log(chalk.cyan('🤖 Agent:'), renderResponse(accumulatedResponse));
+              // Show enhanced formatted response
+              console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+              console.log();
+              console.log(renderResponse(accumulatedResponse));
+              console.log();
+              console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
             } else if (!hasStartedStreaming) {
               // No streaming occurred (tools only), show complete response
-              process.stdout.write('\x1b[1A\x1b[2K'); // Clear "Thinking..." line
-              console.log(chalk.cyan('🤖 Agent:'), renderResponse(response));
+              process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
+              console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+              console.log();
+              console.log(renderResponse(response));
+              console.log();
+              console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
             }
           } else {
             // Non-streaming mode
@@ -298,19 +333,25 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
               options.verbose
             );
 
-            // Clear "Thinking..." line
+            // Clear status line and show enhanced response
             process.stdout.write('\x1b[1A\x1b[2K');
+            console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+            console.log();
 
             // Show formatted response
-            console.log(chalk.cyan('🤖 Agent:'), renderResponse(response));
+            console.log(renderResponse(response));
+            console.log();
+            console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
           }
 
-          console.log(); // Add spacing
+          console.log(); // Add spacing for next input
 
         } catch (error) {
-          console.log(); // Clear the "Thinking..." line
-          console.error(chalk.red('❌ Error:'), error instanceof Error ? error.message : 'Unknown error');
-          console.log(chalk.gray('Try rephrasing your question or type "help" for suggestions.'));
+          console.log(); // Clear the status line
+          console.log(chalk.red('┌─ ❌ Error ─────────────────────────────────┐'));
+          console.log(chalk.red('│'), chalk.white(error instanceof Error ? error.message : 'Unknown error'), chalk.red('│'));
+          console.log(chalk.red('└───────────────────────────────────────────┘'));
+          console.log(chalk.gray('💡 Try rephrasing your question or type "help" for suggestions.'));
           console.log();
         }
       } catch (promptError: any) {
@@ -372,23 +413,25 @@ function displayBanner() {
  * Display chat help information
  */
 function displayChatHelp() {
-  console.log(chalk.yellow('💡 Coding Agent Help'));
   console.log();
-  console.log(chalk.white('Available Commands:'));
-  console.log(chalk.gray('  help               - Show this help message'));
-  console.log(chalk.gray('  exit, quit, q      - Exit interactive mode'));
-  console.log();
-  console.log(chalk.white('Example Questions:'));
-  console.log(chalk.gray('  "Explain what this project does"'));
-  console.log(chalk.gray('  "List files in the src directory"'));
-  console.log(chalk.gray('  "Help me understand this error"'));
-  console.log(chalk.gray('  "What are the main components?"'));
-  console.log(chalk.gray('  "Show me the test files"'));
-  console.log();
-  console.log(chalk.white('Tips:'));
-  console.log(chalk.gray('  • Be specific about what you want to know'));
-  console.log(chalk.gray('  • Ask about files, directories, or code patterns'));
-  console.log(chalk.gray('  • Use natural language - no special syntax needed'));
+  console.log(chalk.yellow('┌─ 💡 Coding Agent Help ────────────────────────┐'));
+  console.log(chalk.yellow('│                                               │'));
+  console.log(chalk.yellow('│') + chalk.white.bold('  Available Commands:') + chalk.yellow('                        │'));
+  console.log(chalk.yellow('│') + chalk.gray('    help               - Show this help') + chalk.yellow('       │'));
+  console.log(chalk.yellow('│') + chalk.gray('    exit, quit, q      - Exit interactive mode') + chalk.yellow(' │'));
+  console.log(chalk.yellow('│                                               │'));
+  console.log(chalk.yellow('│') + chalk.white.bold('  Example Questions:') + chalk.yellow('                         │'));
+  console.log(chalk.yellow('│') + chalk.gray('    "Explain what this project does"') + chalk.yellow('          │'));
+  console.log(chalk.yellow('│') + chalk.gray('    "List files in the src directory"') + chalk.yellow('         │'));
+  console.log(chalk.yellow('│') + chalk.gray('    "Help me understand this error"') + chalk.yellow('           │'));
+  console.log(chalk.yellow('│') + chalk.gray('    "What are the main components?"') + chalk.yellow('           │'));
+  console.log(chalk.yellow('│') + chalk.gray('    "Show me the test files"') + chalk.yellow('                │'));
+  console.log(chalk.yellow('│                                               │'));
+  console.log(chalk.yellow('│') + chalk.white.bold('  Tips:') + chalk.yellow('                                      │'));
+  console.log(chalk.yellow('│') + chalk.gray('    • Be specific about what you want to know') + chalk.yellow('  │'));
+  console.log(chalk.yellow('│') + chalk.gray('    • Ask about files, directories, or patterns') + chalk.yellow(' │'));
+  console.log(chalk.yellow('│') + chalk.gray('    • Use natural language - no special syntax') + chalk.yellow('  │'));
+  console.log(chalk.yellow('└───────────────────────────────────────────────┘'));
   console.log();
 }
 
