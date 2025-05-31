@@ -5,6 +5,7 @@ import * as os from 'os';
 import { execSync } from 'child_process';
 import { ToolLogger } from '../utils/toolLogger';
 import { AnthropicProvider } from './anthropicProvider';
+import { GeminiProvider } from './geminiProvider';
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -60,6 +61,7 @@ export interface LLMProvider {
 export class LLMService implements LLMProvider {
   private openai: OpenAI | null = null;
   private anthropicProvider: AnthropicProvider | null = null;
+  private geminiProvider: GeminiProvider | null = null;
   private initialized = false;
   private currentProvider: LLMProvider | null = null;
 
@@ -75,6 +77,8 @@ export class LLMService implements LLMProvider {
         return this.initializeOpenAI();
       } else if (provider === 'anthropic') {
         return this.initializeAnthropic();
+      } else if (provider === 'gemini') {
+        return this.initializeGemini();
       } else {
         throw new Error(`Unknown provider: ${provider}`);
       }
@@ -82,6 +86,22 @@ export class LLMService implements LLMProvider {
       console.error(chalk.red('Failed to initialize LLM provider:'), error instanceof Error ? error.message : 'Unknown error');
       return false;
     }
+  }
+
+  /**
+   * Initialize Gemini provider
+   */
+  private async initializeGemini(): Promise<boolean> {
+    if (!this.geminiProvider) {
+      this.geminiProvider = new GeminiProvider();
+    }
+
+    const success = await this.geminiProvider.initialize();
+    if (success) {
+      this.currentProvider = this.geminiProvider;
+      this.initialized = true;
+    }
+    return success;
   }
 
   /**
@@ -163,7 +183,7 @@ export class LLMService implements LLMProvider {
     const config = configManager.getConfig();
     const provider = config.provider || 'openai';
 
-    if (provider === 'anthropic' && this.currentProvider) {
+    if ((provider === 'anthropic' || provider === 'gemini') && this.currentProvider) {
       return this.currentProvider.streamMessage(messages, onChunk, onComplete);
     }
 
@@ -235,7 +255,7 @@ export class LLMService implements LLMProvider {
     const config = configManager.getConfig();
     const provider = config.provider || 'openai';
 
-    if (provider === 'anthropic' && this.currentProvider) {
+    if ((provider === 'anthropic' || provider === 'gemini') && this.currentProvider) {
       return this.currentProvider.sendMessage(messages);
     }
 
@@ -281,7 +301,7 @@ export class LLMService implements LLMProvider {
     const config = configManager.getConfig();
     const provider = config.provider || 'openai';
 
-    if (provider === 'anthropic' && this.currentProvider) {
+    if ((provider === 'anthropic' || provider === 'gemini') && this.currentProvider) {
       return this.currentProvider.sendMessageWithTools(messages, functions, onToolCall);
     }
 
@@ -376,7 +396,7 @@ export class LLMService implements LLMProvider {
     const config = configManager.getConfig();
     const provider = config.provider || 'openai';
 
-    if (provider === 'anthropic' && this.currentProvider) {
+    if ((provider === 'anthropic' || provider === 'gemini') && this.currentProvider) {
       return this.currentProvider.streamMessageWithTools(messages, functions, onChunk, onToolCall);
     }
 

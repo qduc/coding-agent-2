@@ -6,7 +6,8 @@ import chalk from 'chalk';
 export interface Config {
   openaiApiKey?: string;
   anthropicApiKey?: string;
-  provider?: 'openai' | 'anthropic';
+  geminiApiKey?: string;
+  provider?: 'openai' | 'anthropic' | 'gemini';
   verbose?: boolean;
   maxTokens?: number;
   model?: string;
@@ -118,11 +119,25 @@ export class ConfigManager {
   }
 
   /**
+   * Check if Gemini API key is configured
+   */
+  hasGeminiKey(): boolean {
+    return !!this.config.geminiApiKey;
+  }
+
+  /**
    * Check if the current provider has a valid API key
    */
   hasValidProviderKey(): boolean {
     const provider = this.config.provider || 'openai';
-    return provider === 'openai' ? this.hasOpenAIKey() : this.hasAnthropicKey();
+    if (provider === 'openai') {
+      return this.hasOpenAIKey();
+    } else if (provider === 'anthropic') {
+      return this.hasAnthropicKey();
+    } else if (provider === 'gemini') {
+      return this.hasGeminiKey();
+    }
+    return false;
   }
 
   /**
@@ -140,6 +155,13 @@ export class ConfigManager {
   }
 
   /**
+   * Get Gemini API key
+   */
+  getGeminiKey(): string | undefined {
+    return this.config.geminiApiKey;
+  }
+
+  /**
    * Set OpenAI API key (in memory only)
    */
   setOpenAIKey(apiKey: string): void {
@@ -151,6 +173,13 @@ export class ConfigManager {
    */
   setAnthropicKey(apiKey: string): void {
     this.config.anthropicApiKey = apiKey;
+  }
+
+  /**
+   * Set Gemini API key (in memory only)
+   */
+  setGeminiKey(apiKey: string): void {
+    this.config.geminiApiKey = apiKey;
   }
 
   /**
@@ -191,8 +220,10 @@ export class ConfigManager {
 
     if (config.provider === 'openai') {
       console.log(`OpenAI API Key: ${config.openaiApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
-    } else {
+    } else if (config.provider === 'anthropic') {
       console.log(`Anthropic API Key: ${config.anthropicApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
+    } else if (config.provider === 'gemini') {
+      console.log(`Gemini API Key: ${config.geminiApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
     }
 
     console.log(`Tool Logging: ${config.logToolUsage ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
@@ -220,7 +251,8 @@ export class ConfigManager {
         default: this.config.provider,
         choices: [
           { name: 'OpenAI (GPT-4, GPT-4o)', value: 'openai' },
-          { name: 'Anthropic (Claude 3)', value: 'anthropic' }
+          { name: 'Anthropic (Claude 3)', value: 'anthropic' },
+          { name: 'Gemini (Google AI)', value: 'gemini' }
         ]
       }
     ]);
@@ -232,9 +264,12 @@ export class ConfigManager {
       if (provider === 'openai') {
         console.log(chalk.cyan('OpenAI API Key:'));
         console.log(chalk.gray('You can get your API key from: https://platform.openai.com/api-keys'));
-      } else {
+      } else if (provider === 'anthropic') {
         console.log(chalk.cyan('Anthropic API Key:'));
         console.log(chalk.gray('You can get your API key from: https://console.anthropic.com/'));
+      } else if (provider === 'gemini') {
+        console.log(chalk.cyan('Gemini API Key:'));
+        console.log(chalk.gray('You can get your API key from: https://aistudio.google.com/app/apikey'));
       }
       console.log();
 
@@ -254,6 +289,9 @@ export class ConfigManager {
             if (provider === 'anthropic' && !input.startsWith('sk-ant-')) {
               return 'Anthropic API keys start with "sk-ant-"';
             }
+            if (provider === 'gemini' && !/^AIza[0-9A-Za-z_-]{35}$/.test(input)) {
+              return 'Gemini API keys should be 39 characters starting with "AIza"';
+            }
             return true;
           }
         }
@@ -261,8 +299,10 @@ export class ConfigManager {
 
       if (provider === 'openai') {
         this.setOpenAIKey(apiKey);
-      } else {
+      } else if (provider === 'anthropic') {
         this.setAnthropicKey(apiKey);
+      } else if (provider === 'gemini') {
+        this.setGeminiKey(apiKey);
       }
     }
 
@@ -273,11 +313,17 @@ export class ConfigManager {
           { name: 'GPT-4o 2024-08-06 (Structured Outputs)', value: 'gpt-4o-2024-08-06' },
           { name: 'GPT-4.1 (Advanced Reasoning)', value: 'gpt-4.1' }
         ]
-      : [
-          { name: 'Claude 3.5 Sonnet (Latest)', value: 'claude-3-5-sonnet-20241022' },
-          { name: 'Claude 3 Opus (Most Capable)', value: 'claude-3-opus-20240229' },
-          { name: 'Claude 3 Haiku (Fast)', value: 'claude-3-haiku-20240307' }
-        ];
+      : provider === 'anthropic'
+        ? [
+            { name: 'Claude 3.5 Sonnet (Latest)', value: 'claude-3-5-sonnet-20241022' },
+            { name: 'Claude 3 Opus (Most Capable)', value: 'claude-3-opus-20240229' },
+            { name: 'Claude 3 Haiku (Fast)', value: 'claude-3-haiku-20240307' }
+          ]
+        : [
+            { name: 'Gemini 1.5 Pro (Latest)', value: 'gemini-1.5-pro-latest' },
+            { name: 'Gemini 1.5 Flash (Fast)', value: 'gemini-1.5-flash-latest' },
+            { name: 'Gemini Pro (General Purpose)', value: 'gemini-pro' }
+          ];
 
     // Optional configuration
     const { model, maxTokens, logToolUsage, streaming } = await inquirer.default.prompt([
@@ -320,7 +366,12 @@ export class ConfigManager {
     console.log();
     console.log(chalk.green('✅ Configuration saved!'));
     console.log(chalk.gray('Note: API key is stored in memory only for security.'));
-    console.log(chalk.gray(`Set ${provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} environment variable for persistent usage.`));
+    const envVar = provider === 'openai' 
+      ? 'OPENAI_API_KEY' 
+      : provider === 'anthropic' 
+        ? 'ANTHROPIC_API_KEY' 
+        : 'GEMINI_API_KEY';
+    console.log(chalk.gray(`Set ${envVar} environment variable for persistent usage.`));
     console.log();
   }
 }
