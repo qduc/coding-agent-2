@@ -94,10 +94,11 @@ export class ToolOrchestrator {
       const messages = this.buildMessages();
 
       try {
-        // Send to LLM with function calling support
-        const response = await this.llmService.sendMessageWithTools(
+        // Send to LLM with streaming function calling support
+        const response = await this.llmService.streamMessageWithTools(
           messages,
-          this.getFunctionSchemas()
+          this.getFunctionSchemas(),
+          onChunk // Pass through streaming callback
         );
 
         // Check if LLM wants to call tools

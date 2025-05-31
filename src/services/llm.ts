@@ -48,6 +48,12 @@ export interface LLMProvider {
     functions?: any[],
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
+  streamMessageWithTools(
+    messages: Message[],
+    functions?: any[],
+    onChunk?: (chunk: string) => void,
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse>;
 }
 
 export class LLMService implements LLMProvider {
@@ -248,6 +254,128 @@ export class LLMService implements LLMProvider {
           completionTokens: response.usage.completion_tokens,
           totalTokens: response.usage.total_tokens
         } : undefined
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`OpenAI API error: ${error.message}`);
+      }
+      throw new Error('Unknown OpenAI API error');
+    }
+  }
+
+  /**
+   * Send a message with function calling support and streaming
+   */
+  async streamMessageWithTools(
+    messages: Message[],
+    functions: any[] = [],
+    onChunk?: (chunk: string) => void,
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse> {
+    if (!this.isReady()) {
+      throw new Error('LLM service not initialized. Run setup first.');
+    }
+
+    const config = configManager.getConfig();
+
+    try {
+      const requestParams: any = {
+        model: config.model || 'gpt-4-turbo-preview',
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
+          ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id })
+        })),
+        max_tokens: config.maxTokens || 4000,
+        temperature: 0.7,
+        stream: true
+      };
+
+      // Add function calling if functions are provided
+      if (functions.length > 0) {
+        requestParams.tools = functions.map(func => ({
+          type: 'function',
+          function: func
+        }));
+        requestParams.tool_choice = 'auto';
+      }
+
+      const stream = await this.openai!.chat.completions.create(requestParams) as any;
+
+      let fullContent = '';
+      let finishReason: string | null = null;
+      let toolCalls: any[] | undefined;
+      const { logToolUsage } = configManager.getConfig();
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta;
+
+        // Handle content streaming
+        if (delta?.content) {
+          fullContent += delta.content;
+          if (onChunk) {
+            onChunk(delta.content);
+          }
+        }
+
+        // Handle tool calls
+        if (delta?.tool_calls) {
+          if (!toolCalls) {
+            toolCalls = [];
+          }
+
+          for (const toolCallDelta of delta.tool_calls) {
+            const index = toolCallDelta.index || 0;
+
+            if (!toolCalls[index]) {
+              toolCalls[index] = {
+                id: toolCallDelta.id,
+                type: 'function',
+                function: { name: '', arguments: '' }
+              };
+            }
+
+            if (toolCallDelta.function?.name) {
+              toolCalls[index].function.name += toolCallDelta.function.name;
+            }
+
+            if (toolCallDelta.function?.arguments) {
+              toolCalls[index].function.arguments += toolCallDelta.function.arguments;
+            }
+          }
+        }
+
+        if (chunk.choices[0]?.finish_reason) {
+          finishReason = chunk.choices[0].finish_reason;
+        }
+      }
+
+      // Log and call tool callbacks
+      if (toolCalls) {
+        for (const toolCall of toolCalls) {
+          const { name, arguments: argsString } = toolCall.function;
+          let parsedArgs: any;
+          try {
+            parsedArgs = JSON.parse(argsString);
+          } catch {
+            parsedArgs = argsString;
+          }
+          if (logToolUsage) {
+            ToolLogger.logToolCall(name, parsedArgs);
+          }
+          if (onToolCall) {
+            onToolCall(name, parsedArgs);
+          }
+        }
+      }
+
+      return {
+        content: fullContent || null,
+        tool_calls: toolCalls,
+        finishReason,
+        // Note: streaming doesn't provide usage info in the same way
+        usage: undefined
       };
     } catch (error) {
       if (error instanceof Error) {

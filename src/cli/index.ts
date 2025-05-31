@@ -7,6 +7,7 @@ import * as path from 'path';
 import { configManager } from '../core/config';
 import { Agent } from '../core/agent';
 import { MarkdownRenderer } from '../utils/markdown';
+import { calculateStreamingClearSequence } from '../utils/terminalOutput';
 
 // Read version from package.json
 const packageJsonPath = path.join(__dirname, '../../package.json');
@@ -197,15 +198,55 @@ async function startInteractiveMode(agent: Agent, options: any) {
         try {
           console.log(chalk.cyan('🤖 Agent:'), chalk.gray('Thinking...'));
 
+          let accumulatedResponse = '';
+          let hasStartedStreaming = false;
+          let currentLine = '';
+
           const response = await agent.processMessage(
             trimmedMessage,
-            undefined, // No streaming callback for now
+            (chunk: string) => {
+              // Clear "Thinking..." on first chunk and start streaming
+              if (!hasStartedStreaming) {
+                process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
+                process.stdout.write(chalk.cyan('🤖 Agent: '));
+                hasStartedStreaming = true;
+              }
+
+              // Accumulate content for final rendering
+              accumulatedResponse += chunk;
+
+              // Stream raw text in real-time for immediate feedback
+              process.stdout.write(chunk);
+              currentLine += chunk;
+
+              // Track current line for proper cursor positioning
+              if (chunk.includes('\n')) {
+                currentLine = '';
+              }
+            },
             options.verbose
           );
 
-          // Clear the "Thinking..." line and display response
-          process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
-          console.log(chalk.cyan('🤖 Agent:'), renderResponse(response));
+          // Replace raw streaming output with formatted version
+          if (hasStartedStreaming && accumulatedResponse.trim()) {
+            const terminalWidth = process.stdout.columns || 80;
+            const agentPrefix = '🤖 Agent: ';
+            
+            // Calculate and execute the clearing sequence
+            const clearSequence = calculateStreamingClearSequence(
+              accumulatedResponse, 
+              terminalWidth, 
+              agentPrefix
+            );
+            process.stdout.write(clearSequence);
+
+            // Show formatted response (this will overwrite the cleared space)
+            console.log(chalk.cyan('🤖 Agent:'), renderResponse(accumulatedResponse));
+          } else if (!hasStartedStreaming) {
+            // No streaming occurred (tools only), show complete response
+            process.stdout.write('\x1b[1A\x1b[2K'); // Clear "Thinking..." line
+            console.log(chalk.cyan('🤖 Agent:'), renderResponse(response));
+          }
           console.log(); // Add spacing
 
         } catch (error) {
@@ -298,8 +339,8 @@ function displayChatHelp() {
  */
 function renderResponse(content: string): string {
   // Simple heuristic to detect markdown content
-  const hasMarkdown = /[#*`_\[\]()-]/.test(content) || 
-                     content.includes('```') || 
+  const hasMarkdown = /[#*`_\[\]()-]/.test(content) ||
+                     content.includes('```') ||
                      content.includes('**') ||
                      content.includes('##') ||
                      content.includes('- ');
