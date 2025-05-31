@@ -1,4 +1,3 @@
-import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs-extra';
 
@@ -17,10 +16,10 @@ export interface ProjectDiscoveryResult {
 /**
  * Project Discovery Utility - Basic discovery of project structure and tech stack
  *
- * Uses three essential commands to quickly understand any project:
- * 1. Project structure (tree command or fallback)
- * 2. Tech stack discovery (find dependency files)
- * 3. Entry points & README discovery
+ * Uses three essential Node.js-based approaches to quickly understand any project:
+ * 1. Project structure (pure Node.js file system traversal)
+ * 2. Tech stack discovery (direct dependency file checks)
+ * 3. Entry points & README discovery (direct file system checks)
  */
 export class ProjectDiscovery {
   private workingDirectory: string;
@@ -66,160 +65,95 @@ export class ProjectDiscovery {
   }
 
   /**
-   * Command 1: Project structure using tree
-   * Falls back to improved directory visualization if tree is not available
+   * Command 1: Project structure using Node.js file system
+   * Creates a tree-like representation without shell commands
    */
   private async getProjectStructure(): Promise<string> {
     try {
-      // Try tree command first, redirecting stderr to /dev/null to suppress "command not found" messages
-      const treeCommand = `tree -I 'node_modules|.git|__pycache__|*.pyc|venv|env|dist|build' -L 2 2>/dev/null`;
-      const result = execSync(treeCommand, {
-        cwd: this.workingDirectory,
-        encoding: 'utf8',
-        timeout: 10000
-      });
-      return result.trim();
+      return this.createTreeRepresentationNodeJS();
     } catch (error) {
-      // Check if it's a command not found error vs other errors
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const isCommandNotFound =
-        errorMessage.includes('command not found') ||
-        errorMessage.includes('not recognized') ||
-        errorMessage.includes('No such file');
+      // Silent error handling - return empty string
+      return '';
+    }
+  }
 
-      // Enhanced fallback: Create a tree-like representation using find + ls
-      try {
-        if (isCommandNotFound) {
-          return this.createTreeRepresentation();
-        } else {
-          // If it's not a command not found error, we can try basic find as last resort
-          const findCommand = `find . -maxdepth 2 -type d | grep -v -E '(node_modules|\.git|__pycache__|venv|env|dist|build)' | sort 2>/dev/null`;
-          const result = execSync(findCommand, {
-            cwd: this.workingDirectory,
-            encoding: 'utf8',
-            timeout: 10000
-          });
-          return `Directory structure:\n${result.trim()}`;
-        }
-      } catch (fallbackError) {
-        // Last resort: list top-level directories
+  /**
+   * Create a tree-like representation using Node.js filesystem APIs
+   * This replaces shell commands with pure Node.js implementation
+   */
+  private createTreeRepresentationNodeJS(): string {
+    try {
+      const projectName = path.basename(this.workingDirectory);
+      const ignoreDirs = new Set(['node_modules', '.git', '__pycache__', 'venv', 'env', 'dist', 'build']);
+
+      const buildTree = (dir: string, prefix: string = '', maxDepth: number = 2, currentDepth: number = 0): string => {
+        if (currentDepth >= maxDepth) return '';
+
         try {
-          const lsCommand = `ls -la | grep '^d' | awk '{print $9}' | grep -v -E '(node_modules|\.git|__pycache__|venv|env|dist|build)' 2>/dev/null`;
-          const result = execSync(lsCommand, {
-            cwd: this.workingDirectory,
-            encoding: 'utf8',
-            timeout: 5000
+          const items = fs.readdirSync(dir, { withFileTypes: true })
+            .filter(item => !item.name.startsWith('.') && !ignoreDirs.has(item.name))
+            .sort((a, b) => {
+              // Directories first, then files
+              if (a.isDirectory() && !b.isDirectory()) return -1;
+              if (!a.isDirectory() && b.isDirectory()) return 1;
+              return a.name.localeCompare(b.name);
+            });
+
+          let result = '';
+          items.forEach((item, index) => {
+            const isLast = index === items.length - 1;
+            const connector = isLast ? '└── ' : '├── ';
+            const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+
+            result += `${prefix}${connector}${item.name}${item.isDirectory() ? '/' : ''}\n`;
+
+            if (item.isDirectory()) {
+              result += buildTree(path.join(dir, item.name), nextPrefix, maxDepth, currentDepth + 1);
+            }
           });
-          return `${result.trim()}`;
-        } catch (lastResortError) {
-          // Silently return empty string instead of error message
+
+          return result;
+        } catch (error) {
           return '';
         }
-      }
-    }
-  }
+      };
 
-  /**
-   * Create a tree-like representation using find, ls, and basic text formatting
-   * This mimics the tree command output with basic indentation
-   */
-  private createTreeRepresentation(): string {
-    try {
-      // Get project name
-      const projectName = path.basename(this.workingDirectory);
+      const projectTree = buildTree(this.workingDirectory);
+      const directoryCount = (projectTree.match(/├── .+\/$/gm) || []).length + (projectTree.match(/└── .+\/$/gm) || []).length;
+      const fileCount = (projectTree.match(/├── [^\/]+$/gm) || []).length + (projectTree.match(/└── [^\/]+$/gm) || []).length;
 
-      // Get all directories first (excluding filtered ones)
-      const findDirsCommand = `find . -type d -not -path "*/\\.*" -not -path "*/node_modules*" -not -path "*/venv*" -not -path "*/env*" -not -path "*/dist*" -not -path "*/build*" -maxdepth 2 | sort 2>/dev/null`;
-      const dirs = execSync(findDirsCommand, {
-        cwd: this.workingDirectory,
-        encoding: 'utf8',
-        timeout: 10000
-      }).trim().split('\n');
-
-      // Get top-level files (excluding filtered ones)
-      const findRootFilesCommand = `find . -maxdepth 1 -type f -not -path "*/\\.*" | sort 2>/dev/null`;
-      const rootFiles = execSync(findRootFilesCommand, {
-        cwd: this.workingDirectory,
-        encoding: 'utf8',
-        timeout: 5000
-      }).trim().split('\n').filter(f => f !== '');
-
-      // Build tree representation
-      let result = `${projectName}/\n`;
-
-      // Add directories with proper indentation
-      for (const dir of dirs) {
-        if (dir === '.') continue;
-
-        // Count depth based on path separators
-        const depth = dir.split('/').length - 1;
-        const indent = '│   '.repeat(depth - 1);
-        const name = dir.split('/').pop() || '';
-
-        // For level 1 directories, add │── prefix
-        // For level 2+ directories, add proper indentation
-        if (depth === 1) {
-          result += `├── ${name}/\n`;
-        } else if (depth === 2) {
-          result += `${indent}├── ${name}/\n`;
-        }
-      }
-
-      // Add root files
-      for (const file of rootFiles) {
-        if (file === '.') continue;
-        const name = file.replace('./', '');
-        result += `├── ${name}\n`;
-      }
-
-      // Add summary line
-      const dirCount = dirs.length - 1; // -1 for the '.' entry
-      const fileCount = rootFiles.length;
-      result += `\n${dirCount} director${dirCount === 1 ? 'y' : 'ies'}, ${fileCount} file${fileCount === 1 ? '' : 's'}`;
-
-      return result;
+      return `${projectName}/\n${projectTree}\n${directoryCount} director${directoryCount === 1 ? 'y' : 'ies'}, ${fileCount} file${fileCount === 1 ? '' : 's'}`;
     } catch (error) {
-      // If our advanced approach fails, use the basic approach
-      const findCommand = `find . -maxdepth 2 -type d | grep -v -E '(node_modules|\.git|__pycache__|venv|env|dist|build)' | sort 2>/dev/null`;
-      const result = execSync(findCommand, {
-        cwd: this.workingDirectory,
-        encoding: 'utf8',
-        timeout: 10000
-      });
-      return `Directory structure:\n${result.trim()}`;
+      // Fallback to basic directory listing
+      try {
+        const items = fs.readdirSync(this.workingDirectory, { withFileTypes: true })
+          .filter(item => !item.name.startsWith('.'))
+          .map(item => item.name + (item.isDirectory() ? '/' : ''));
+        return `${path.basename(this.workingDirectory)}/\n${items.join('\n')}`;
+      } catch (fallbackError) {
+        return '';
+      }
     }
   }
 
   /**
-   * Command 2: Tech stack discovery by finding dependency files
+   * Command 2: Tech stack discovery using Node.js file system
+   * Replaces find command with direct file checks
    */
   private async getTechStack(): Promise<string> {
     try {
-      const findCommand = `find . -maxdepth 2 \\( -name "package.json" -o -name "requirements.txt" -o -name "Cargo.toml" -o -name "go.mod" -o -name "pom.xml" -o -name "composer.json" \\) -exec echo "=== {} ===" \\; -exec head -20 {} \\; 2>/dev/null`;
-
-      const result = execSync(findCommand, {
-        cwd: this.workingDirectory,
-        encoding: 'utf8',
-        timeout: 10000
-      });
-
-      if (result.trim()) {
-        return result.trim();
-      } else {
-        // If the find command didn't error but found nothing, try more direct approach
-        return this.detectTechStackFallback();
-      }
+      return this.detectTechStackWithNodeJS();
     } catch (error) {
-      // If find command fails, try manual detection approach
-      return this.detectTechStackFallback();
+      // Silent error handling - return empty string
+      return '';
     }
   }
 
   /**
-   * Fallback method for tech stack detection when the find command fails
-   * Uses direct file checks and simple content analysis
+   * Tech stack detection using Node.js file system APIs
+   * Replaces find command with direct file checks
    */
-  private detectTechStackFallback(): string {
+  private detectTechStackWithNodeJS(): string {
     try {
       let result = '';
       const projectRoot = this.workingDirectory;
@@ -233,7 +167,8 @@ export class ProjectDiscovery {
         { file: 'pom.xml', type: 'Java/Maven' },
         { file: 'composer.json', type: 'PHP' },
         { file: 'Gemfile', type: 'Ruby' },
-        { file: 'build.gradle', type: 'Java/Gradle' }
+        { file: 'build.gradle', type: 'Java/Gradle' },
+        { file: 'tsconfig.json', type: 'TypeScript' }
       ];
 
       for (const check of fileChecks) {
@@ -242,22 +177,32 @@ export class ProjectDiscovery {
           result += `=== ./${check.file} ===\n`;
           try {
             // Read just the first few lines
-            const content = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 15).join('\n');
+            const content = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 20).join('\n');
             result += content + '\n...(truncated)...\n\n';
           } catch (readError) {
             // Silently ignore read errors
-            result += '\n';
+            result += '[File exists but couldn\'t read]\n\n';
           }
         }
       }
 
-      // Additional logic for typescript detection
-      const tsConfigPath = path.join(projectRoot, 'tsconfig.json');
-      if (fs.existsSync(tsConfigPath)) {
-        result += '=== ./tsconfig.json ===\n[TypeScript project detected]\n\n';
+      // Check src directory for additional dependency files if it exists
+      const srcDir = path.join(projectRoot, 'src');
+      if (fs.existsSync(srcDir) && fs.statSync(srcDir).isDirectory()) {
+        for (const check of fileChecks) {
+          const filePath = path.join(srcDir, check.file);
+          if (fs.existsSync(filePath)) {
+            result += `=== ./src/${check.file} ===\n`;
+            try {
+              const content = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 20).join('\n');
+              result += content + '\n...(truncated)...\n\n';
+            } catch (readError) {
+              result += '[File exists but couldn\'t read]\n\n';
+            }
+          }
+        }
       }
 
-      // Silently return empty string if nothing was found
       return result.trim();
     } catch (error) {
       // Silent error handling
@@ -266,56 +211,58 @@ export class ProjectDiscovery {
   }
 
   /**
-   * Command 3: Entry points and README discovery
+   * Command 3: Entry points and README discovery using Node.js file system
+   * Replaces find command with direct file checks
    */
   private async getEntryPoints(): Promise<string[]> {
     try {
-      const findCommand = `find . -maxdepth 2 \\( -name "README*" -o -name "main.*" -o -name "app.*" -o -name "index.*" \\) | head -5 2>/dev/null`;
-
-      const result = execSync(findCommand, {
-        cwd: this.workingDirectory,
-        encoding: 'utf8',
-        timeout: 10000
-      });
-
-      return result.trim().split('\n').filter(line => line.trim().length > 0);
+      return this.findEntryPointsWithNodeJS();
     } catch (error) {
-      // Fallback: direct file checking
-      try {
-        const entries = [];
-        const projectRoot = this.workingDirectory;
+      // Silent fallback - empty array
+      return [];
+    }
+  }
 
-        // Common entry point patterns
-        const patterns = [
-          'README.md', 'README.txt', 'README',
-          'index.js', 'index.ts', 'index.py', 'index.php',
-          'main.js', 'main.ts', 'main.py', 'main.go',
-          'app.js', 'app.ts', 'app.py'
-        ];
+  /**
+   * Find entry points using Node.js file system APIs
+   * Replaces find command with direct file checks
+   */
+  private findEntryPointsWithNodeJS(): string[] {
+    try {
+      const entries: string[] = [];
+      const projectRoot = this.workingDirectory;
 
-        for (const pattern of patterns) {
-          const filePath = path.join(projectRoot, pattern);
-          if (fs.existsSync(filePath)) {
-            entries.push('./' + pattern);
-          }
+      // Common entry point patterns
+      const patterns = [
+        'README.md', 'README.txt', 'README',
+        'index.js', 'index.ts', 'index.py', 'index.php',
+        'main.js', 'main.ts', 'main.py', 'main.go',
+        'app.js', 'app.ts', 'app.py'
+      ];
+
+      // Check root directory
+      for (const pattern of patterns) {
+        const filePath = path.join(projectRoot, pattern);
+        if (fs.existsSync(filePath)) {
+          entries.push('./' + pattern);
         }
-
-        // Check src directory for entry points if it exists
-        const srcDir = path.join(projectRoot, 'src');
-        if (fs.existsSync(srcDir) && fs.statSync(srcDir).isDirectory()) {
-          for (const pattern of patterns) {
-            const filePath = path.join(srcDir, pattern);
-            if (fs.existsSync(filePath)) {
-              entries.push('./src/' + pattern);
-            }
-          }
-        }
-
-        return entries;
-      } catch (fallbackError) {
-        // Silent fallback - empty array
-        return [];
       }
+
+      // Check src directory for entry points if it exists
+      const srcDir = path.join(projectRoot, 'src');
+      if (fs.existsSync(srcDir) && fs.statSync(srcDir).isDirectory()) {
+        for (const pattern of patterns) {
+          const filePath = path.join(srcDir, pattern);
+          if (fs.existsSync(filePath)) {
+            entries.push('./src/' + pattern);
+          }
+        }
+      }
+
+      // Limit to first 5 entries to match original behavior
+      return entries.slice(0, 5);
+    } catch (error) {
+      return [];
     }
   }
 
