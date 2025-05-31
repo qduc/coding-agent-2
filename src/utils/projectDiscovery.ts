@@ -36,9 +36,13 @@ export interface ProjectDiscoveryResult {
  */
 export class ProjectDiscovery {
   private workingDirectory: string;
+  private codeAnalyzer: CodeAnalyzer;
+  private enableCodeAnalysis: boolean;
 
-  constructor(workingDirectory: string = process.cwd()) {
+  constructor(workingDirectory: string = process.cwd(), enableCodeAnalysis: boolean = true) {
     this.workingDirectory = workingDirectory;
+    this.enableCodeAnalysis = enableCodeAnalysis;
+    this.codeAnalyzer = new CodeAnalyzer();
   }
 
   /**
@@ -68,13 +72,43 @@ export class ProjectDiscovery {
       // Generate summary
       const summary = this.generateSummary(projectStructure, techStack, entryPoints);
 
+      let codeStructure: CodeStructureAnalysis | undefined;
+      let analysisMetadata = {
+        filesAnalyzed: 0,
+        filesSkipped: 0,
+        limitationsApplied: [] as string[]
+      };
+
+      if (this.enableCodeAnalysis) {
+        try {
+          const { codeStructure: analysis, metadata } = await this.codeAnalyzer.analyzeProject(this.workingDirectory);
+          codeStructure = analysis;
+          analysisMetadata = {
+            filesAnalyzed: analysis.files.length,
+            filesSkipped: 0, // TODO: track skipped files
+            limitationsApplied: [
+              `Analyzed ${analysis.files.length} of ${analysis.totalFiles} files`,
+              `Max file size: ${this.codeAnalyzer.config.maxFileSize} bytes`,
+              `Max total size: ${this.codeAnalyzer.config.maxTotalSize} bytes`
+            ]
+          };
+        } catch (error) {
+          this.logger.error('Code analysis failed', error);
+          analysisMetadata.limitationsApplied.push('Code analysis failed');
+        }
+      }
+
       return {
         projectStructure,
         techStack,
         entryPoints,
         summary,
         executedAt,
-        workingDirectory: this.workingDirectory
+        workingDirectory: this.workingDirectory,
+        codeStructure,
+        analysisMetadata,
+        isCachedResult: false,
+        partiallyUpdated: []
       };
     } catch (error) {
       // Return minimal info if discovery fails - with silent handling
