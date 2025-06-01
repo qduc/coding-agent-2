@@ -84,7 +84,7 @@ export class ToolOrchestrator {
     };
     this.conversationHistory.push(userMessage);
 
-    let maxIterations = 5; // Prevent infinite loops
+    let maxIterations = 20; // Prevent infinite loops
     let fullResponse = '';
 
     while (maxIterations > 0) {

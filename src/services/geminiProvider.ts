@@ -93,7 +93,7 @@ export class GeminiProvider implements LLMProvider {
 
     const config = configManager.getConfig();
     const model = this.genAI.getGenerativeModel({
-      model: config.model || 'gemini-2.5-flash',
+      model: config.model || 'gemini-2.5-flash-preview-05-20',
       generationConfig: {
         maxOutputTokens: config.maxTokens || 8000
       }
@@ -128,7 +128,7 @@ export class GeminiProvider implements LLMProvider {
 
     const config = configManager.getConfig();
     const model = this.genAI.getGenerativeModel({
-      model: config.model || 'gemini-2.5-flash',
+      model: config.model || 'gemini-2.5-flash-preview-05-20',
       generationConfig: {
         maxOutputTokens: config.maxTokens || 8000
       }
@@ -150,7 +150,7 @@ export class GeminiProvider implements LLMProvider {
 
     const config = configManager.getConfig();
     const model = this.genAI.getGenerativeModel({
-      model: config.model || 'gemini-2.5-flash',
+      model: config.model || 'gemini-2.5-flash-preview-05-20',
       generationConfig: {
         maxOutputTokens: config.maxTokens || 8000
       },

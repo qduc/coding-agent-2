@@ -246,7 +246,7 @@ export class AnthropicProvider implements LLMProvider {
         requestParams.tools = functions.map(func => ({
           name: func.name,
           description: func.description,
-          input_schema: func.parameters
+          input_schema: func.input_schema || func.parameters
         }));
       }
 
@@ -332,7 +332,7 @@ export class AnthropicProvider implements LLMProvider {
         requestParams.tools = functions.map(func => ({
           name: func.name,
           description: func.description,
-          input_schema: func.parameters
+          input_schema: func.input_schema || func.parameters
         }));
       }
 
@@ -342,7 +342,7 @@ export class AnthropicProvider implements LLMProvider {
       let finishReason: string | null = null;
       let toolCalls: any[] | undefined;
       const { logToolUsage } = configManager.getConfig();
-      
+
       // Track streaming tool input accumulation
       const streamingToolInputs: Map<number, string> = new Map();
 
@@ -363,7 +363,7 @@ export class AnthropicProvider implements LLMProvider {
 
           const toolBlock = chunk.content_block;
           const toolCallIndex = chunk.index;
-          
+
           // Initialize tool call with placeholder - we'll update the arguments later
           toolCalls.push({
             id: toolBlock.id,
@@ -389,7 +389,7 @@ export class AnthropicProvider implements LLMProvider {
         if (chunk.type === 'content_block_stop' && toolCalls) {
           const toolCallIndex = chunk.index;
           const fullInputJson = streamingToolInputs.get(toolCallIndex);
-          
+
           if (fullInputJson !== undefined) {
             // Find the tool call for this index and update its arguments
             const toolCallArrayIndex = toolCalls.length - 1; // Assuming tools are added in order
@@ -407,7 +407,7 @@ export class AnthropicProvider implements LLMProvider {
               } catch (e) {
                 // If JSON parsing fails, keep the raw input
                 toolCalls[toolCallArrayIndex].function.arguments = fullInputJson;
-                
+
                 if (logToolUsage) {
                   ToolLogger.logToolCall(toolCalls[toolCallArrayIndex].function.name, {});
                 }
@@ -416,7 +416,7 @@ export class AnthropicProvider implements LLMProvider {
                 }
               }
             }
-            
+
             // Clean up streaming state
             streamingToolInputs.delete(toolCallIndex);
           }

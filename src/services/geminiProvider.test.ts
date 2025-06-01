@@ -26,7 +26,7 @@ describe('GeminiProvider', () => {
     (GoogleGenerativeAI as jest.Mock).mockImplementation(() => mockGenAI);
     (configManager.getConfig as jest.Mock).mockReturnValue({
       geminiApiKey: 'test-key',
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-preview-05-20',
       maxTokens: 8000
     });
 
@@ -185,7 +185,7 @@ describe('GeminiProvider', () => {
       await provider.sendMessageWithTools(messages, functions);
 
       expect(mockGenAI.getGenerativeModel).toHaveBeenCalledWith({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-flash-preview-05-20',
         generationConfig: { maxOutputTokens: 8000 },
         tools: [{
           functionDeclarations: [{
