@@ -3,9 +3,22 @@ import { ConfigState, ConfigAction } from '../types';
 
 const initialState: ConfigState = {
   llmProvider: 'openai',
-  llmConfig: {},
+  llmConfig: {
+    openai: { apiKey: '', model: 'gpt-4' },
+    anthropic: { apiKey: '', model: 'claude-2' },
+    gemini: { apiKey: '', model: 'gemini-pro' }
+  },
   tools: [],
-  featureFlags: {},
+  featureFlags: {
+    experimentalFeatures: false,
+    codeLens: true,
+    autoComplete: true
+  },
+  appearance: {
+    theme: 'dark',
+    fontSize: 14,
+    fontFamily: 'monospace'
+  }
 };
 
 const ConfigContext = createContext<{
@@ -20,12 +33,43 @@ const reducer = (state: ConfigState, action: ConfigAction): ConfigState => {
   switch (action.type) {
     case 'SET_LLM_PROVIDER':
       return { ...state, llmProvider: action.payload };
-    case 'SET_LLM_CONFIG':
-      return { ...state, llmConfig: action.payload };
-    case 'SET_TOOLS':
-      return { ...state, tools: action.payload };
-    case 'SET_FEATURE_FLAGS':
-      return { ...state, featureFlags: action.payload };
+    case 'UPDATE_LLM_CONFIG':
+      return {
+        ...state,
+        llmConfig: {
+          ...state.llmConfig,
+          [action.payload.provider]: {
+            ...state.llmConfig[action.payload.provider],
+            ...action.payload.config
+          }
+        }
+      };
+    case 'TOGGLE_FEATURE_FLAG':
+      return {
+        ...state,
+        featureFlags: {
+          ...state.featureFlags,
+          [action.payload]: !state.featureFlags[action.payload]
+        }
+      };
+    case 'UPDATE_APPEARANCE':
+      return {
+        ...state,
+        appearance: {
+          ...state.appearance,
+          ...action.payload
+        }
+      };
+    case 'ADD_TOOL':
+      return {
+        ...state,
+        tools: [...state.tools, action.payload]
+      };
+    case 'REMOVE_TOOL':
+      return {
+        ...state,
+        tools: state.tools.filter(tool => tool.name !== action.payload)
+      };
     default:
       return state;
   }
