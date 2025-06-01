@@ -22,16 +22,16 @@ export const useFileSystem = () => {
   const openFile = useCallback(async (filePath: string) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
-      const content: string = await apiService.getFileContent(filePath); // Assuming returns string
+      // Assuming apiService.getFileContent returns a string, which we then wrap into FileContent
+      const content: string = await apiService.getFileContent(filePath); 
       const fileName = filePath.split(/[\\/]/).pop() || filePath; // Handle both path separators
 
       const currentFilePayload: FileContent = {
         name: fileName,
         path: filePath,
         content: content,
-        // type: 'file', // If your FileContent type has this
-        // size: content.length, // If needed
-        // modified: new Date(), // If relevant, though backend should provide this for existing files
+        // isBinary, isTruncated, error could be fetched from API or inferred
+        // For now, we'll assume they are optional or default to false/null
       };
       dispatch({ type: 'SET_CURRENT_FILE', payload: currentFilePayload });
     } catch (error) {

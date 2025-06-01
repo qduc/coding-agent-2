@@ -24,5 +24,7 @@ export function useTheme() {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
 
-  return { theme, toggleTheme };
+  const darkMode = theme === 'dark'; // Added darkMode property
+
+  return { theme, toggleTheme, darkMode }; // Returned darkMode
 }

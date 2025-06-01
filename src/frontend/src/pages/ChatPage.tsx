@@ -17,8 +17,8 @@ export default function ChatPage() {
           messages={messages}
           onSendMessage={sendMessage}
           isStreaming={isStreaming}
-          // toolExecutions, isLoading, error props might also be needed
-          // depending on ChatInterface's full definition
+          // toolExecutions, isLoading, error props are not provided by useChat in current context
+          // and are optional in ChatInterfaceProps, so no explicit passing needed if not available.
         />
       </div>
     </MainLayout>

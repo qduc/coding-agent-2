@@ -2,7 +2,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
-  timestamp: string;
+  timestamp: Date; // Changed from string to Date
   status?: 'streaming' | 'error' | 'completed';
 }
 
@@ -14,5 +14,5 @@ export interface ToolExecution {
   error?: string;
   status: 'pending' | 'running' | 'completed' | 'error';
   duration?: number;
-  timestamp: string;
+  timestamp: Date; // Changed from string to Date
 }

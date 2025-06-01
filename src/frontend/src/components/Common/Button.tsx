@@ -23,7 +23,10 @@ const defaultElement = 'button';
 
 export const Button = React.forwardRef(
   <E extends React.ElementType = typeof defaultElement>(
-    {
+    props: ButtonProps<E>, // Destructure props inside the function body
+    ref: React.ForwardedRef<React.ElementRef<E>>
+  ) => {
+    const {
       as,
       variant = 'primary',
       size = 'md',
@@ -34,10 +37,9 @@ export const Button = React.forwardRef(
       children,
       className,
       disabled,
-      ...props
-    }: ButtonProps<E>,
-    ref: React.ForwardedRef<React.ElementRef<E>>
-  ) => {
+      ...restProps // Collect remaining props
+    } = props;
+
     const Component = as || defaultElement;
     const variantClasses = {
       primary: 'bg-primary text-white hover:bg-primary-dark focus:ring-primary',
@@ -72,7 +74,7 @@ export const Button = React.forwardRef(
           className
         )}
         disabled={disabled || loading}
-        {...props}
+        {...restProps} // Spread restProps here
       >
         {loading ? (
           <LoadingSpinner size={size} className={iconPosition === 'left' ? 'mr-2' : 'ml-2'} />
@@ -86,6 +88,8 @@ export const Button = React.forwardRef(
       </Component>
     );
   }
-);
+) as <E extends React.ElementType = typeof defaultElement>(
+  props: ButtonProps<E> & { ref?: React.ForwardedRef<React.ElementRef<E>> }
+) => React.ReactElement;
 
 Button.displayName = 'Button';

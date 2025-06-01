@@ -47,13 +47,13 @@ function App() {
                 <GlobalProviders> {/* Applies dark mode class */}
                   <MainLayout>
                     <Suspense fallback={<LoadingSpinner fullScreen />}>
-                      <ErrorBoundary fallbackRender={({ error }) => (
+                      <ErrorBoundary fallback={ // Changed from fallbackRender to fallback
                         <div role="alert" className="p-4">
                           <h2 className="text-lg font-bold">Something went wrong</h2>
-                          <pre className="text-red-500">{error.message}</pre>
+                          <p className="text-red-500">An unexpected error occurred.</p> {/* Static message as fallback expects ReactNode */}
                           <button onClick={() => window.location.reload()}>Reload</button>
                         </div>
-                      )}>
+                      }>
                         <Routes>
                           <Route path="/" element={<ChatPage />} />
                           <Route path="/chat" element={<ChatPage />} /> {/* Explicit /chat route */}
