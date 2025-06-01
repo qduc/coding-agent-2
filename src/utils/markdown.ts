@@ -1,4 +1,6 @@
+
 import chalk from 'chalk';
+import { BoxRenderer } from './boxRenderer';
 
 /**
  * Markdown Renderer - Utility for rendering markdown content in the terminal
@@ -19,31 +21,10 @@ export class MarkdownRenderer {
       const lines = match.split('\n');
       const language = lines[0].replace('```', '').trim();
       const code = lines.slice(1, -1).join('\n');
-      const langDisplay = language || 'code';
-
-      // Enhanced code block with rounded corners and line numbers
-      const codeLines = code.split('\n');
-      const maxLineNumWidth = codeLines.length.toString().length;
-      const borderLength = Math.min(60, process.stdout.columns - 10 || 60);
-
-      // Create header with language and copy indicator
-      const headerText = `${langDisplay}`;
-      const copyIndicator = '📋';
-      const headerPadding = Math.max(0, borderLength - headerText.length - copyIndicator.length - 6);
-      const topBorder = '╭─ ' + chalk.cyan(headerText) + ' ' + '─'.repeat(headerPadding) + ' ' + chalk.gray(copyIndicator) + ' ╮';
-
-      // Format code lines with line numbers
-      const formattedLines = codeLines.map((line, index) => {
-        const lineNum = (index + 1).toString().padStart(maxLineNumWidth, ' ');
-        const lineNumFormatted = chalk.gray.dim(lineNum + ' │ ');
-        return chalk.gray('│ ') + lineNumFormatted + line;
-      }).join('\n');
-
-      const bottomBorder = '╰' + '─'.repeat(borderLength + 1) + '╯';
-
-      return '\n' + chalk.gray(topBorder) + '\n' +
-             formattedLines + '\n' +
-             chalk.gray(bottomBorder) + '\n';
+      return BoxRenderer.createCodeBox(language, code, {
+        showLineNumbers: true,
+        maxWidth: 70
+      });
     });
 
     // Headers with enhanced visual hierarchy
@@ -87,32 +68,11 @@ export class MarkdownRenderer {
     let output = markdownText.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
       const lang = language || 'text';
       const highlightedCode = this.highlightCode(code.trim(), lang);
-
-      // Enhanced code block with rounded corners and line numbers
-      const codeLines = highlightedCode.split('\n');
-      const maxLineNumWidth = codeLines.length.toString().length;
-      const borderLength = Math.min(60, process.stdout.columns - 10 || 60);
-
-      // Create header with language and copy indicator
-      const headerText = `${lang}`;
-      const copyIndicator = '📋';
-      const headerPadding = Math.max(0, borderLength - headerText.length - copyIndicator.length - 6);
-      const topBorder = '╭─ ' + chalk.cyan(headerText) + ' ' + '─'.repeat(headerPadding) + ' ' + chalk.gray(copyIndicator) + ' ╮';
-
-      // Format code lines with line numbers
-      const formattedLines = codeLines.map((line, index) => {
-        const lineNum = (index + 1).toString().padStart(maxLineNumWidth, ' ');
-        const lineNumFormatted = chalk.gray.dim(lineNum + ' │ ');
-        return chalk.gray('│ ') + lineNumFormatted + line;
-      }).join('\n');
-
-      const bottomBorder = '╰' + '─'.repeat(borderLength + 1) + '╯';
-
-      return '\n' + chalk.gray(topBorder) + '\n' +
-             formattedLines + '\n' +
-             chalk.gray(bottomBorder) + '\n';
+      return BoxRenderer.createCodeBox(lang, highlightedCode, {
+        showLineNumbers: true,
+        maxWidth: 70
+      });
     });
-
     return this.render(output);
   }
 

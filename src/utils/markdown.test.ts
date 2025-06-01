@@ -286,7 +286,16 @@ describe('MarkdownRenderer', () => {
       const longLine = 'a'.repeat(1000);
       const input = `\`\`\`\n${longLine}\n\`\`\``;
       const result = stripVisuals(MarkdownRenderer.render(input));
-      expect(result).toContain(longLine);
+
+      // The box renderer truncates long lines and adds '...'
+      // Instead of checking for an exact length, just verify:
+      // 1. It contains a sequence of 'a's (truncated)
+      // 2. It contains '...' which indicates truncation
+      // 3. The original 1000-char string is NOT present (was truncated)
+
+      expect(result).toContain('...');  // Should have truncation indicator
+      expect(result).toMatch(/a{10,}\.{3}/); // Should have multiple 'a's followed by '...'
+      expect(result).not.toContain(longLine); // Should not contain the full 1000-char string
     });
 
     test('should handle multiple consecutive formatting (semantic)', () => {
@@ -335,6 +344,118 @@ describe('MarkdownRenderer', () => {
       expect(result).toContain('Row 1');
       expect(result).toContain('Data 2');
       expect(result).toContain('End of document');
+    });
+  });
+
+  describe('BoxAlignment', () => {
+    // Mock process.stdout to control terminal width
+    let originalStdoutColumns: number | undefined;
+
+    beforeEach(() => {
+      // Save original stdout columns and set to a fixed value for testing
+      originalStdoutColumns = process.stdout.columns;
+      Object.defineProperty(process.stdout, 'columns', {
+        value: 100,
+        writable: true
+      });
+    });
+
+    afterEach(() => {
+      // Restore original stdout columns
+      Object.defineProperty(process.stdout, 'columns', {
+        value: originalStdoutColumns,
+        writable: true
+      });
+    });
+
+    test('code block borders should be properly aligned', () => {
+      // Use code block with both short and longer lines
+      const input = [
+        '```typescript',
+        'function test() {',
+        '  // Short line',
+        '  const longVariableName = "This is a longer string that might cause alignment issues";',
+        '  return "short";',
+        '}',
+        '```'
+      ].join('\n');
+
+      const result = MarkdownRenderer.render(input);
+      const lines = result.split('\n');
+
+      // Find the box borders (start and end)
+      const topBorderIndex = lines.findIndex(line => line.includes('╭─'));
+      const bottomBorderIndex = lines.findIndex(line => line.includes('╰'));
+
+      expect(topBorderIndex).not.toBe(-1);
+      expect(bottomBorderIndex).not.toBe(-1);
+
+      // Get all content lines
+      const contentLines = lines.slice(topBorderIndex + 1, bottomBorderIndex);
+
+      // Remove ANSI color codes for clean checking
+      const cleanContentLines = contentLines.map(line =>
+        line.replace(/\u001b\[[0-9;]*m/g, '')
+      );
+
+      // Check that each content line:
+      // 1. Starts with left border '│ '
+      // 2. Ends with right border ' │'
+      // 3. Has the same overall width
+
+      const widths = cleanContentLines.map(line => line.length);
+      const expectedWidth = widths[0]; // All lines should match the first line's width
+
+      cleanContentLines.forEach((line, i) => {
+        // Check that line contains the left border pattern somewhere
+        expect(line.includes('│')).toBe(true);
+        expect(line.endsWith(' │')).toBe(true);
+        expect(line.length).toBe(expectedWidth);
+
+        // Verify the position of the right border is consistent
+        const rightBorderIndex = line.lastIndexOf('│');
+        expect(rightBorderIndex).toBe(expectedWidth - 1);
+      });
+    });
+
+    test('long content should be properly truncated without misaligning borders', () => {
+      const veryLongLine = 'a'.repeat(200); // Line much longer than box width
+      const input = [
+        '```typescript',
+        `const longString = "${veryLongLine}";`,
+        'const shortString = "abc";',
+        '```'
+      ].join('\n');
+
+      const result = MarkdownRenderer.render(input);
+      const lines = result.split('\n');
+
+      // Find box borders
+      const topBorderIndex = lines.findIndex(line => line.includes('╭─'));
+      const bottomBorderIndex = lines.findIndex(line => line.includes('╰'));
+
+      // Get clean content lines
+      const contentLines = lines
+        .slice(topBorderIndex + 1, bottomBorderIndex)
+        .map(line => line.replace(/\u001b\[[0-9;]*m/g, ''));
+
+      // Verify consistency of line lengths and border positions
+      const lineLengths = contentLines.map(line => line.length);
+      const uniqueLengths = [...new Set(lineLengths)];
+
+      // All lines should have the same length
+      expect(uniqueLengths.length).toBe(1);
+
+      // Check that the long line is truncated and has '...'
+      const longLineIndex = contentLines.findIndex(line => line.includes('longString'));
+      expect(longLineIndex).not.toBe(-1);
+      expect(contentLines[longLineIndex]).toContain('...');
+
+      // The right border should be at the same position for all lines
+      const rightBorderPositions = contentLines.map(line => line.lastIndexOf('│'));
+      const uniquePositions = [...new Set(rightBorderPositions)];
+
+      expect(uniquePositions.length).toBe(1);
     });
   });
 });
