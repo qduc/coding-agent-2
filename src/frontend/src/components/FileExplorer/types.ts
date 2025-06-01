@@ -1,15 +1,4 @@
-export interface FileSystemNode {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  size?: number;
-  modified?: Date;
-  children?: FileSystemNode[];
-  extension?: string;
-  isOpen?: boolean;
-  isSelected?: boolean;
-  isHidden?: boolean;
-}
+import { FileSystemNode, FileContent } from '../../types/file'; // Import from centralized types
 
 export type FileViewMode = 'grid' | 'list';
 export type SortField = 'name' | 'size' | 'modified' | 'type';
@@ -22,14 +11,6 @@ export interface FileExplorerContext {
   sortDirection: SortDirection;
   searchQuery: string;
   selectedFile?: string;
-}
-
-export interface FileContent {
-  path: string;
-  content: string;
-  isBinary: boolean;
-  isTruncated: boolean;
-  error?: string;
 }
 
 export interface FileSearchResult {
@@ -48,3 +29,6 @@ export interface FileOperation {
   destinationPath?: string;
   content?: string;
 }
+
+// Re-exporting for convenience if components in this folder still need them directly
+export type { FileSystemNode, FileContent };

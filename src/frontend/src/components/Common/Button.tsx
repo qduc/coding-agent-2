@@ -19,15 +19,13 @@ type PolymorphicButtonProps<E extends React.ElementType> = {
 type ButtonProps<E extends React.ElementType> = PolymorphicButtonProps<E> &
   Omit<React.ComponentPropsWithoutRef<E>, keyof PolymorphicButtonProps<E>>;
 
-const defaultElement = 'button';
-
 export const Button = React.forwardRef(
-  <E extends React.ElementType = typeof defaultElement>(
-    props: ButtonProps<E>, // Destructure props inside the function body
+  <E extends React.ElementType = 'button'>( // Changed defaultElement to 'button' directly
+    props: ButtonProps<E>,
     ref: React.ForwardedRef<React.ElementRef<E>>
   ) => {
     const {
-      as,
+      as: Component = 'button', // Changed defaultElement to 'button' directly
       variant = 'primary',
       size = 'md',
       loading = false,
@@ -37,10 +35,9 @@ export const Button = React.forwardRef(
       children,
       className,
       disabled,
-      ...restProps // Collect remaining props
+      ...restProps
     } = props;
 
-    const Component = as || defaultElement;
     const variantClasses = {
       primary: 'bg-primary text-white hover:bg-primary-dark focus:ring-primary',
       secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus:ring-secondary',
@@ -74,7 +71,7 @@ export const Button = React.forwardRef(
           className
         )}
         disabled={disabled || loading}
-        {...restProps} // Spread restProps here
+        {...restProps}
       >
         {loading ? (
           <LoadingSpinner size={size} className={iconPosition === 'left' ? 'mr-2' : 'ml-2'} />
@@ -88,7 +85,7 @@ export const Button = React.forwardRef(
       </Component>
     );
   }
-) as <E extends React.ElementType = typeof defaultElement>(
+) as <E extends React.ElementType = 'button'>( // Changed defaultElement to 'button' directly
   props: ButtonProps<E> & { ref?: React.ForwardedRef<React.ElementRef<E>> }
 ) => React.ReactElement;
 

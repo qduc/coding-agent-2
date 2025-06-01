@@ -3,15 +3,8 @@ import MainLayout from '../components/Layout/MainLayout';
 import { FileExplorer } from '../components/FileExplorer/FileExplorer';
 import { FileToolbar } from '../components/FileExplorer/FileToolbar';
 import { useFileSystem } from '../hooks/useFileSystem';
-import { useEffect } from 'react';
-
-// Define a basic interface for FileToolbarProps based on common usage
-// This assumes FileToolbar accepts an onRefresh prop.
-interface FileToolbarProps {
-  onRefresh: () => void;
-  // Add other props as needed if FileToolbar component is provided later
-  // e.g., viewMode, onViewModeChange, sortBy, onSortByChange, sortDirection, onSortDirectionChange
-}
+import { useEffect, useState } from 'react';
+import { FileViewMode } from '../components/FileExplorer/types'; // Import FileViewMode
 
 export default function FilesPage() {
   const {
@@ -19,8 +12,10 @@ export default function FilesPage() {
     currentFile,
     loadFileTree,
     openFile,
-    isLoading, // Use isLoading from hook
+    isLoading,
   } = useFileSystem();
+
+  const [viewMode, setViewMode] = useState<FileViewMode>('list'); // State for view mode
 
   useEffect(() => {
     // Load file tree only if it's empty and not currently loading
@@ -43,7 +38,9 @@ export default function FilesPage() {
       </Helmet>
       <div className="flex flex-col h-full">
         <FileToolbar
-          onRefresh={loadFileTree} // Pass onRefresh prop
+          onRefresh={loadFileTree}
+          viewMode={viewMode} // Pass viewMode
+          onViewModeChange={setViewMode} // Pass onViewModeChange
         />
         <FileExplorer
           className="flex-1"

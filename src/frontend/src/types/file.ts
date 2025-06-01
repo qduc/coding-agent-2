@@ -1,34 +1,40 @@
+// src/frontend/src/types/file.ts
+
 export interface FileSystemNode {
-  path: string;
   name: string;
+  path: string;
   type: 'file' | 'directory';
-  children?: FileSystemNode[]; // For directories
-  size?: number; // For files
-  modified?: Date; // For files/directories
+  size?: number;
+  modified?: Date;
+  children?: FileSystemNode[];
+  extension?: string;
+  isOpen?: boolean;
+  isSelected?: boolean;
+  isHidden?: boolean;
 }
 
 export interface FileContent {
-  name: string; // Added for frontend display
   path: string;
   content: string;
-  isBinary?: boolean; // Optional, from FileExplorer/types.ts summary
-  isTruncated?: boolean; // Optional, from FileExplorer/types.ts summary
-  error?: string; // Optional, from FileExplorer/types.ts summary
+  isBinary?: boolean;    // Made optional
+  isTruncated?: boolean; // Made optional
+  error?: string;
+  name?: string; // Added name for consistency, though path can derive it
 }
 
 export interface FileSystemState {
-    fileTree: FileSystemNode[]; // Changed from any[]
-    currentFile: FileContent | null; // Changed from string | null
-    currentDirectory: string | null;
-    isFileOperationInProgress: boolean;
-    isLoading: boolean; // Added
-    error: string | null; // Added
+  fileTree: FileSystemNode[];
+  currentFile: FileContent | null;
+  currentDirectory: string | null;
+  isFileOperationInProgress: boolean;
+  isLoading: boolean; // Added isLoading
+  error: string | null; // Added error
 }
 
 export type FileSystemAction =
-    | { type: 'SET_FILE_TREE'; payload: FileSystemNode[] } // Changed payload type
-    | { type: 'SET_CURRENT_FILE'; payload: FileContent | null } // Changed payload type
-    | { type: 'SET_CURRENT_DIRECTORY'; payload: string | null }
-    | { type: 'SET_FILE_OPERATION'; payload: boolean }
-    | { type: 'SET_LOADING'; payload: boolean } // Added
-    | { type: 'SET_ERROR'; payload: string | null }; // Added
+  | { type: 'SET_FILE_TREE'; payload: FileSystemNode[] }
+  | { type: 'SET_CURRENT_FILE'; payload: FileContent | null }
+  | { type: 'SET_CURRENT_DIRECTORY'; payload: string | null }
+  | { type: 'SET_FILE_OPERATION'; payload: boolean }
+  | { type: 'SET_LOADING'; payload: boolean } // Added SET_LOADING action
+  | { type: 'SET_ERROR'; payload: string | null }; // Added SET_ERROR action
