@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Configuration } from './types';
+import { Configuration, ConfigValidationError } from './types';
 import { Input } from '../Common/Input';
 import { Button } from '../Common/Button';
 import { ErrorMessage } from '../Common/ErrorMessage';

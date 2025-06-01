@@ -1,5 +1,5 @@
 import React from 'react';
-import { Configuration } from './types';
+import { Configuration, ConfigValidationError } from './types';
 import { Select } from '../Common/Select';
 import { Input } from '../Common/Input';
 import { ErrorMessage } from '../Common/ErrorMessage';
