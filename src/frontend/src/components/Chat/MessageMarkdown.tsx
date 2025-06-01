@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'prism-react-renderer';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 
@@ -14,20 +13,15 @@ export default function MessageMarkdown({ content }: MessageMarkdownProps) {
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw]}
       components={{
-        code({ node, inline, className, children, ...props }) {
+        code: ({ className, children, ...props }) => {
           const match = /language-(\w+)/.exec(className || '');
-          return !inline && match ? (
-            <SyntaxHighlighter
-              language={match[1]}
-              PreTag="div"
-              {...props}
-            >
-              {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter>
-          ) : (
-            <code className={className} {...props}>
-              {children}
-            </code>
+          const language = match ? match[1] : '';
+          return (
+            <pre className={`language-${language}`}>
+              <code className={className} {...props}>
+                {String(children).replace(/\n$/, '')}
+              </code>
+            </pre>
           );
         },
         a({ node, href, children, ...props }) {

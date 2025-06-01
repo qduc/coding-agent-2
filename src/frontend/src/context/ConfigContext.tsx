@@ -68,7 +68,7 @@ const reducer = (state: ConfigState, action: ConfigAction): ConfigState => {
     case 'REMOVE_TOOL':
       return {
         ...state,
-        tools: state.tools.filter(tool => tool.name !== action.payload)
+        tools: state.tools.filter((tool: { name: string }) => tool.name !== action.payload)
       };
     default:
       return state;

@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import MainLayout from '../components/Layout/MainLayout';
-import ToolList from '../components/Tools/ToolList';
-import ToolStatus from '../components/Tools/ToolStatus';
+import { ToolList } from '../components/Tools/ToolList';
+import { ToolStatus } from '../components/Tools/ToolStatus';
 
 export default function ToolsPage() {
   return (

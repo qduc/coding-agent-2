@@ -11,24 +11,26 @@ export const useWebSocket = (url: string) => {
   const connect = useCallback(() => {
     socketRef.current = socketService.connect(url);
 
-    socketRef.current.onopen = () => {
-      dispatch({ type: 'SET_CONNECTION_STATUS', payload: true });
-      reconnectAttempts.current = 0;
-    };
+    if (socketRef.current) {
+      socketRef.current.onopen = () => {
+        dispatch({ type: 'SET_CONNECTION_STATUS', payload: true });
+        reconnectAttempts.current = 0;
+      };
 
-    socketRef.current.onclose = () => {
-      dispatch({ type: 'SET_CONNECTION_STATUS', payload: false });
-      if (reconnectAttempts.current < maxReconnectAttempts) {
-        setTimeout(() => {
-          reconnectAttempts.current += 1;
-          connect();
-        }, 1000 * reconnectAttempts.current);
-      }
-    };
+      socketRef.current.onclose = () => {
+        dispatch({ type: 'SET_CONNECTION_STATUS', payload: false });
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          setTimeout(() => {
+            reconnectAttempts.current += 1;
+            connect();
+          }, 1000 * reconnectAttempts.current);
+        }
+      };
 
-    socketRef.current.onerror = (error) => {
-      dispatch({ type: 'SET_ERROR', payload: error });
-    };
+      socketRef.current.onerror = (error) => {
+        dispatch({ type: 'SET_ERROR', payload: error });
+      };
+    }
   }, [url, dispatch]);
 
   useEffect(() => {

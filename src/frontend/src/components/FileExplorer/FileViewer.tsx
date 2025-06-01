@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { FileContent } from './types';
-import { Prism as SyntaxHighlighter } from 'prism-react-renderer';
 import { FileIcon } from './FileIcons';
 
 interface FileViewerProps {
@@ -43,7 +42,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, maxSize = 1024 * 1
     const extension = file.path.split('.').pop()?.toLowerCase();
     setIsImage(['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(extension || ''));
     setIsBinary(file.isBinary);
-    
+
     if (file.isBinary) {
       setContent('Binary content not displayed');
     } else {
@@ -89,9 +88,11 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, maxSize = 1024 * 1
           File is too large, showing first {maxSize} bytes
         </div>
       )}
-      <SyntaxHighlighter language={language}>
-        {content}
-      </SyntaxHighlighter>
+      <pre className={`language-${language}`}>
+        <code>
+          {content}
+        </code>
+      </pre>
     </div>
   );
 };
