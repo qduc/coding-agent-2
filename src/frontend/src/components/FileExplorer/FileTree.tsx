@@ -8,6 +8,7 @@ interface FileTreeProps {
   onSelect?: (path: string) => void;
   onToggle?: (path: string, isOpen: boolean) => void;
   depth?: number;
+  className?: string;
 }
 
 export const FileTree: React.FC<FileTreeProps> = ({
@@ -28,7 +29,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   }, [onSelect]);
 
   return (
-    <div className="file-tree">
+    <div className={`file-tree ${className || ''}`}>
       {nodes.map((node) => (
         <div 
           key={node.path}
