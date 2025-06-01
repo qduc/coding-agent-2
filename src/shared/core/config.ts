@@ -20,7 +20,12 @@ export interface Config {
   enableFileLogging?: boolean;
   enableConsoleLogging?: boolean;
   enableToolConsoleLogging?: boolean; // Separate setting for tool messages
+  // Optional global defaults for tool execution, can be overridden at other levels
+  maxFileSize?: number; 
+  timeout?: number;
 }
+
+export { LogLevel }; // Re-export LogLevel
 
 export class ConfigManager {
   private configPath: string;

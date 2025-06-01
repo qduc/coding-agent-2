@@ -1,11 +1,14 @@
 import type { ToolErrorCode, ToolSchema } from '../../shared/tools/types';
 import type { ProjectDiscoveryResult } from '../../shared/utils/projectDiscovery';
-import type { LogLevel } from '../../shared/utils/logger';
+import { LogLevel } from '../../shared/utils/logger'; // Import directly for re-export
 
 /**
  * Core API Response Types
  */
 export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: ApiError | string;
   success: boolean;
   data?: T;
   error?: ApiError | string;
@@ -36,6 +39,8 @@ export interface ValidationError {
   message: string;
   code: string;
 }
+
+export type { LogLevel, ProjectDiscoveryResult }; // Re-export LogLevel and ProjectDiscoveryResult
 
 export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   metadata: {

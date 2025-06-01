@@ -9,12 +9,10 @@ export class WebSessionManager implements ISessionManager {
   public sessionId: string = '';
   public conversationHistory: Message[] = [];
 
-  private sessions: Map<string, ChatSession> = new Map();
+  public sessions: Map<string, ChatSession> = new Map();
   // sessionId and conversationHistory seem to be for a "primary" session,
   // while the manager handles multiple sessions in the `sessions` map.
   // This design might need review, but I'll stick to fixing current issues.
-  public sessionId: string = ''; // Current/active session ID for the instance
-  public conversationHistory: Message[] = []; // History for the current/active session
 
   constructor(sessionId?: string) {
     if (sessionId) {

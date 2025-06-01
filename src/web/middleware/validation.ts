@@ -18,9 +18,10 @@ export const validate = (schema: z.ZodSchema, target: 'body' | 'query' | 'params
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = (error as ZodError).errors.map((err: any) => ({
+        const errors = error.errors.map((err: z.ZodIssue) => ({
           field: err.path.join('.'),
           message: err.message,
+          code: err.code,
         }));
 
         const response: ApiResponse = {
