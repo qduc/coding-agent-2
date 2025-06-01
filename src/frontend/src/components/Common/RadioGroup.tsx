@@ -1,16 +1,16 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
 
-export interface RadioGroupProps {
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
+export interface RadioGroupProps<T extends string = string> {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
   variant?: 'primary' | 'secondary';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
-export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
+export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps<any>>(
   ({ options, value, onChange, variant = 'primary', size = 'md', className, ...props }, ref) => {
     return (
       <div ref={ref} className={cn('space-y-2', className)} {...props}>
