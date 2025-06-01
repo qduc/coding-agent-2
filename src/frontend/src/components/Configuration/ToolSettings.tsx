@@ -2,7 +2,7 @@ import React from 'react';
 import { Configuration } from './types';
 import { Switch } from '../Common/Switch';
 import { Checkbox } from '../Common/Checkbox';
-import { ToolSchema } from '../../../shared/services/schemaAdapter';
+import { ToolInfo } from '../../../shared/services/schemaAdapter';
 
 interface ToolSettingsProps {
   config: Configuration['tools'];
@@ -10,7 +10,7 @@ interface ToolSettingsProps {
 }
 
 // Mock tool data - in a real app this would come from the backend
-const availableTools: ToolSchema[] = [
+const availableTools: ToolInfo[] = [
   { name: 'file_search', description: 'Search files in the project' },
   { name: 'code_analysis', description: 'Analyze code structure' },
   { name: 'terminal', description: 'Run terminal commands' },

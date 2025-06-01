@@ -5,9 +5,12 @@
 
 import { FunctionDeclaration } from '@google/generative-ai';
 
-export interface ToolSchema {
+export interface ToolInfo {
   name: string;
   description: string;
+}
+
+export interface ToolSchema extends ToolInfo {
   input_schema?: {
     type: string;
     properties: Record<string, any>;
