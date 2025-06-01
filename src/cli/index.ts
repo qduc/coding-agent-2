@@ -4,11 +4,11 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { configManager } from '../core/config';
-import { Agent } from '../core/agent';
-import { MarkdownRenderer } from '../utils/markdown';
-import { BoxRenderer } from '../utils/boxRenderer';
-import { calculateStreamingClearSequence } from '../utils/terminalOutput';
+import { configManager } from '../shared/core/config';
+import { Agent } from '../shared/core/agent';
+import { MarkdownRenderer } from '../shared/utils/markdown';
+import { BoxRenderer } from '../shared/utils/boxRenderer';
+import { calculateStreamingClearSequence } from '../shared/utils/terminalOutput';
 
 // Read version from package.json
 const packageJsonPath = path.join(__dirname, '../../package.json');
