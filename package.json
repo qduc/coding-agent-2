@@ -13,11 +13,14 @@
     "start:web": "node dist/web/start.js",
     "dev:web": "tsc --watch & npm run start:web",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepublishOnly": "npm run clean && npm run build:all",
     "test": "jest --passWithNoTests --no-watch",
-    "frontend": "cd src/frontend && npm run dev",
-    "frontend:build": "cd src/frontend && npm run build",
-    "frontend:preview": "cd src/frontend && npm run preview"
+    "dev:frontend": "cd src/frontend && npm run dev",
+    "build:frontend": "cd src/frontend && npm run build",
+    "preview:frontend": "cd src/frontend && npm run preview",
+    "dev:fullstack": "concurrently \"npm run dev:web\" \"npm run dev:frontend\"",
+    "build:all": "npm run build && npm run build:frontend",
+    "start:fullstack": "concurrently \"npm run start:web\" \"npm run preview:frontend\""
   },
   "keywords": [
     "ai",
