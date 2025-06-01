@@ -17,8 +17,8 @@ export default function MessageList({ messages, isStreaming = false }: MessageLi
   return (
     <div className="flex flex-col space-y-4 p-4">
       {messages.map((message, index) => {
-        const showTimestamp = index === 0 || 
-          new Date(message.timestamp).getTime() - 
+        const showTimestamp = index === 0 ||
+          new Date(message.timestamp).getTime() -
           new Date(messages[index - 1].timestamp).getTime() > 5 * 60 * 1000;
 
         return (

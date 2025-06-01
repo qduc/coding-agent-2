@@ -62,9 +62,9 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, maxSize = 1024 * 1
   if (isImage) {
     return (
       <div className="file-viewer-image">
-        <img 
-          src={`data:image/${file.path.split('.').pop()};base64,${file.content}`} 
-          alt={file.path} 
+        <img
+          src={`data:image/${file.path.split('.').pop()};base64,${file.content}`}
+          alt={file.path}
         />
       </div>
     );

@@ -1,0 +1,43 @@
+# Development docker-compose with hot reloading
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - app_data:/app/data
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src/frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  app_data:
+
+networks:
+  app-network:
+    driver: bridge

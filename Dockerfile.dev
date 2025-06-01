@@ -1,0 +1,31 @@
+# Development Dockerfile for hot reloading
+FROM node:18-alpine
+
+# Install system dependencies
+RUN apk add --no-cache python3 make g++ git curl
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Expose the web server port
+EXPOSE 3001
+
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+
+# Change ownership of the app directory
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+# Development command with hot reloading
+CMD ["npm", "run", "dev:web"]

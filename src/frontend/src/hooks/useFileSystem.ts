@@ -23,7 +23,7 @@ export const useFileSystem = () => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
       // apiService.getFileContent returns a basic FileContent object
-      const fileContent = await apiService.getFileContent(filePath); 
+      const fileContent = await apiService.getFileContent(filePath);
       const fileName = filePath.split(/[\\/]/).pop() || filePath; // Handle both path separators
 
       const currentFilePayload: FileContent = {

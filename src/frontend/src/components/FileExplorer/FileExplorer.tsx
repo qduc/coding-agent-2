@@ -25,7 +25,7 @@ export const FileExplorer = ({
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      <FileToolbar 
+      <FileToolbar
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onRefresh={onRefresh || (() => {})}
