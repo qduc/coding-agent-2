@@ -1,14 +1,13 @@
 import { ISessionManager, Message } from '../../shared/interfaces/ISessionManager';
 import fs from 'fs-extra';
-import path from 'path';
+import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 export class CLISessionManager implements ISessionManager {
   async startSession(sessionId?: string): Promise<void> {
-    this.sessionId = sessionId || crypto.randomUUID();
-    this.persistencePath = path.join(
-      path.dirname(this.persistencePath),
-      `${this.sessionId}.json`
-    );
+    this.sessionId = sessionId || randomUUID();
+    const dir = path.dirname(this.persistencePath);
+    this.persistencePath = path.join(dir, `${this.sessionId}.json`);
     await this.loadSession();
   }
 

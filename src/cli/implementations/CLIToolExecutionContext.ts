@@ -3,11 +3,6 @@ import fs from 'fs-extra';
 import path from 'path';
 
 export class CLIToolExecutionContext implements IToolExecutionContext {
-  permissions = {
-    fileSystem: true,
-    network: true,
-    shell: true
-  };
 
   setContext(context: Partial<Omit<IToolExecutionContext, 'setContext' | 'getContext'>>): void {
     Object.assign(this, context);
@@ -29,10 +24,10 @@ export class CLIToolExecutionContext implements IToolExecutionContext {
   }
   workingDirectory: string;
   environment: Record<string, unknown>;
-  permissions: {
-    fileSystem: boolean;
-    network: boolean;
-    shell: boolean;
+  permissions = {
+    fileSystem: true,
+    network: true,
+    shell: true
   };
 
   constructor(options?: Partial<IToolExecutionContext>) {
@@ -65,9 +60,6 @@ export class CLIToolExecutionContext implements IToolExecutionContext {
       : path.join(this.workingDirectory, filePath);
 
     const stats = await fs.stat(absolutePath);
-    if (stats.size > this.maxFileSize) {
-      throw new Error(`File too large (max ${this.maxFileSize} bytes)`);
-    }
 
     return fs.readFile(absolutePath, 'utf-8');
   }
