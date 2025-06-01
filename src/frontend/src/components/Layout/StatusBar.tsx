@@ -1,4 +1,5 @@
 import { ConnectionStatus } from '../types';
+import { cn } from '../../utils/cn';
 
 interface StatusBarProps {
   connectionStatus?: ConnectionStatus;

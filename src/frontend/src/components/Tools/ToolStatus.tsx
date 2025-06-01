@@ -1,5 +1,5 @@
 import { ToolExecution } from '../Chat/types';
-import { StreamingIndicator } from '../Chat/StreamingIndicator';
+import StreamingIndicator from '../Chat/StreamingIndicator';
 
 interface ToolStatusProps {
   currentTools: ToolExecution[];
@@ -21,13 +21,13 @@ export function ToolStatus({ currentTools, className }: ToolStatusProps) {
               {tool.status}
             </span>
           </div>
-          
+
           {tool.status === 'running' && <StreamingIndicator />}
-          
+
           {tool.error && (
             <div className="mt-1 text-sm text-red-600">{tool.error}</div>
           )}
-          
+
           {tool.output && (
             <div className="mt-1 text-sm text-gray-600">
               <pre className="whitespace-pre-wrap">{tool.output}</pre>

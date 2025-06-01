@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import cn from '../../utils/cn';
+import { cn } from '../../utils/cn';
 import MessageMarkdown from './MessageMarkdown';
 import { ToolExecution } from './types';
 

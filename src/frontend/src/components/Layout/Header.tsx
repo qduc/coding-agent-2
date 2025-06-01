@@ -1,5 +1,5 @@
 import { cn } from '../../utils/cn';
-import Button from '../Common/Button';
+import { Button } from '../Common/Button';
 import { ConnectionStatus } from '../types';
 
 interface HeaderProps {

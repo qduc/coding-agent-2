@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import Button from '../Common/Button';
+import { Button } from '../Common/Button';
 
 interface MessageInputProps {
   onSend: (content: string) => void;
