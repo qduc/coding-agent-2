@@ -38,31 +38,7 @@ export const Button = React.forwardRef(
     }: ButtonProps<E>,
     ref: React.ForwardedRef<React.ElementRef<E>>
   ) => {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  loading?: boolean;
-  icon?: React.ReactNode;
-  iconPosition?: 'left' | 'right';
-  fullWidth?: boolean;
-  children: React.ReactNode;
-}
-
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    {
-      variant = 'primary',
-      size = 'md',
-      loading = false,
-      icon,
-      iconPosition = 'left',
-      fullWidth = false,
-      children,
-      className,
-      disabled,
-      ...props
-    },
-    ref
-  ) => {
+    const Component = as || defaultElement;
     const variantClasses = {
       primary: 'bg-primary text-white hover:bg-primary-dark focus:ring-primary',
       secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus:ring-secondary',
@@ -84,10 +60,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     return (
-      const Component = as || defaultElement;
-      return (
-        <Component
-          ref={ref}
+      <Component
+        ref={ref}
         className={cn(
           'inline-flex items-center justify-center rounded-md font-medium transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-offset-2',
