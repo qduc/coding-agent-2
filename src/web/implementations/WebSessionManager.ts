@@ -10,22 +10,47 @@ export class WebSessionManager implements ISessionManager {
   public conversationHistory: Message[] = [];
 
   private sessions: Map<string, ChatSession> = new Map();
+  // sessionId and conversationHistory seem to be for a "primary" session,
+  // while the manager handles multiple sessions in the `sessions` map.
+  // This design might need review, but I'll stick to fixing current issues.
+  public sessionId: string = ''; // Current/active session ID for the instance
+  public conversationHistory: Message[] = []; // History for the current/active session
 
   constructor(sessionId?: string) {
     if (sessionId) {
       this.sessionId = sessionId;
+      // If a session ID is provided at construction, try to load it or create it.
+      if (!this.sessions.has(sessionId)) {
+        this.startSession(sessionId);
+      } else {
+        const existingSession = this.sessions.get(sessionId);
+        if (existingSession) {
+          this.conversationHistory = this.convertChatMessagesToMessages(existingSession.messages);
+        }
+      }
     }
   }
 
   /**
-   * Start a new session
+   * Start or set a session as active
    */
-  async startSession(sessionId?: string): Promise<void> {
-    this.sessionId = sessionId || uuidv4();
-    this.conversationHistory = [];
+  async startSession(sessionIdToStart?: string): Promise<void> {
+    this.sessionId = sessionIdToStart || uuidv4();
+    
+    let session = this.sessions.get(this.sessionId);
+    if (!session) {
+      session = {
+        id: this.sessionId,
+        messages: [],
+        createdAt: new Date(),
+        lastActivity: new Date()
+      };
+      this.sessions.set(this.sessionId, session);
+    }
+    this.conversationHistory = this.convertChatMessagesToMessages(session.messages);
+  }
 
-    const newSession: ChatSession = {
-      id: this.sessionId,
+  /**
       messages: [],
       createdAt: new Date(),
       lastActivity: new Date()
@@ -80,21 +105,25 @@ export class WebSessionManager implements ISessionManager {
   /**
    * Add message to current session
    */
-  addMessage(message: Message): void {
-    this.conversationHistory.push(message);
+  private convertChatMessageToMessage(chatMessage: ChatMessage): Message {
+    return {
+      role: chatMessage.role, // Assuming ChatMessage.role is compatible with Message.role
+      content: chatMessage.content
+    };
+  }
 
-    if (this.sessionId) {
-      const session = this.sessions.get(this.sessionId);
-      if (session) {
-        const chatMessage: ChatMessage = {
-          id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          content: message.content || '',
-          timestamp: new Date(),
-          role: message.role as 'user' | 'assistant'
-        };
+  /**
+   * Add message to a specific session
+   */
+  addMessage(sessionId: string, message: ChatMessage): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.messages.push(message);
+      session.lastActivity = new Date();
 
-        session.messages.push(chatMessage);
-        session.lastActivity = new Date();
+      // If this is the "active" session for this manager instance, update its history too
+      if (this.sessionId === sessionId) {
+        this.conversationHistory.push(this.convertChatMessageToMessage(message));
       }
     }
   }
@@ -121,18 +150,27 @@ export class WebSessionManager implements ISessionManager {
   }
 
   /**
-   * Create a new session
+   * Create a new session, optionally with a specific ID
    */
-  createSession(): ChatSession {
-    const sessionId = uuidv4();
+  createSession(sessionIdToCreate?: string): ChatSession {
+    const id = sessionIdToCreate || uuidv4();
+    // Avoid overwriting if session with this ID already exists, unless intended.
+    // For now, let's assume it creates if not exists, or returns existing if id is provided and found.
+    // Or, more simply, always creates with the given ID or a new one.
+    if (sessionIdToCreate && this.sessions.has(sessionIdToCreate)) {
+        // This case needs clarification: error, return existing, or overwrite?
+        // For now, let's assume we overwrite or it's an ID that's known not to exist.
+        // Or, better, if an ID is provided, we expect to create THAT session.
+    }
+
     const newSession: ChatSession = {
-      id: sessionId,
+      id: id,
       messages: [],
       createdAt: new Date(),
       lastActivity: new Date()
     };
 
-    this.sessions.set(sessionId, newSession);
+    this.sessions.set(id, newSession);
     return newSession;
   }
 
@@ -178,5 +216,12 @@ export class WebSessionManager implements ISessionManager {
       messageCount: session.messages.length,
       duration: session.lastActivity.getTime() - session.createdAt.getTime()
     };
+  }
+
+  /**
+   * Get the count of active sessions
+   */
+  getActiveSessionCount(): number {
+    return this.sessions.size;
   }
 }

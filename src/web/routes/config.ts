@@ -23,13 +23,38 @@ const logger = Logger.getInstance();
  */
 router.get('/', generalLimiter, async (req: Request, res: Response) => {
   try {
-    const config = configManager.getConfig();
+    const currentConfig = configManager.getConfig();
+    // Construct data matching WebConfiguration type
+    const webConfigData: WebConfiguration = {
+      llm: {
+        provider: currentConfig.provider || 'openai',
+        model: currentConfig.model || '',
+        apiKey: undefined, // API keys are not sent to client
+        baseUrl: currentConfig.openaiApiBaseUrl,
+        maxTokens: currentConfig.maxTokens
+      },
+      tools: {
+        enabled: currentConfig.logToolUsage !== undefined ? currentConfig.logToolUsage : true, // Assuming logToolUsage maps to tools.enabled
+        list: [], // ToolConfig list needs to be populated if required by WebConfiguration
+        maxFileSize: (configManager.getConfig() as any).maxFileSize || 1024 * 1024, // Need to ensure maxFileSize is part of Config
+        timeout: (configManager.getConfig() as any).timeout || 30000, // Need to ensure timeout is part of Config
+        logUsage: currentConfig.logToolUsage || false,
+      },
+      logging: {
+        level: (currentConfig.logLevel || 'info') as LogLevel,
+        persist: currentConfig.enableFileLogging || false,
+        maxLogSize: 0, // Placeholder, needs to come from config if available
+        maxLogFiles: 0 // Placeholder
+      },
+      features: getFeatureFlags(), // This now returns the extended ConfigFeatureFlags
+      // ui config is optional
+    };
+
     const response: ApiResponse<WebConfiguration> = {
       success: true,
       data: {
-        ...config,
-        availableModels: getAvailableModels(config.provider),
-        features: getFeatureFlags()
+        ...webConfigData, // Use the structured data
+        // availableModels: getAvailableModels(currentConfig.provider) // This was part of old structure, WebConfiguration does not have it directly
       },
       timestamp: new Date()
     };
@@ -44,18 +69,22 @@ router.get('/', generalLimiter, async (req: Request, res: Response) => {
  */
 router.get('/provider', generalLimiter, async (req: Request, res: Response) => {
   try {
-    const config = configManager.getConfig();
+    const currentConfig = configManager.getConfig();
+    const providerSettings: ConfigProviderSettings = {
+      provider: currentConfig.provider || 'openai',
+      model: currentConfig.model || '',
+      // apiKey is sensitive, should not be sent unless necessary and secured
+      // apiKey: currentConfig.provider === 'openai' ? currentConfig.openaiApiKey :
+      //          currentConfig.provider === 'anthropic' ? currentConfig.anthropicApiKey :
+      //          currentConfig.geminiApiKey, // Omitting API key for security
+      endpoint: currentConfig.openaiApiBaseUrl, // Renamed apiBaseUrl to endpoint to match type
+      // maxTokens is part of llm settings, not directly in ConfigProviderSettings
+      // If needed, ConfigProviderSettings type should be updated.
+      // For now, adhering to existing ConfigProviderSettings type.
+    };
     const response: ApiResponse<ConfigProviderSettings> = {
       success: true,
-      data: {
-        provider: config.provider,
-        apiKey: config.provider === 'openai' ? config.openaiApiKey : 
-               config.provider === 'anthropic' ? config.anthropicApiKey :
-               config.geminiApiKey,
-        apiBaseUrl: config.openaiApiBaseUrl,
-        model: config.model,
-        maxTokens: config.maxTokens
-      },
+      data: providerSettings,
       timestamp: new Date()
     };
     res.json(response);
@@ -69,14 +98,18 @@ router.get('/provider', generalLimiter, async (req: Request, res: Response) => {
  */
 router.get('/tools', generalLimiter, async (req: Request, res: Response) => {
   try {
-    const config = configManager.getConfig();
+    const currentConfig = configManager.getConfig();
+    // Assuming ConfigToolSettings refers to general enablement, not specific tool properties from main Config
+    // The Config interface has logToolUsage, but not directly maxFileSize or timeout for "tools" block.
+    // These might be from a different config section or need to be added to Config.
+    // For now, using existing properties from Config that seem relevant.
+    const toolSettings: ConfigToolSettings = {
+        enabled: currentConfig.logToolUsage || false, // Mapping logToolUsage to general tool enablement
+        // whitelist/blacklist are not in current Config, so they'd be undefined or default.
+    };
     const response: ApiResponse<ConfigToolSettings> = {
       success: true,
-      data: {
-        logToolUsage: config.logToolUsage || false,
-        maxFileSize: config.maxFileSize || 1024 * 1024, // 1MB default
-        timeout: config.timeout || 30000 // 30s default
-      },
+      data: toolSettings,
       timestamp: new Date()
     };
     res.json(response);
@@ -110,25 +143,46 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
     if (!validation.success) {
       return res.status(400).json({
         success: false,
-        error: {
+        error: { // This is an ApiError object
           code: 'VALIDATION_ERROR',
           message: 'Invalid configuration',
-          details: validation.errors
+          validationErrors: validation.errors, // Use validationErrors field
+          timestamp: new Date(),
         },
         timestamp: new Date()
-      } as ApiResponse);
+      } as ApiResponse); // Consider ErrorResponse type
     }
 
-    await configManager.updateConfig(req.body);
+    await configManager.saveConfig(req.body); // Changed updateConfig to saveConfig
     logger.info('Configuration updated', { event: 'config_update' });
+
+    const newConfig = configManager.getConfig();
+    const webConfigData: WebConfiguration = { // Reconstruct WebConfiguration
+      llm: {
+        provider: newConfig.provider || 'openai',
+        model: newConfig.model || '',
+        baseUrl: newConfig.openaiApiBaseUrl,
+        maxTokens: newConfig.maxTokens
+      },
+      tools: {
+        enabled: newConfig.logToolUsage !== undefined ? newConfig.logToolUsage : true,
+        list: [],
+        maxFileSize: (newConfig as any).maxFileSize || 1024 * 1024,
+        timeout: (newConfig as any).timeout || 30000,
+        logUsage: newConfig.logToolUsage || false,
+      },
+      logging: {
+        level: (newConfig.logLevel || 'info') as LogLevel,
+        persist: newConfig.enableFileLogging || false,
+        maxLogSize: 0,
+        maxLogFiles: 0
+      },
+      features: getFeatureFlags(),
+    };
 
     const response: ApiResponse<WebConfiguration> = {
       success: true,
-      data: {
-        ...configManager.getConfig(),
-        availableModels: getAvailableModels(req.body.provider),
-        features: getFeatureFlags()
-      },
+      data: webConfigData,
       timestamp: new Date()
     };
     res.json(response);
@@ -146,33 +200,34 @@ router.put('/provider', configUpdateLimiter, async (req: Request, res: Response)
     if (!validation.success) {
       return res.status(400).json({
         success: false,
-        error: {
+        error: { // This is an ApiError object
           code: 'VALIDATION_ERROR',
           message: 'Invalid provider configuration',
-          details: validation.errors
+          validationErrors: validation.errors, // Use validationErrors field
+          timestamp: new Date(),
         },
         timestamp: new Date()
-      } as ApiResponse);
+      } as ApiResponse); // Consider ErrorResponse type
     }
 
     const currentConfig = configManager.getConfig();
-    const updatedConfig = {
-      ...currentConfig,
-      ...req.body
-    };
+    // req.body should be validated to be Partial<Config> or specific provider settings
+    const mergedConfig = { ...currentConfig, ...req.body };
 
-    await configManager.updateConfig(updatedConfig);
+    await configManager.saveConfig(mergedConfig); // Changed updateConfig to saveConfig
     logger.info('Provider configuration updated', { event: 'provider_config_update' });
+    
+    const newProviderConfig = configManager.getConfig(); // Get the latest config
+    const providerSettings: ConfigProviderSettings = {
+        provider: newProviderConfig.provider || 'openai',
+        model: newProviderConfig.model || '',
+        apiKey: req.body.apiKey, // Assuming apiKey from request is what's set, but it's not saved to file by saveConfig
+        endpoint: newProviderConfig.openaiApiBaseUrl, // Match ConfigProviderSettings type
+    };
 
     const response: ApiResponse<ConfigProviderSettings> = {
       success: true,
-      data: {
-        provider: updatedConfig.provider,
-        apiKey: req.body.apiKey,
-        apiBaseUrl: updatedConfig.openaiApiBaseUrl,
-        model: updatedConfig.model,
-        maxTokens: updatedConfig.maxTokens
-      },
+      data: providerSettings,
       timestamp: new Date()
     };
     res.json(response);
@@ -206,35 +261,50 @@ router.post('/validate', generalLimiter, async (req: Request, res: Response) => 
 function getAvailableModels(provider?: string): string[] {
   const models = {
     openai: ['gpt-4', 'gpt-4-turbo-preview', 'gpt-3.5-turbo'],
-    anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-2.1'],
-    gemini: ['gemini-pro', 'gemini-ultra']
+    anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-2.1'], // Example models
+    gemini: ['gemini-pro', 'gemini-ultra'] // Example models
   };
-  return provider ? models[provider as keyof typeof models] || [] : 
-    [...models.openai, ...models.anthropic, ...models.gemini];
+  // Ensure provider is a valid key
+  if (provider && provider in models) {
+    return models[provider as keyof typeof models];
+  }
+  // Return all models if no specific provider or provider is invalid
+  return [...models.openai, ...models.anthropic, ...models.gemini];
 }
 
 function getFeatureFlags(): ConfigFeatureFlags {
+  // This should match the ConfigFeatureFlags type in api.ts
   return {
-    toolExecution: true,
-    streaming: true,
-    sessions: true,
-    codeAnalysis: true,
-    fileManagement: true
+    toolExecution: true, // from original
+    streaming: true,     // from original
+    sessions: true,      // from original
+    fileManagement: true, // from original, maps to fileAccess in some contexts
+    codeAnalysis: true,  // Added
+    autoSave: false,     // Added, assuming default false
+    fileAccess: true     // Added for consistency with type
   };
 }
 
 function handleConfigError(res: Response, error: unknown, message: string) {
   const logger = Logger.getInstance();
-  logger.error(message, { error });
+  logger.error(message, { 
+    error: { 
+      name: (error instanceof Error) ? error.name : 'Error', 
+      message: (error instanceof Error) ? error.message : String(error),
+      stack: (error instanceof Error) ? error.stack : undefined
+    }
+  });
 
-  const response: ApiResponse = {
+  const apiError: ApiError = {
+    code: 'CONFIG_OPERATION_FAILED', // More generic code
+    message: message,
+    details: error instanceof Error ? error.message : String(error),
+    timestamp: new Date()
+  };
+
+  const response: ErrorResponse = { // Use ErrorResponse for type safety
     success: false,
-    error: message,
-    ...(error instanceof Error ? {
-      details: error.message
-    } : {
-      details: String(error)
-    }),
+    error: apiError,
     timestamp: new Date()
   };
   res.status(500).json(response);

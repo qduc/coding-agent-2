@@ -50,6 +50,7 @@ export interface StreamingResponse<T = any> {
   event: 'data' | 'error' | 'complete';
   data?: T;
   error?: ApiError;
+  timestamp?: Date; // Added timestamp
 }
 
 /**
@@ -197,10 +198,14 @@ export interface ConfigFeatureFlags {
 /**
  * Project Types
  */
+export type { ProjectDiscoveryResult } from '../../shared/utils/projectDiscovery';
+
 export interface ProjectContext {
   discovery: ProjectDiscoveryResult;
-  fileTree: FileSystemNode[];
-  metadata: ProjectMetadata;
+  fileTree?: FileSystemNode[]; // Made optional as not all contexts might have it immediately
+  metadata?: ProjectMetadata; // Made optional
+  workingDirectory: string; // Added
+  environment: Record<string, unknown>; // Added
 }
 
 export interface FileSystemNode {

@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { ProjectDiscovery } from '../../shared/utils/projectDiscovery';
 import { CLIToolExecutionContext } from '../../cli/implementations/CLIToolExecutionContext';
-import { ApiResponse, ProjectContext, ProjectDiscoveryResult } from '../types/api';
+import { ApiResponse, ProjectContext, ProjectDiscoveryResult, ApiError, ErrorResponse } from '../types/api'; // Added ApiError, ErrorResponse
 import { ToolError } from '../../shared/tools/types';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit } from 'express-rate-limit'; // Standard import
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -120,11 +120,12 @@ router.post('/files/search', async (req, res) => {
  */
 router.get('/context', async (req, res) => {
   try {
-    const discoveryResult = await discovery.discover();
-    const contextData: ProjectContext = {
+    const discoveryResult = await discovery.discover(); // This is ProjectDiscoveryResult
+    const projectContextData: ProjectContext = {
       discovery: discoveryResult,
       workingDirectory: context.workingDirectory,
-      environment: context.environment,
+      environment: context.environment as Record<string, unknown>, // Ensure type match
+      // fileTree and metadata are optional in ProjectContext type now
     };
     const response: ApiResponse<ProjectContext> = {
       success: true,
@@ -173,30 +174,33 @@ async function validatePath(relativePath: string): Promise<string> {
   }
 }
 
-function handleProjectError(res: any, error: unknown) {
+function handleProjectError(res: Response, error: unknown) { // Changed res type to Response
+  let apiError: ApiError;
+  let statusCode = 500;
+
   if (error instanceof ToolError) {
-    const response: ApiResponse = {
-      success: false,
-      error: {
-        code: error.code,
-        message: error.message,
-        timestamp: new Date(),
-      },
+    apiError = {
+      code: error.code,
+      message: error.message,
+      suggestions: error.suggestions, // Include suggestions if available
       timestamp: new Date(),
     };
-    res.status(400).json(response);
+    statusCode = 400; // Typically, tool errors are client/request related
   } else {
-    const response: ApiResponse = {
-      success: false,
-      error: {
-        code: 'UNKNOWN_ERROR',
-        message: 'An unexpected error occurred',
-        timestamp: new Date(),
-      },
+    apiError = {
+      code: 'PROJECT_OPERATION_FAILED', // More specific than UNKNOWN_ERROR
+      message: error instanceof Error ? error.message : 'An unexpected error occurred in project operation',
+      details: String(error),
       timestamp: new Date(),
     };
-    res.status(500).json(response);
   }
+
+  const response: ErrorResponse = {
+    success: false,
+    error: apiError,
+    timestamp: new Date(),
+  };
+  res.status(statusCode).json(response);
 }
 
 export default router;
