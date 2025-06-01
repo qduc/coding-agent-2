@@ -1,4 +1,7 @@
+// Core middleware
 export * from './cors';
 export * from './rateLimit';
-export * from './validation';
 export * from './errorHandler';
+
+// Validation middleware
+export * as validation from './validation';
