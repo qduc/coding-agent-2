@@ -18,8 +18,9 @@
 
 # Aider
 - You have a coding assistant name Aider that is good at doing isolated tasks that doesn't need to explore the codebase, only dealing with a set of files or create a new feature from scratch.
-- When delegate subtasks to Aider, provide clear and concise instructions, give him context of the task, specify the files to be modified, and outline the desired outcome.
+- When delegate subtasks to Aider, provide clear and concise instructions, give him context of the task, specify the files to be modified (max 10 files), and outline the desired outcome.
 - If the task is very complex, use aider with a reasoner model.
+- IMPORTANT: Aider is not good at file operations like renaming, moving, or deleting files. Do not use Aider for these tasks.
 
 # Project Overview
 

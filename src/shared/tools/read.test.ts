@@ -16,7 +16,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 import { ReadTool, ReadParams, ReadResult } from './read';
-import { ToolError, ToolContext } from '../types';
+import { ToolError, ToolContext } from './types';
 
 describe('ReadTool', () => {
   let readTool: ReadTool;

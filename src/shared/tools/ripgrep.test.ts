@@ -3,7 +3,7 @@
  */
 
 import { RipgrepTool, RipgrepParams, RipgrepResult } from './ripgrep';
-import { ToolError } from '../types';
+import { ToolError } from './types';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 
@@ -24,7 +24,7 @@ describe('RipgrepTool', () => {
 
   const createTestFiles = async () => {
     await fs.ensureDir(path.join(tempDir, 'src'));
-    
+
     await fs.writeFile(
       path.join(tempDir, 'src', 'auth.js'),
       `function login(user, password) {
@@ -51,7 +51,7 @@ app.get('/api/v1/users', (req, res) => {
     await fs.writeFile(
       path.join(tempDir, 'README.md'),
       `# Project
-      
+
 This project has UserNotFound errors.
 `
     );
@@ -68,7 +68,7 @@ This project has UserNotFound errors.
   describe('Parameter Validation', () => {
     it('should reject empty pattern', async () => {
       const result = await ripgrepTool.execute({ pattern: '' });
-      
+
       expect(result.success).toBe(false);
       const error = result.error as ToolError;
       expect(error.message).toContain('pattern cannot be empty');
@@ -114,7 +114,7 @@ This project has UserNotFound errors.
       expect(result.success).toBe(true);
       const output = result.output as RipgrepResult;
       expect(output.matches.length).toBeGreaterThan(0);
-      
+
       const match = output.matches.find(m => m.file.includes('auth.js'));
       expect(match).toBeDefined();
       expect(match?.matchedText).toBe('UserNotFound');
@@ -159,7 +159,7 @@ This project has UserNotFound errors.
   describe('Security Features', () => {
     it('should block node_modules directory', async () => {
       await createTestFiles();
-      
+
       const nodeModulesDir = path.join(tempDir, 'node_modules');
       await fs.ensureDir(nodeModulesDir);
       await fs.writeFile(
@@ -174,8 +174,8 @@ This project has UserNotFound errors.
 
       expect(result.success).toBe(true);
       const output = result.output as RipgrepResult;
-      
-      const blockedMatches = output.matches.filter(m => 
+
+      const blockedMatches = output.matches.filter(m =>
         m.file.includes('node_modules')
       );
       expect(blockedMatches.length).toBe(0);
@@ -195,7 +195,7 @@ This project has UserNotFound errors.
 
       expect(result.success).toBe(true);
       const output = result.output as RipgrepResult;
-      
+
       expect(output.stats).toBeDefined();
       expect(output.stats.executionTime).toBeGreaterThanOrEqual(0);
       expect(output.totalMatches).toBe(output.matches.length);
@@ -237,11 +237,11 @@ This project has UserNotFound errors.
 
       expect(result.success).toBe(true);
       const output = result.output as RipgrepResult;
-      
+
       // Should find in both .js and .md files
       const jsMatch = output.matches.find(m => m.file.endsWith('.js'));
       const mdMatch = output.matches.find(m => m.file.endsWith('.md'));
-      
+
       expect(jsMatch).toBeDefined();
       expect(mdMatch).toBeDefined();
     });

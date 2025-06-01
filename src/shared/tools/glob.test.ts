@@ -17,7 +17,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 import { GlobTool, GlobParams, GlobResult, GlobMatch } from './glob';
-import { ToolError, ToolContext } from '../types';
+import { ToolError, ToolContext } from './types';
 
 describe('GlobTool', () => {
   let globTool: GlobTool;

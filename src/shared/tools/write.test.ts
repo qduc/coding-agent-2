@@ -19,7 +19,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 import { WriteTool, WriteParams, WriteResult } from './write';
-import { ToolError, ToolContext } from '../types';
+import { ToolError, ToolContext } from './types';
 
 describe('WriteTool', () => {
   let writeTool: WriteTool;
