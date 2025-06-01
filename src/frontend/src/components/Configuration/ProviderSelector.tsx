@@ -79,6 +79,7 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
         />
         <ErrorMessage 
           id="model-error"
+          // errors prop now correctly matches the updated ErrorMessageProps
           errors={errors.filter(e => e.field === 'provider.model')}
         />
       </div>

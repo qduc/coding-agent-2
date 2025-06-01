@@ -76,6 +76,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           </div>
           <ErrorMessage
             id={`api-key-error-${provider}`}
+            // errors prop now correctly matches the updated ErrorMessageProps
             errors={errors.filter(e => e.field === `apiKeys.${provider}`)}
           />
         </div>

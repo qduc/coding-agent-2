@@ -3,7 +3,8 @@ import { cn } from '../../utils/cn';
 
 export interface ErrorMessageProps {
   message?: string;
-  errors?: string[];
+  // Changed to accept an array of objects with a 'message' property
+  errors?: { message: string }[];
   className?: string;
   variant?: 'primary' | 'secondary';
   id?: string;
@@ -26,7 +27,8 @@ export const ErrorMessage = React.forwardRef<HTMLDivElement, ErrorMessageProps>(
       >
         {message}
         {errors && errors.map((error, index) => (
-          <div key={index}>{error}</div>
+          // Accessing error.message as per the updated type
+          <div key={index}>{error.message}</div>
         ))}
       </div>
     );
