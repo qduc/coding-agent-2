@@ -10,6 +10,20 @@ interface FileInfo {
   modified: Date;
 }
 
+interface FileSystemNode {
+  path: string;
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+  modified?: Date;
+  children?: FileSystemNode[];
+}
+
+interface FileContent {
+  path: string;
+  content: string;
+}
+
 export const apiService = {
   // Chat operations
   sendMessage: (content: string): Promise<ChatMessage> => {
@@ -35,6 +49,17 @@ export const apiService = {
 
   listFiles: (): Promise<FileInfo[]> => {
     return Promise.resolve([]);
+  },
+
+  getFileTree: (): Promise<FileSystemNode[]> => {
+    return Promise.resolve([]);
+  },
+
+  getFileContent: (path: string): Promise<FileContent> => {
+    return Promise.resolve({
+      path,
+      content: ''
+    });
   },
 
   // Configuration operations
