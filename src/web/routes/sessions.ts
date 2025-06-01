@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express'; // Added Request, Response
 import { WebSessionManager } from '../implementations/WebSessionManager';
 import { ApiResponse, SessionInfo, ChatMessage, ApiError, ErrorResponse } from '../types/api'; // Removed ChatSession, ValidationError (unused here)
-import { validateRequest, ZodSchemaType } from '../middleware/validation'; // Added ZodSchemaType
+import { validateRequest } from '../middleware/validation';
 import { generalLimiter } from '../middleware/rateLimiter'; // Using generalLimiter
-import { paginate } from '../utils/pagination'; // Assuming this exists and is typed
+import { paginateArray, parsePaginationParams } from '../utils/pagination'; // Assuming this exists and is typed, added parsePaginationParams
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid'; // For generating message IDs
 
@@ -21,14 +21,14 @@ router.get('/api/sessions', generalLimiter, async (req: Request, res: Response) 
       messageCount: session.messages.length
     } as SessionInfo));
 
-    res.json({
+    return res.json({
       success: true,
-      data: sessions,
+      data: sessionsInfo,
       timestamp: new Date()
     } as ApiResponse<SessionInfo[]>);
   } catch (error) {
     const apiError: ApiError = { code: 'SESSION_LIST_ERROR', message: 'Failed to list sessions', details: String(error), timestamp: new Date() };
-    res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
 });
 
@@ -49,7 +49,7 @@ router.post('/api/sessions', generalLimiter, async (req: Request, res: Response)
     } as ApiResponse<SessionInfo>);
   } catch (error) {
     const apiError: ApiError = { code: 'SESSION_CREATION_ERROR', message: 'Failed to create session', details: String(error), timestamp: new Date() };
-    res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
 });
 
@@ -57,7 +57,7 @@ const sessionIdParamsSchema = z.object({ sessionId: z.string().uuid() }); // Exa
 
 router.get('/api/sessions/:sessionId', generalLimiter, validateRequest({ params: sessionIdParamsSchema }), async (req: Request, res: Response) => {
   try {
-    const { sessionId } = req.params; // Typed by Zod validation if using validateRequest properly
+    const { sessionId } = req.params as z.infer<typeof sessionIdParamsSchema>;
     const session = sessionManager.getSession(sessionId);
 
     if (!session) {
@@ -73,20 +73,20 @@ router.get('/api/sessions/:sessionId', generalLimiter, validateRequest({ params:
       lastActive: session.lastActivity,
       messageCount: session.messages.length,
     };
-    res.json({
+    return res.json({
       success: true,
       data: sessionInfo,
       timestamp: new Date()
     } as ApiResponse<SessionInfo>);
   } catch (error) {
     const apiError: ApiError = { code: 'SESSION_FETCH_ERROR', message: 'Failed to fetch session', details: String(error), timestamp: new Date() };
-    res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
 });
 
 router.delete('/api/sessions/:sessionId', generalLimiter, validateRequest({ params: sessionIdParamsSchema }), async (req: Request, res: Response) => {
   try {
-    const { sessionId } = req.params;
+    const { sessionId } = req.params as z.infer<typeof sessionIdParamsSchema>;
     const success = sessionManager.terminateSession(sessionId); // Use terminateSession
 
     if (!success) {
@@ -97,14 +97,14 @@ router.delete('/api/sessions/:sessionId', generalLimiter, validateRequest({ para
       } as ErrorResponse);
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: { id: sessionId, message: 'Session terminated' },
       timestamp: new Date()
     } as ApiResponse<{ id: string; message: string }>);
   } catch (error) {
     const apiError: ApiError = { code: 'SESSION_DELETION_ERROR', message: 'Failed to delete session', details: String(error), timestamp: new Date() };
-    res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
 });
 
@@ -116,11 +116,10 @@ const historyQuerySchema = z.object({ page: z.string().optional().default('1'), 
 router.get('/api/sessions/:sessionId/history',
   generalLimiter,
   validateRequest({ params: historyParamsSchema, query: historyQuerySchema }),
-  paginate(), // Assuming paginate middleware is correctly set up
   async (req: Request, res: Response) => {
     try {
-      const { sessionId } = req.params as ZodSchemaType<typeof historyParamsSchema>;
-      const { page, pageSize } = req.query as ZodSchemaType<typeof historyQuerySchema>;
+      const { sessionId } = req.params as z.infer<typeof historyParamsSchema>;
+      const { page, pageSize } = req.query as z.infer<typeof historyQuerySchema>;
       const session = sessionManager.getSession(sessionId);
 
       if (!session) {
@@ -132,23 +131,11 @@ router.get('/api/sessions/:sessionId/history',
       }
 
       const messages: ChatMessage[] = session.messages;
-      const total = messages.length;
-      const start = (Number(page) - 1) * Number(pageSize);
-      const end = start + Number(pageSize);
-      const paginatedMessages = messages.slice(start, end);
-
-      res.json({
-        success: true,
-        data: paginatedMessages,
-        timestamp: new Date(),
-        metadata: {
-          page: Number(page),
-          pageSize: Number(pageSize),
-          total
-        }
-      } as ApiResponse<ChatMessage[]>);
+      const paginatedResponse = paginateArray(messages, Number(page), Number(pageSize));
+      
+      return res.json(paginatedResponse);
     } catch (error) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: { code: 'HISTORY_FETCH_ERROR', message: 'Failed to fetch history', details: String(error), timestamp: new Date() },
         timestamp: new Date()
@@ -168,8 +155,8 @@ router.post('/api/sessions/:sessionId/history',
   validateRequest({ params: addMessageParamsSchema, body: addMessageBodySchema }),
   async (req: Request, res: Response) => {
     try {
-      const { sessionId } = req.params as ZodSchemaType<typeof addMessageParamsSchema>;
-      const { content, role } = req.body as ZodSchemaType<typeof addMessageBodySchema>;
+      const { sessionId } = req.params as z.infer<typeof addMessageParamsSchema>;
+      const { content, role } = req.body as z.infer<typeof addMessageBodySchema>;
 
       const session = sessionManager.getSession(sessionId);
       if (!session) {
@@ -183,20 +170,20 @@ router.post('/api/sessions/:sessionId/history',
       const message: ChatMessage = {
         id: uuidv4(), // Add ID to ChatMessage
         content,
-        role,
+        role: role as ChatMessage['role'], // Ensure role matches ChatMessage role type
         timestamp: new Date()
       };
 
       sessionManager.addMessage(sessionId, message); // Use modified addMessage
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         data: message,
         timestamp: new Date()
       } as ApiResponse<ChatMessage>);
     } catch (error) {
       const apiError: ApiError = { code: 'MESSAGE_ADD_ERROR', message: 'Failed to add message', details: String(error), timestamp: new Date() };
-      res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      return res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
     }
   }
 );
@@ -206,7 +193,7 @@ router.delete('/api/sessions/:sessionId/history',
   validateRequest({ params: historyParamsSchema }),
   async (req: Request, res: Response) => {
     try {
-      const { sessionId } = req.params as ZodSchemaType<typeof historyParamsSchema>;
+      const { sessionId } = req.params as z.infer<typeof historyParamsSchema>;
       const session = sessionManager.getSession(sessionId);
 
       if (!session) {
@@ -218,19 +205,19 @@ router.delete('/api/sessions/:sessionId/history',
             timestamp: new Date()
           },
           timestamp: new Date()
-        });
+        } as ErrorResponse); // Added ErrorResponse type
       }
 
       sessionManager.clearHistory(sessionId);
 
-      res.json({
+      return res.json({
         success: true,
         data: { id: sessionId, message: 'History cleared' },
         timestamp: new Date()
       } as ApiResponse<{ id: string; message: string }>);
     } catch (error) {
       const apiError: ApiError = { code: 'HISTORY_CLEAR_ERROR', message: 'Failed to clear history', details: String(error), timestamp: new Date() };
-      res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      return res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
     }
   }
 );
@@ -247,11 +234,10 @@ const searchHistoryQuerySchema = z.object({
 router.get('/api/sessions/:sessionId/history/search',
   generalLimiter,
   validateRequest({ params: searchHistoryParamsSchema, query: searchHistoryQuerySchema }),
-  paginate(),
   async (req: Request, res: Response) => {
     try {
-      const { sessionId } = req.params as ZodSchemaType<typeof searchHistoryParamsSchema>;
-      const { query, page, pageSize } = req.query as ZodSchemaType<typeof searchHistoryQuerySchema>;
+      const { sessionId } = req.params as z.infer<typeof searchHistoryParamsSchema>;
+      const { query, page, pageSize } = req.query as z.infer<typeof searchHistoryQuerySchema>;
       const session = sessionManager.getSession(sessionId);
 
       if (!session) {
@@ -262,27 +248,16 @@ router.get('/api/sessions/:sessionId/history/search',
         } as ErrorResponse);
       }
 
-      const searchQuery = (query as string).toLowerCase(); // Ensure query is string
+      const searchQuery = query.toLowerCase(); // query is already string due to Zod validation
       const results = session.messages.filter(message =>
         message.content.toLowerCase().includes(searchQuery)
       );
-      const total = results.length;
-      const start = (Number(page) - 1) * Number(pageSize);
-      const end = start + Number(pageSize);
-      const paginatedResults = results.slice(start, end);
+      
+      const paginatedResponse = paginateArray(results, Number(page), Number(pageSize));
 
-      res.json({
-        success: true,
-        data: paginatedResults,
-        timestamp: new Date(),
-        metadata: {
-          page: Number(page),
-          pageSize: Number(pageSize),
-          total
-        }
-      } as ApiResponse<ChatMessage[]>);
+      return res.json(paginatedResponse);
     } catch (error) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: { code: 'HISTORY_SEARCH_ERROR', message: 'Failed to search history', details: String(error), timestamp: new Date() },
         timestamp: new Date()

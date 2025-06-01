@@ -6,7 +6,7 @@ export interface ChatMessage {
   id: string;
   content: string;
   timestamp: Date;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   toolExecutions?: ToolExecution[];
 }
 
