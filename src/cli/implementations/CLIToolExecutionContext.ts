@@ -3,6 +3,29 @@ import fs from 'fs-extra';
 import path from 'path';
 
 export class CLIToolExecutionContext implements IToolExecutionContext {
+  permissions = {
+    fileSystem: true,
+    network: true,
+    shell: true
+  };
+
+  setContext(context: Partial<Omit<IToolExecutionContext, 'setContext' | 'getContext'>>): void {
+    Object.assign(this, context);
+  }
+
+  getContext(): Omit<IToolExecutionContext, 'setContext' | 'getContext'> {
+    return {
+      workingDirectory: this.workingDirectory,
+      environment: this.environment,
+      permissions: this.permissions
+    };
+  }
+
+  validateAccess(operation: 'fileSystem' | 'network' | 'shell'): void {
+    if (!this.permissions[operation]) {
+      throw new Error(`Permission denied for ${operation} operation`);
+    }
+  }
   workingDirectory: string;
   environment: Record<string, unknown>;
   maxFileSize: number;

@@ -1,4 +1,6 @@
-import { Message } from '../../services/llm';
+import { Message } from '../services/llm';
+
+export type { Message };
 
 /**
  * Interface for managing conversation sessions

@@ -4,6 +4,42 @@ import fs from 'fs-extra';
 import path from 'path';
 
 export class CLISessionManager implements ISessionManager {
+  async startSession(sessionId?: string): Promise<void> {
+    this.sessionId = sessionId || uuidv4();
+    this.persistencePath = path.join(
+      path.dirname(this.persistencePath),
+      `${this.sessionId}.json`
+    );
+    await this.loadSession();
+  }
+
+  async endSession(save?: boolean): Promise<void> {
+    if (save) {
+      await this.saveSession();
+    }
+    this.clearHistory();
+  }
+
+  async saveConversation(path?: string): Promise<void> {
+    const savePath = path || this.persistencePath;
+    await fs.ensureDir(path.dirname(savePath));
+    await fs.writeJson(savePath, {
+      sessionId: this.sessionId,
+      conversationHistory: this.conversationHistory
+    });
+  }
+
+  async loadConversation(sessionId: string): Promise<Message[]> {
+    const loadPath = path.join(
+      path.dirname(this.persistencePath),
+      `${sessionId}.json`
+    );
+    if (await fs.pathExists(loadPath)) {
+      const data = await fs.readJson(loadPath);
+      return data.conversationHistory || [];
+    }
+    return [];
+  }
   sessionId: string;
   conversationHistory: Message[] = [];
   private persistencePath: string;

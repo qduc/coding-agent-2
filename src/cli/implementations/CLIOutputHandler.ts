@@ -3,6 +3,21 @@ import { IOutputHandler, OutputStyle } from '../../shared/interfaces/IOutputHand
 import { MarkdownRenderer } from '../../shared/utils/markdown';
 
 export class CLIOutputHandler implements IOutputHandler {
+  writeOutput(content: string, style?: OutputStyle): void {
+    this.write(content, style);
+  }
+
+  writeError(error: string | Error, details?: Record<string, unknown>): void {
+    const message = typeof error === 'string' ? error : error.message;
+    this.writeLine(`Error: ${message}`, { color: 'error' });
+    if (details) {
+      this.writeLine(JSON.stringify(details, null, 2), { color: 'secondary', indent: 2 });
+    }
+  }
+
+  writeSuccess(message: string): void {
+    this.writeLine(message, { color: 'success' });
+  }
   write(text: string, style?: OutputStyle): void {
     let output = text;
     

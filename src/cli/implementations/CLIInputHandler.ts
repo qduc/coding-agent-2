@@ -19,12 +19,39 @@ export class CLIInputHandler implements IInputHandler {
     });
   }
 
+  async readCommand(): Promise<{command: string; args: string[]}> {
+    const input = await this.readInput();
+    const parts = input.trim().split(/\s+/);
+    return {
+      command: parts[0] || '',
+      args: parts.slice(1)
+    };
+  }
+
+  async handleInteractiveMode(
+    onInput: (input: string) => Promise<void>,
+    onEnd: () => void
+  ): Promise<void> {
+    this.setupInterruptHandler();
+    try {
+      while (true) {
+        const input = await this.readInput();
+        if (input.toLowerCase() === 'exit') {
+          onEnd();
+          break;
+        }
+        await onInput(input);
+      }
+    } finally {
+      this.close();
+    }
+  }
+
   close() {
     this.rl.close();
   }
 
-  // Handle SIGINT (Ctrl+C) gracefully
-  setupInterruptHandler() {
+  private setupInterruptHandler() {
     this.rl.on('SIGINT', () => {
       this.rl.question('Exit? (y/n) ', (answer) => {
         if (answer.toLowerCase() === 'y') {
