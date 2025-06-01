@@ -7,6 +7,7 @@ import * as path from 'path';
 import { configManager } from '../core/config';
 import { Agent } from '../core/agent';
 import { MarkdownRenderer } from '../utils/markdown';
+import { BoxRenderer } from '../utils/boxRenderer';
 import { calculateStreamingClearSequence } from '../utils/terminalOutput';
 
 // Read version from package.json
@@ -102,10 +103,7 @@ async function handleDirectCommand(command: string, agent: Agent, options: any, 
 
   // Enhanced visual hierarchy with better spacing
   console.log();
-  console.log(chalk.yellow('┌─────────────────────────────────────────────┐'));
-  console.log(chalk.yellow('│') + chalk.yellow.bold('  🤖 Coding Agent') + chalk.yellow('                     │'));
-  console.log(chalk.yellow('└─────────────────────────────────────────────┘'));
-  console.log();
+  console.log(BoxRenderer.createInfoBox('🤖 Coding Agent', ''));
   console.log(chalk.cyan('📥 Request:'), chalk.white(command));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
@@ -197,10 +195,7 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
 
   // Enhanced welcome with better visual hierarchy
   console.log();
-  console.log(chalk.yellow('┌─────────────────────────────────────────────┐'));
-  console.log(chalk.yellow('│') + chalk.yellow.bold('  🤖 Coding Agent - Interactive Mode') + chalk.yellow('     │'));
-  console.log(chalk.yellow('└─────────────────────────────────────────────┘'));
-  console.log();
+  console.log(BoxRenderer.createInfoBox('🤖 Coding Agent - Interactive Mode', ''));
   console.log(chalk.cyan('🚀 Starting conversation session...'));
   console.log();
 
@@ -214,12 +209,11 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
     }
 
     // Enhanced welcome message with better visual structure
-    console.log(chalk.cyan('┌─ 💬 Welcome to Interactive Chat Mode ─────────┐'));
-    console.log(chalk.cyan('│') + chalk.white('  • Type your questions about code or project  ') + chalk.cyan('│'));
-    console.log(chalk.cyan('│') + chalk.white('  • Use "help" for suggestions                 ') + chalk.cyan('│'));
-    console.log(chalk.cyan('│') + chalk.white('  • Use "exit" or "quit" to leave              ') + chalk.cyan('│'));
-    console.log(chalk.cyan('│') + chalk.white('  • Use Ctrl+C to exit anytime                ') + chalk.cyan('│'));
-    console.log(chalk.cyan('└───────────────────────────────────────────────┘'));
+    const welcomeContent = `• Type your questions about code or project
+• Use "help" for suggestions
+• Use "exit" or "quit" to leave
+• Use Ctrl+C to exit anytime`;
+    console.log(BoxRenderer.createInfoBox('💬 Welcome to Interactive Chat Mode', welcomeContent));
     console.log();
 
     // Set up graceful exit handler for Ctrl+C
@@ -348,9 +342,8 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
 
         } catch (error) {
           console.log(); // Clear the status line
-          console.log(chalk.red('┌─ ❌ Error ─────────────────────────────────┐'));
-          console.log(chalk.red('│'), chalk.white(error instanceof Error ? error.message : 'Unknown error'), chalk.red('│'));
-          console.log(chalk.red('└───────────────────────────────────────────┘'));
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.log(BoxRenderer.createInfoBox('❌ Error', errorMessage));
           console.log(chalk.gray('💡 Try rephrasing your question or type "help" for suggestions.'));
           console.log();
         }
@@ -413,25 +406,24 @@ function displayBanner() {
  * Display chat help information
  */
 function displayChatHelp() {
+  const helpContent = `Available Commands:
+    help               - Show this help
+    exit, quit, q      - Exit interactive mode
+
+Example Questions:
+    "Explain what this project does"
+    "List files in the src directory"
+    "Help me understand this error"
+    "What are the main components?"
+    "Show me the test files"
+
+Tips:
+    • Be specific about what you want to know
+    • Ask about files, directories, or patterns
+    • Use natural language - no special syntax`;
+
   console.log();
-  console.log(chalk.yellow('┌─ 💡 Coding Agent Help ────────────────────────┐'));
-  console.log(chalk.yellow('│                                               │'));
-  console.log(chalk.yellow('│') + chalk.white.bold('  Available Commands:') + chalk.yellow('                        │'));
-  console.log(chalk.yellow('│') + chalk.gray('    help               - Show this help') + chalk.yellow('       │'));
-  console.log(chalk.yellow('│') + chalk.gray('    exit, quit, q      - Exit interactive mode') + chalk.yellow(' │'));
-  console.log(chalk.yellow('│                                               │'));
-  console.log(chalk.yellow('│') + chalk.white.bold('  Example Questions:') + chalk.yellow('                         │'));
-  console.log(chalk.yellow('│') + chalk.gray('    "Explain what this project does"') + chalk.yellow('          │'));
-  console.log(chalk.yellow('│') + chalk.gray('    "List files in the src directory"') + chalk.yellow('         │'));
-  console.log(chalk.yellow('│') + chalk.gray('    "Help me understand this error"') + chalk.yellow('           │'));
-  console.log(chalk.yellow('│') + chalk.gray('    "What are the main components?"') + chalk.yellow('           │'));
-  console.log(chalk.yellow('│') + chalk.gray('    "Show me the test files"') + chalk.yellow('                │'));
-  console.log(chalk.yellow('│                                               │'));
-  console.log(chalk.yellow('│') + chalk.white.bold('  Tips:') + chalk.yellow('                                      │'));
-  console.log(chalk.yellow('│') + chalk.gray('    • Be specific about what you want to know') + chalk.yellow('  │'));
-  console.log(chalk.yellow('│') + chalk.gray('    • Ask about files, directories, or patterns') + chalk.yellow(' │'));
-  console.log(chalk.yellow('│') + chalk.gray('    • Use natural language - no special syntax') + chalk.yellow('  │'));
-  console.log(chalk.yellow('└───────────────────────────────────────────────┘'));
+  console.log(BoxRenderer.createInfoBox('💡 Coding Agent Help', helpContent));
   console.log();
 }
 
