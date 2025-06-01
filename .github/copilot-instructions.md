@@ -21,6 +21,7 @@
 - When delegate subtasks to Aider, provide clear and concise instructions, give him context of the task, specify the files to be modified (max 10 files), and outline the desired outcome.
 - If the task is very complex, use aider with a reasoner model.
 - IMPORTANT: Aider is not good at file operations like renaming, moving, or deleting files. Do not use Aider for these tasks.
+- DO NOT use Aider for super simple tasks like find and replace a few strings, he need to read a whole file to do that so it is very inefficient.
 
 # Project Overview
 

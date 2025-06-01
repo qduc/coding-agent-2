@@ -18,8 +18,8 @@ export class CLISessionManager implements ISessionManager {
     this.clearHistory();
   }
 
-  async saveConversation(path?: string): Promise<void> {
-    const savePath = path || this.persistencePath;
+  async saveConversation(filePath?: string): Promise<void> {
+    const savePath = filePath || this.persistencePath;
     await fs.ensureDir(path.dirname(savePath));
     await fs.writeJson(savePath, {
       sessionId: this.sessionId,
