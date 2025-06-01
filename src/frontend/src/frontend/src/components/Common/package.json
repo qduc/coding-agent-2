@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "react-hot-toast": "^2.4.1",
+    "react-markdown": "^8.0.7",
+    "prism-react-renderer": "^2.1.0",
+    "@headlessui/react": "^1.7.17",
+    "@heroicons/react": "^2.1.1",
+    "date-fns": "^2.30.0",
+    "clsx": "^2.1.0"
+  }
+}
