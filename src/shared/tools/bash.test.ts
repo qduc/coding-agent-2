@@ -18,7 +18,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 import { BashTool, BashParams, BashResult } from './bash';
-import { ToolError, ToolContext } from './types';
+import { ToolError, ToolContext } from '../types';
 
 describe('BashTool', () => {
   let bashTool: BashTool;

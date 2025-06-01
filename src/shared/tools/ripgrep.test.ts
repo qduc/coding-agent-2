@@ -3,7 +3,7 @@
  */
 
 import { RipgrepTool, RipgrepParams, RipgrepResult } from './ripgrep';
-import { ToolError } from './types';
+import { ToolError } from '../types';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 
