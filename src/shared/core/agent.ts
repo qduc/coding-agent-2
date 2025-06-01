@@ -16,21 +16,39 @@ import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscov
  * Provides high-level API for initialization, configuration, and message processing.
  * Delegates tool execution to ToolOrchestrator while handling session management.
  */
+import { IInputHandler, IToolExecutionContext } from '../interfaces';
+
+interface AgentOptions {
+  inputHandler?: IInputHandler;
+  toolContext?: IToolExecutionContext;
+}
+
 export class Agent {
   private llmService: LLMService;
   private orchestrator: ToolOrchestrator;
   private projectDiscovery: ProjectDiscovery;
   private discoveryResult?: ProjectDiscoveryResult;
+  private inputHandler?: IInputHandler;
+  private toolContext?: IToolExecutionContext;
 
-  constructor() {
+  constructor(options: AgentOptions = {}) {
+    this.inputHandler = options.inputHandler;
+    this.toolContext = options.toolContext;
     this.llmService = new LLMService();
 
-    // Create instances of all tools with default context
-    const lsTool = new LSTool();
-    const globTool = new GlobTool();
-    const readTool = new ReadTool();
-    const writeTool = new WriteTool();
-    const bashTool = new BashTool();
+    // Create instances of all tools with provided or default context
+    const toolContext = this.toolContext || {
+      workingDirectory: process.cwd(),
+      environment: process.env,
+      maxFileSize: 1024 * 1024 * 5, // 5MB
+      timeout: 30000 // 30s
+    };
+
+    const lsTool = new LSTool(toolContext);
+    const globTool = new GlobTool(toolContext);
+    const readTool = new ReadTool(toolContext);
+    const writeTool = new WriteTool(toolContext);
+    const bashTool = new BashTool(toolContext);
 
     // Create ripgrep tool and check if ripgrep is available
     const ripgrepTool = new RipgrepTool();

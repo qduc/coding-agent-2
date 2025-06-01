@@ -6,6 +6,8 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { configManager } from '../shared/core/config';
 import { Agent } from '../shared/core/agent';
+import { CLIInputHandler } from './implementations';
+import { CLIToolExecutionContext } from './implementations';
 import { MarkdownRenderer } from '../shared/utils/markdown';
 import { BoxRenderer } from '../shared/utils/boxRenderer';
 import { calculateStreamingClearSequence } from '../shared/utils/terminalOutput';
@@ -67,8 +69,15 @@ async function main() {
           options.streaming :
           configManager.getConfig().streaming;
 
-        // Create and initialize agent
-        const agent = new Agent();
+        // Create CLI implementations
+        const inputHandler = new CLIInputHandler();
+        const toolContext = new CLIToolExecutionContext();
+
+        // Create and initialize agent with CLI implementations
+        const agent = new Agent({
+          inputHandler,
+          toolContext
+        });
         const initialized = await agent.initialize();
         if (!initialized) {
           console.error(chalk.red('Failed to initialize AI service.'));
