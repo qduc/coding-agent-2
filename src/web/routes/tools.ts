@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express'; // Added Request, Response
+import { Router, Request, Response, NextFunction, RequestHandler } from 'express'; // Added Request, Response, NextFunction, RequestHandler
 import { rateLimit } from 'express-rate-limit'; // Standard import
 import { ToolError } from '../../shared/tools/types'; // Removed ToolErrorCode (unused here)
 import { ApiResponse, ApiError, ErrorResponse } from '../types/api'; // Added ErrorResponse
@@ -57,7 +57,7 @@ const executionLimiter = rateLimit({
  * GET /api/tools
  * List all available tools with descriptions and schemas
  */
-router.get('/', async (req: Request, res: Response) => {
+const listToolsHandler: RequestHandler = async (req, res, _next) => {
   try {
     const toolList = getTools();
     const responseData = toolList.map(tool => ({
@@ -72,22 +72,23 @@ router.get('/', async (req: Request, res: Response) => {
     };
     res.json(response);
   } catch (error) {
-    logger.error('Failed to list tools', { error: { name: (error as Error).name, message: (error as Error).message, stack: (error as Error).stack }});
+    logger.error('Failed to list tools', error as Error);
     const apiError: ApiError = {
       code: 'TOOL_LIST_ERROR',
       message: 'Failed to retrieve tools list',
       details: String(error),
-      timestamp: new Date()
+      timestamp: new Date(),
+      stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
-});
+};
 
 /**
  * GET /api/tools/:toolName
  * Get detailed information about a specific tool
  */
-router.get('/:toolName', async (req: Request, res: Response) => {
+const getToolByNameHandler: RequestHandler = async (req, res, _next) => {
   try {
     const { toolName } = req.params;
     const tool = getToolByName(toolName);
@@ -113,22 +114,23 @@ router.get('/:toolName', async (req: Request, res: Response) => {
     };
     res.json(response);
   } catch (error) {
-    logger.error('Failed to get tool details', { error: { name: (error as Error).name, message: (error as Error).message, stack: (error as Error).stack }});
+    logger.error('Failed to get tool details', error as Error);
     const apiError: ApiError = {
       code: 'TOOL_DETAILS_ERROR',
       message: 'Failed to retrieve tool details',
       details: String(error),
-      timestamp: new Date()
+      timestamp: new Date(),
+      stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
-});
+};
 
 /**
  * GET /api/tools/category/:category
  * Get tools by category
  */
-router.get('/category/:category', async (req: Request, res: Response) => {
+const getToolsByCategoryHandler: RequestHandler = async (req, res, _next) => {
   try {
     const { category } = req.params;
     const categorizedTools = getToolsByCategory();
@@ -150,22 +152,23 @@ router.get('/category/:category', async (req: Request, res: Response) => {
     };
     res.json(response);
   } catch (error) {
-    logger.error('Failed to get tools by category', { error: { name: (error as Error).name, message: (error as Error).message, stack: (error as Error).stack }});
+    logger.error('Failed to get tools by category', error as Error);
     const apiError: ApiError = {
       code: 'TOOL_CATEGORY_ERROR',
       message: 'Failed to retrieve tools by category',
       details: String(error),
-      timestamp: new Date()
+      timestamp: new Date(),
+      stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
-});
+};
 
 /**
  * POST /api/tools/execute
  * Execute a tool with given parameters
  */
-router.post('/execute', executionLimiter, async (req: Request, res: Response) => {
+const executeToolHandler: RequestHandler = async (req, res, _next) => {
   try {
     const { toolName, parameters, context } = req.body; // context should be Partial<IToolExecutionContext>
 
@@ -211,21 +214,32 @@ router.post('/execute', executionLimiter, async (req: Request, res: Response) =>
       const apiError: ApiError = {
         message: error.message,
         code: error.code,
-        suggestions: error.suggestions,
-        timestamp: new Date()
+        // suggestions: error.suggestions, // Removed as ApiError does not have suggestions
+        details: { // Optional: include suggestions in details if needed
+          originalMessage: error.message,
+          suggestions: error.suggestions,
+        },
+        timestamp: new Date(),
+        stack: error.stack 
       };
       return res.status(400).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
     }
 
-    logger.error('Failed to execute tool', { error: { name: (error as Error).name, message: (error as Error).message, stack: (error as Error).stack }});
+    logger.error('Failed to execute tool', error as Error);
     const apiError: ApiError = {
       code: 'TOOL_EXECUTION_FAILED',
       message: 'Tool execution failed',
       details: error instanceof Error ? error.message : String(error),
-      timestamp: new Date()
+      timestamp: new Date(),
+      stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
   }
-});
+};
+
+router.get('/', listToolsHandler);
+router.get('/:toolName', getToolByNameHandler);
+router.get('/category/:category', getToolsByCategoryHandler);
+router.post('/execute', executionLimiter, executeToolHandler);
 
 export default router;
