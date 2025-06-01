@@ -9,7 +9,22 @@ import path from 'path';
 import { corsMiddleware, generalLimiter, errorHandler, notFoundHandler } from './middleware';
 
 // Import routes
-import { healthRoutes, configRoutes, apiRoutes, authRoutes } from './routes';
+import { 
+  healthRoutes,
+  configRoutes,
+  apiRoutes,
+  authRoutes,
+  toolsRoutes,
+  projectRoutes,
+  chatRoutes,
+  fileRoutes,
+  userRoutes
+} from './routes';
+
+// Import additional middleware
+import { requestLogger, responseLogger } from './middleware/logging';
+import { sessionMiddleware } from './middleware/session';
+import { validateApiKey } from './middleware/auth';
 
 // Import WebSocket handling
 import {
@@ -61,21 +76,32 @@ export class WebServer {
         directives: {
           defaultSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-eval'"], // Needed for some dev tools
           imgSrc: ["'self'", "data:", "https:"],
+          connectSrc: ["'self'", "ws:"],
         },
       },
     }));
 
+    // Request logging
+    this.app.use(requestLogger);
+    
     // CORS
     this.app.use(corsMiddleware);
 
+    // Session handling
+    this.app.use(sessionMiddleware);
+
     // Body parsing
-    this.app.use(bodyParser.json({ limit: '1mb' }));
-    this.app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
+    this.app.use(bodyParser.json({ limit: '5mb' })); // Increased for file uploads
+    this.app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
 
     // Rate limiting
     this.app.use('/api', generalLimiter);
+    this.app.use('/api/tools', validateApiKey); // Additional auth for tools API
+
+    // Response logging
+    this.app.use(responseLogger);
 
     // Static file serving (for frontend)
     if (process.env.NODE_ENV === 'production') {
@@ -94,6 +120,11 @@ export class WebServer {
     this.app.use('/api', apiRoutes);
     this.app.use('/api/config', configRoutes);
     this.app.use('/api/auth', authRoutes);
+    this.app.use('/api/tools', toolsRoutes);
+    this.app.use('/api/projects', projectRoutes);
+    this.app.use('/api/chat', chatRoutes);
+    this.app.use('/api/files', fileRoutes);
+    this.app.use('/api/users', userRoutes);
 
     // Serve React app for all other routes in production
     if (process.env.NODE_ENV === 'production') {
