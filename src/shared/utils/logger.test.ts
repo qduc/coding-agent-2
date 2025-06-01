@@ -1,4 +1,4 @@
-import { Logger, LogLevel, logger, logError, logInfo, logDebug } from '../utils/logger';
+import { Logger, LogLevel, logger, logError, logInfo, logDebug } from './logger';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
