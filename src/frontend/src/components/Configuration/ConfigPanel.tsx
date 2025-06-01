@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Configuration, ConfigTab, ConfigValidationError } from './types';
-import ProviderSelector from './ProviderSelector';
+import { ProviderSelector } from './ProviderSelector';
 import ApiKeyManager from './ApiKeyManager';
 import ToolSettings from './ToolSettings';
 import PreferencesPanel from './PreferencesPanel';
@@ -80,7 +80,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         return (
           <ProviderSelector
             config={config.provider}
-            onChange={(value) => handleChange('provider', value)}
+            onChange={(value: Configuration['provider']) => handleChange('provider', value)}
             errors={errors.filter(e => e.field.startsWith('provider'))}
           />
         );
@@ -89,7 +89,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
           <ApiKeyManager
             config={config.apiKeys}
             activeProvider={config.provider.name}
-            onChange={(value) => handleChange('apiKeys', value)}
+            onChange={(value: Configuration['apiKeys']) => handleChange('apiKeys', value)}
             errors={errors.filter(e => e.field.startsWith('apiKeys'))}
           />
         );
@@ -97,14 +97,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         return (
           <ToolSettings
             config={config.tools}
-            onChange={(value) => handleChange('tools', value)}
+            onChange={(value: Configuration['tools']) => handleChange('tools', value)}
           />
         );
       case 'preferences':
         return (
           <PreferencesPanel
             config={config.preferences}
-            onChange={(value) => handleChange('preferences', value)}
+            onChange={(value: Configuration['preferences']) => handleChange('preferences', value)}
           />
         );
       default:

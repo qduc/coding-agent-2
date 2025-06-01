@@ -62,7 +62,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               id={`api-key-${provider}`}
               type={revealedKeys[provider] ? 'text' : 'password'}
               value={config[provider] || ''}
-              onChange={(e) => handleKeyChange(provider, e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleKeyChange(provider, e.target.value)}
               aria-describedby={`api-key-error-${provider}`}
               className="flex-1"
             />

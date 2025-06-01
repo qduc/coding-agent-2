@@ -21,10 +21,6 @@
     "dev:fullstack": "concurrently \"npm run dev:web\" \"npm run dev:frontend\"",
     "build:all": "npm run build && npm run build:frontend",
     "start:fullstack": "concurrently \"npm run start:web\" \"npm run preview:frontend\""
-    ,
-    "check": "bash scripts/check-errors.sh",
-    "check:detailed": "ts-node scripts/check-errors.ts",
-    "health": "npm run check"
   },
   "keywords": [
     "ai",

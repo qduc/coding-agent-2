@@ -34,7 +34,9 @@ export default function Header({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           }
-        />
+        >
+          <span className="sr-only">Toggle menu</span>
+        </Button>
         <h1 className="text-xl font-bold">Code Assistant</h1>
       </div>
 
@@ -62,7 +64,9 @@ export default function Header({
               </svg>
             )
           }
-        />
+        >
+          <span className="sr-only">Toggle dark mode</span>
+        </Button>
 
         <Button
           variant="ghost"
@@ -73,7 +77,9 @@ export default function Header({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           }
-        />
+        >
+          <span className="sr-only">Settings</span>
+        </Button>
       </div>
     </header>
   );

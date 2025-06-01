@@ -84,7 +84,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Switch
               id="auto-scroll"
               checked={config.chat.autoScroll}
-              onChange={(checked) => handleChatSettingChange('autoScroll', checked)}
+              onChange={(checked: boolean) => handleChatSettingChange('autoScroll', checked)}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -92,7 +92,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Switch
               id="show-timestamps"
               checked={config.chat.showTimestamps}
-              onChange={(checked) => handleChatSettingChange('showTimestamps', checked)}
+              onChange={(checked: boolean) => handleChatSettingChange('showTimestamps', checked)}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -100,7 +100,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Switch
               id="message-bubbles"
               checked={config.chat.messageBubbles}
-              onChange={(checked) => handleChatSettingChange('messageBubbles', checked)}
+              onChange={(checked: boolean) => handleChatSettingChange('messageBubbles', checked)}
             />
           </div>
         </div>
@@ -116,7 +116,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Select
               id="view-mode"
               value={config.fileExplorer.viewMode}
-              onChange={(e) => handleFileExplorerChange('viewMode', e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFileExplorerChange('viewMode', e.target.value)}
               options={[
                 { value: 'grid', label: 'Grid' },
                 { value: 'list', label: 'List' },
@@ -130,7 +130,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Select
               id="sort-by"
               value={config.fileExplorer.sortBy}
-              onChange={(e) => handleFileExplorerChange('sortBy', e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFileExplorerChange('sortBy', e.target.value)}
               options={[
                 { value: 'name', label: 'Name' },
                 { value: 'modified', label: 'Modified Date' },
@@ -143,7 +143,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Switch
               id="sort-direction"
               checked={config.fileExplorer.sortDirection === 'desc'}
-              onChange={(checked) => handleFileExplorerChange(
+              onChange={(checked: boolean) => handleFileExplorerChange(
                 'sortDirection', 
                 checked ? 'desc' : 'asc'
               )}
@@ -161,7 +161,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Switch
               id="cache-responses"
               checked={config.performance.cacheResponses}
-              onChange={(checked) => handlePerformanceChange('cacheResponses', checked)}
+              onChange={(checked: boolean) => handlePerformanceChange('cacheResponses', checked)}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -169,7 +169,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
             <Switch
               id="lazy-load-images"
               checked={config.performance.lazyLoadImages}
-              onChange={(checked) => handlePerformanceChange('lazyLoadImages', checked)}
+              onChange={(checked: boolean) => handlePerformanceChange('lazyLoadImages', checked)}
             />
           </div>
         </div>

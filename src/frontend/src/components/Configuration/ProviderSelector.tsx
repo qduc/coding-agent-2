@@ -16,9 +16,9 @@ const providerModels = {
   gemini: ['gemini-1.5-pro', 'gemini-1.0-pro'],
 };
 
-export default ProviderSelector;
 
-const ProviderSelector: React.FC<ProviderSelectorProps> = ({
+
+export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
   config,
   onChange,
   errors,
@@ -70,7 +70,7 @@ const ProviderSelector: React.FC<ProviderSelectorProps> = ({
         <Select
           id="model-select"
           value={config.model}
-          onChange={(e) => handleModelChange(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleModelChange(e.target.value)}
           options={providerModels[config.name].map(model => ({
             value: model,
             label: model,
@@ -91,7 +91,7 @@ const ProviderSelector: React.FC<ProviderSelectorProps> = ({
           id="base-url"
           type="text"
           value={config.baseUrl || ''}
-          onChange={(e) => handleParamChange('baseUrl', e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleParamChange('baseUrl', e.target.value)}
           placeholder="https://api.openai.com/v1"
         />
       </div>
@@ -108,7 +108,7 @@ const ProviderSelector: React.FC<ProviderSelectorProps> = ({
             max="2"
             step="0.1"
             value={config.temperature ?? 0.7}
-            onChange={(e) => handleParamChange('temperature', parseFloat(e.target.value))}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleParamChange('temperature', parseFloat(e.target.value))}
           />
         </div>
         <div>
@@ -120,7 +120,7 @@ const ProviderSelector: React.FC<ProviderSelectorProps> = ({
             type="number"
             min="1"
             value={config.maxTokens ?? 2048}
-            onChange={(e) => handleParamChange('maxTokens', parseInt(e.target.value))}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleParamChange('maxTokens', parseInt(e.target.value))}
           />
         </div>
       </div>
