@@ -1,13 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { ApiResponse, StreamingResponse } from '../types/api';
+import { Router, Request, Response } from 'express';
+import { ApiResponse, StreamingResponse, ApiError } from '../types/api'; // Added ApiError
 import {
-  generalLimiter,
-  chatLimiter,
   generalLimiter,
   chatLimiter,
   validateChatMessage,
   validateSessionId,
-  // Removed generalLimiter from here as it's already imported above
 } from '../middleware';
 import { WebSessionManager } from '../implementations/WebSessionManager';
 import { Agent } from '../../shared/core/agent';
@@ -84,31 +82,33 @@ router.post('/chat',
 
       const apiResponse: ApiResponse<typeof agentResponse> = {
         success: true,
-        data: response,
+        data: agentResponse, // Corrected from 'response' to 'agentResponse'
         timestamp: new Date()
       };
 
       res.json(apiResponse);
+      return;
     } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
       logger.error('Chat processing failed', { 
-        error: { 
-          name: (error instanceof Error) ? error.name : 'Error', 
-          message: (error instanceof Error) ? error.message : String(error),
-          stack: (error instanceof Error) ? error.stack : undefined
-        } 
+        name: err.name, 
+        message: err.message,
+        stack: err.stack
       });
       const apiError: ApiError = {
         code: 'CHAT_PROCESSING_ERROR',
         message: 'Chat processing failed',
-        details: error instanceof Error ? error.message : String(error),
+        details: err.message,
         timestamp: new Date()
       };
-      const response: ApiResponse = {
+      const errorResponse: ApiResponse<null> = { // Explicitly type error response
         success: false,
         error: apiError,
+        data: null,
         timestamp: new Date()
       };
-      res.status(500).json(response);
+      res.status(500).json(errorResponse);
+      return;
     }
   }
 );
@@ -156,12 +156,11 @@ router.post('/chat/stream',
         };
         res.write(`data: ${JSON.stringify(completeEvent)}\n\n`);
       } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
         logger.error('Streaming chat processing failed', {
-          error: {
-            name: (error instanceof Error) ? error.name : 'Error',
-            message: (error instanceof Error) ? error.message : String(error),
-            stack: (error instanceof Error) ? error.stack : undefined
-          }
+          name: err.name,
+          message: err.message,
+          stack: err.stack
         });
         const errorEvent: StreamingResponse = {
           event: 'error',
@@ -178,12 +177,11 @@ router.post('/chat/stream',
         res.end();
       }
     } catch (error) { // Catch errors from session management or header setting
+      const err = error instanceof Error ? error : new Error(String(error));
       logger.error('Streaming chat setup failed', {
-        error: {
-          name: (error instanceof Error) ? error.name : 'Error',
-          message: (error instanceof Error) ? error.message : String(error),
-          stack: (error instanceof Error) ? error.stack : undefined
-        }
+        name: err.name,
+        message: err.message,
+        stack: err.stack
       });
       // Ensure headers are set before writing error if not already sent
       if (!res.headersSent) {

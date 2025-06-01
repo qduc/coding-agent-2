@@ -6,14 +6,17 @@ import {
   ConfigValidationResult,
   ConfigProviderSettings,
   ConfigToolSettings,
-  ConfigFeatureFlags
+  ConfigFeatureFlags,
+  ApiError, // Added ApiError
+  ErrorResponse, // Added ErrorResponse
+  ValidationError // Added ValidationError
 } from '../types/api';
 import { 
   generalLimiter, 
   configUpdateLimiter 
 } from '../middleware';
 import { validateConfig, validateProviderConfig } from '../types/validation';
-import { Logger } from '../../shared/utils/logger';
+import { Logger, LogLevel } from '../../shared/utils/logger'; // Imported LogLevel
 
 const router = Router();
 const logger = Logger.getInstance();
@@ -53,14 +56,15 @@ router.get('/', generalLimiter, async (req: Request, res: Response) => {
     const response: ApiResponse<WebConfiguration> = {
       success: true,
       data: {
-        ...webConfigData, // Use the structured data
-        // availableModels: getAvailableModels(currentConfig.provider) // This was part of old structure, WebConfiguration does not have it directly
+        ...webConfigData,
       },
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     handleConfigError(res, error, 'Failed to retrieve configuration');
+    return;
   }
 });
 
@@ -88,8 +92,10 @@ router.get('/provider', generalLimiter, async (req: Request, res: Response) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     handleConfigError(res, error, 'Failed to retrieve provider configuration');
+    return;
   }
 });
 
@@ -113,8 +119,10 @@ router.get('/tools', generalLimiter, async (req: Request, res: Response) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     handleConfigError(res, error, 'Failed to retrieve tool configuration');
+    return;
   }
 });
 
@@ -129,8 +137,10 @@ router.get('/features', generalLimiter, async (req: Request, res: Response) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     handleConfigError(res, error, 'Failed to retrieve feature flags');
+    return;
   }
 });
 
@@ -141,19 +151,22 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
   try {
     const validation = validateConfig(req.body);
     if (!validation.success) {
-      return res.status(400).json({
+      const errorResponse: ErrorResponse = {
         success: false,
-        error: { // This is an ApiError object
+        error: { 
           code: 'VALIDATION_ERROR',
           message: 'Invalid configuration',
-          validationErrors: validation.errors, // Use validationErrors field
+          validationErrors: validation.errors as ValidationError[], // Assuming validation.errors matches ValidationError[]
           timestamp: new Date(),
         },
+        data: null,
         timestamp: new Date()
-      } as ApiResponse); // Consider ErrorResponse type
+      };
+      res.status(400).json(errorResponse);
+      return;
     }
 
-    await configManager.saveConfig(req.body); // Changed updateConfig to saveConfig
+    await configManager.saveConfig(req.body);
     logger.info('Configuration updated', { event: 'config_update' });
 
     const newConfig = configManager.getConfig();
@@ -186,8 +199,10 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     handleConfigError(res, error, 'Failed to update configuration');
+    return;
   }
 });
 
@@ -198,16 +213,19 @@ router.put('/provider', configUpdateLimiter, async (req: Request, res: Response)
   try {
     const validation = validateProviderConfig(req.body);
     if (!validation.success) {
-      return res.status(400).json({
+      const errorResponse: ErrorResponse = {
         success: false,
-        error: { // This is an ApiError object
+        error: { 
           code: 'VALIDATION_ERROR',
           message: 'Invalid provider configuration',
-          validationErrors: validation.errors, // Use validationErrors field
+          validationErrors: validation.errors as ValidationError[], // Assuming validation.errors matches ValidationError[]
           timestamp: new Date(),
         },
+        data: null,
         timestamp: new Date()
-      } as ApiResponse); // Consider ErrorResponse type
+      };
+      res.status(400).json(errorResponse);
+      return;
     }
 
     const currentConfig = configManager.getConfig();
@@ -231,8 +249,10 @@ router.put('/provider', configUpdateLimiter, async (req: Request, res: Response)
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     handleConfigError(res, error, 'Failed to update provider configuration');
+    return;
   }
 });
 
@@ -246,14 +266,16 @@ router.post('/validate', generalLimiter, async (req: Request, res: Response) => 
       success: true,
       data: {
         valid: validation.success,
-        errors: validation.success ? undefined : validation.errors,
+        errors: validation.success ? undefined : validation.errors as ValidationError[], // Assuming validation.errors matches ValidationError[]
         warnings: []
       },
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     handleConfigError(res, error, 'Failed to validate configuration');
+    return;
   }
 });
 
@@ -287,27 +309,27 @@ function getFeatureFlags(): ConfigFeatureFlags {
 
 function handleConfigError(res: Response, error: unknown, message: string) {
   const logger = Logger.getInstance();
+  const err = error instanceof Error ? error : new Error(String(error));
   logger.error(message, { 
-    error: { 
-      name: (error instanceof Error) ? error.name : 'Error', 
-      message: (error instanceof Error) ? error.message : String(error),
-      stack: (error instanceof Error) ? error.stack : undefined
-    }
+    name: err.name, 
+    message: err.message,
+    stack: err.stack
   });
 
   const apiError: ApiError = {
-    code: 'CONFIG_OPERATION_FAILED', // More generic code
+    code: 'CONFIG_OPERATION_FAILED',
     message: message,
-    details: error instanceof Error ? error.message : String(error),
+    details: err.message,
     timestamp: new Date()
   };
 
-  const response: ErrorResponse = { // Use ErrorResponse for type safety
+  const errorResponse: ErrorResponse = { 
     success: false,
     error: apiError,
+    data: null, // Ensure ErrorResponse has a data field, typically null
     timestamp: new Date()
   };
-  res.status(500).json(response);
+  res.status(500).json(errorResponse);
 }
 
 export default router;

@@ -31,8 +31,10 @@ router.get('/discovery', async (req, res) => {
       timestamp: new Date(),
     };
     res.json(response);
+    return;
   } catch (error) {
     handleProjectError(res, error);
+    return;
   }
 });
 
@@ -46,8 +48,10 @@ router.post('/analyze', analysisLimiter, async (req, res) => {
       timestamp: new Date(),
     };
     res.json(response);
+    return;
   } catch (error) {
     handleProjectError(res, error);
+    return;
   }
 });
 
@@ -86,14 +90,16 @@ router.get('/files/tree', async (req, res) => {
   try {
     const { maxDepth = 3 } = req.query;
     const tree = await discovery.getFileTree(Number(maxDepth));
-    const response: ApiResponse = {
+    const response: ApiResponse<any> = { // Assuming tree structure is complex, using 'any' for data type
       success: true,
       data: tree,
       timestamp: new Date(),
     };
     res.json(response);
+    return;
   } catch (error) {
     handleProjectError(res, error);
+    return;
   }
 });
 
@@ -110,8 +116,10 @@ router.post('/files/search', async (req, res) => {
       timestamp: new Date(),
     };
     res.json(response);
+    return;
   } catch (error) {
     handleProjectError(res, error);
+    return;
   }
 });
 
@@ -129,12 +137,14 @@ router.get('/context', async (req, res) => {
     };
     const response: ApiResponse<ProjectContext> = {
       success: true,
-      data: contextData,
+      data: projectContextData, // Corrected from contextData
       timestamp: new Date(),
     };
     res.json(response);
+    return;
   } catch (error) {
     handleProjectError(res, error);
+    return;
   }
 });
 
@@ -143,12 +153,14 @@ router.get('/technologies', async (req, res) => {
     const techStack = await discovery.detectTechnologies();
     const response: ApiResponse<string[]> = {
       success: true,
-      data: techStack,
+      data: techStack, // techStack is already string[]
       timestamp: new Date(),
     };
     res.json(response);
+    return;
   } catch (error) {
     handleProjectError(res, error);
+    return;
   }
 });
 
@@ -182,25 +194,28 @@ function handleProjectError(res: Response, error: unknown) { // Changed res type
     apiError = {
       code: error.code,
       message: error.message,
-      suggestions: error.suggestions, // Include suggestions if available
+      // suggestions: error.suggestions, // Removed suggestions as it might not be in base ApiError
+      details: error.stack, // Optionally include stack or more details for ToolError
       timestamp: new Date(),
     };
-    statusCode = 400; // Typically, tool errors are client/request related
+    statusCode = 400; 
   } else {
+    const err = error instanceof Error ? error : new Error(String(error));
     apiError = {
-      code: 'PROJECT_OPERATION_FAILED', // More specific than UNKNOWN_ERROR
-      message: error instanceof Error ? error.message : 'An unexpected error occurred in project operation',
-      details: String(error),
+      code: 'PROJECT_OPERATION_FAILED',
+      message: err.message,
+      details: err.stack, // Include stack for unexpected errors
       timestamp: new Date(),
     };
   }
 
-  const response: ErrorResponse = {
+  const errorResponse: ErrorResponse = {
     success: false,
     error: apiError,
+    data: null, // Ensure ErrorResponse has a data field, typically null
     timestamp: new Date(),
   };
-  res.status(statusCode).json(response);
+  res.status(statusCode).json(errorResponse);
 }
 
 export default router;

@@ -21,11 +21,10 @@ router.get('/health', healthLimiter, async (req: Request, res: Response) => {
       status: 'healthy',
       version: process.env.npm_package_version || '0.1.0',
       uptime: process.uptime(),
-      timestamp: new Date(),
+      // timestamp: new Date(), // Removed: timestamp is part of ApiResponse, not HealthCheckResponse data
       services: {
         llm: llmStatus,
-        fileSystem: 'connected', // Changed from 'available'
-        // memory: 'ok' // memory is not part of HealthCheckResponse.services, it's in metrics for detailed status
+        fileSystem: 'connected', 
       }
     };
 
@@ -34,16 +33,20 @@ router.get('/health', healthLimiter, async (req: Request, res: Response) => {
       data: healthData,
       timestamp: new Date()
     } as ApiResponse<HealthCheckResponse>);
+    return;
   } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
     res.status(503).json({
       success: false,
       error: {
         code: 'SERVICE_UNAVAILABLE',
         message: 'Health check failed',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: err.message
       },
+      data: null,
       timestamp: new Date()
-    } as ApiResponse);
+    } as ApiResponse); // Assuming ApiError structure for error object
+    return;
   }
 });
 
@@ -63,10 +66,10 @@ router.get('/status', healthLimiter, async (req: Request, res: Response) => {
                                              // The response below uses a structure that includes metrics.
                                              // This implies HealthCheckResponse might need to be extended or a different type used.
                                              // For now, I'll assume HealthCheckResponse is flexible or the user wants to fit data into it.
-      status: 'healthy', // Changed from 'operational'
+      status: 'healthy', 
       version: process.env.npm_package_version || '0.1.0',
       uptime: process.uptime(),
-      timestamp: new Date(),
+      // timestamp: new Date(), // Removed: timestamp is part of ApiResponse, not HealthCheckResponse data
       metrics: {
         memory: {
           total: os.totalmem(),
@@ -93,16 +96,20 @@ router.get('/status', healthLimiter, async (req: Request, res: Response) => {
       data: statusData,
       timestamp: new Date()
     } as ApiResponse<HealthCheckResponse>);
+    return;
   } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
     res.status(500).json({
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
         message: 'Failed to get system status',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: err.message
       },
+      data: null,
       timestamp: new Date()
-    } as ApiResponse);
+    } as ApiResponse); // Assuming ApiError structure for error object
+    return;
   }
 });
 
@@ -121,19 +128,23 @@ router.get('/ready', healthLimiter, async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data: { status: 'ready' },
+      data: { status: 'ready' }, // status here is fine as it's custom data for this response
       timestamp: new Date()
-    } as ApiResponse);
+    } as ApiResponse<{ status: string }>);
+    return;
   } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
     res.status(503).json({
       success: false,
       error: {
         code: 'NOT_READY',
         message: 'System not ready',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: err.message
       },
+      data: null,
       timestamp: new Date()
-    } as ApiResponse);
+    } as ApiResponse); // Assuming ApiError structure for error object
+    return;
   }
 });
 
@@ -145,11 +156,12 @@ router.get('/live', healthLimiter, (req: Request, res: Response) => {
   res.json({
     success: true,
     data: { 
-      status: 'alive',
+      status: 'alive', // status here is fine as it's custom data for this response
       uptime: process.uptime() 
     },
     timestamp: new Date()
-  } as ApiResponse);
+  } as ApiResponse<{ status: string; uptime: number }>);
+  return; 
 });
 
 export default router;
