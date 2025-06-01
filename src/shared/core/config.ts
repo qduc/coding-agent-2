@@ -2,7 +2,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 import chalk from 'chalk';
-import { Logger, LogLevel } from '../../utils/logger';
+import { Logger, LogLevel } from '../utils/logger';
 
 export interface Config {
   openaiApiKey?: string;

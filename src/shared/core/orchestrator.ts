@@ -5,15 +5,15 @@
  * and conversation management with tool results.
  */
 
-import { BaseTool, ToolResult } from '../../tools';
-import { LLMService, Message } from '../../services/llm';
+import { BaseTool, ToolResult } from '../tools';
+import { LLMService, Message } from '../services/llm';
 import chalk from 'chalk';
 import * as path from 'path';
 import { configManager } from './config';
-import { ToolLogger } from '../../utils/toolLogger';
-import { ProjectDiscoveryResult } from '../../utils/projectDiscovery';
-import { logger } from '../../utils/logger';
-import { SchemaAdapter } from '../../services/schemaAdapter';
+import { ToolLogger } from '../utils/toolLogger';
+import { ProjectDiscoveryResult } from '../utils/projectDiscovery';
+import { logger } from '../utils/logger';
+import { SchemaAdapter } from '../services/schemaAdapter';
 
 export interface ConversationMessage extends Message {
   tool_calls?: any[];

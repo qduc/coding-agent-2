@@ -1,14 +1,14 @@
-import { LLMService } from '../../services/llm';
+import { LLMService } from '../services/llm';
 import { configManager } from './config';
-import { BaseTool } from '../../tools/base';
-import { LSTool } from '../../tools/ls';
-import { GlobTool } from '../../tools/glob';
-import { ReadTool } from '../../tools/read';
-import { RipgrepTool } from '../../tools/ripgrep';
-import { WriteTool } from '../../tools/write';
-import { BashTool } from '../../tools/bash';
+import { BaseTool } from '../tools/base';
+import { LSTool } from '../tools/ls';
+import { GlobTool } from '../tools/glob';
+import { ReadTool } from '../tools/read';
+import { RipgrepTool } from '../tools/ripgrep';
+import { WriteTool } from '../tools/write';
+import { BashTool } from '../tools/bash';
 import { ToolOrchestrator } from './orchestrator';
-import { ProjectDiscovery, ProjectDiscoveryResult } from '../../utils/projectDiscovery';
+import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
 /**
  * Core Agent - Primary interface for AI programming assistant
