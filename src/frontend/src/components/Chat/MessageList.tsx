@@ -38,7 +38,7 @@ export default function MessageList({ messages, isStreaming = false }: MessageLi
             id: 'streaming',
             role: 'assistant',
             content: '',
-            timestamp: new Date().toISOString(),
+            timestamp: new Date(),
             status: 'streaming',
           }}
         />

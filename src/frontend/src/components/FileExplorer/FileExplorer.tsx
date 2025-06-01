@@ -9,6 +9,7 @@ interface FileExplorerProps {
   selectedFile?: FileContent | null;
   onFileSelect: (path: string) => void;
   onToggleDirectory: (path: string, isOpen: boolean) => void;
+  onRefresh?: () => void;
   className?: string;
 }
 
@@ -17,6 +18,7 @@ export const FileExplorer = ({
   selectedFile,
   onFileSelect,
   onToggleDirectory,
+  onRefresh,
   className = '',
 }: FileExplorerProps) => {
   const [viewMode, setViewMode] = useState<FileViewMode>('list');
@@ -26,6 +28,7 @@ export const FileExplorer = ({
       <FileToolbar 
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        onRefresh={onRefresh || (() => {})}
       />
       <div className="flex flex-1 overflow-hidden">
         <FileTree

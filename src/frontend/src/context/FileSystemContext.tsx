@@ -6,6 +6,8 @@ const initialState: FileSystemState = {
   currentFile: null,
   currentDirectory: null,
   isFileOperationInProgress: false,
+  isLoading: false,
+  error: null,
 };
 
 const FileSystemContext = createContext<{

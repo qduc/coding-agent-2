@@ -41,7 +41,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({ file, maxSize = 1024 * 1
   useEffect(() => {
     const extension = file.path.split('.').pop()?.toLowerCase();
     setIsImage(['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(extension || ''));
-    setIsBinary(file.isBinary);
+    setIsBinary(file.isBinary || false);
 
     if (file.isBinary) {
       setContent('Binary content not displayed');
