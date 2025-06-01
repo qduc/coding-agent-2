@@ -34,5 +34,4 @@
     "vite": "^5.1.0"
   },
   "proxy": "http://localhost:3001"
-  }
 }
