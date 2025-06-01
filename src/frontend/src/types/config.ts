@@ -1,27 +1,54 @@
+// These types mirror the structure from Configuration['tools'] and Configuration['preferences']
+
+export interface PanelToolsConfig {
+    enabled: string[];
+    settings: Record<string, any>;
+    permissions: {
+      fileSystem: boolean;
+      network: boolean;
+      shell: boolean;
+    };
+}
+
+export interface PanelPreferencesConfig {
+    theme: 'light' | 'dark' | 'system';
+    chat: {
+      autoScroll: boolean;
+      showTimestamps: boolean;
+      messageBubbles: boolean;
+    };
+    fileExplorer: {
+      viewMode: 'grid' | 'list';
+      sortBy: 'name' | 'modified' | 'size';
+      sortDirection: 'asc' | 'desc';
+    };
+    performance: {
+      cacheResponses: boolean;
+      lazyLoadImages: boolean;
+    };
+}
+
 export interface ConfigState {
     llmProvider: 'openai' | 'anthropic' | 'gemini';
     llmConfig: {
-        openai: { apiKey: string; model: string };
-        anthropic: { apiKey: string; model: string };
-        gemini: { apiKey: string; model: string };
+        openai: { apiKey: string; model: string; baseUrl?: string; temperature?: number; maxTokens?: number; };
+        anthropic: { apiKey: string; model: string; baseUrl?: string; temperature?: number; maxTokens?: number; };
+        gemini: { apiKey: string; model: string; baseUrl?: string; temperature?: number; maxTokens?: number; };
     };
-    tools: any[];
+    tools: PanelToolsConfig; // Updated from any[]
     featureFlags: {
         experimentalFeatures: boolean;
         codeLens: boolean;
         autoComplete: boolean;
     };
-    appearance: {
-        theme: string;
-        fontSize: number;
-        fontFamily: string;
-    };
+    preferences: PanelPreferencesConfig; // Updated from appearance
 }
 
+export type LlmProviderKey = keyof ConfigState['llmConfig'];
+
 export type ConfigAction =
-    | { type: 'SET_LLM_PROVIDER'; payload: 'openai' | 'anthropic' | 'gemini' }
-    | { type: 'UPDATE_LLM_CONFIG'; payload: { provider: string; config: any } }
+    | { type: 'SET_LLM_PROVIDER'; payload: LlmProviderKey }
+    | { type: 'UPDATE_LLM_CONFIG'; payload: { provider: LlmProviderKey; config: Partial<ConfigState['llmConfig'][LlmProviderKey]> } }
     | { type: 'TOGGLE_FEATURE_FLAG'; payload: keyof ConfigState['featureFlags'] }
-    | { type: 'UPDATE_APPEARANCE'; payload: Partial<ConfigState['appearance']> }
-    | { type: 'ADD_TOOL'; payload: any }
-    | { type: 'REMOVE_TOOL'; payload: string };
+    | { type: 'UPDATE_PREFERENCES'; payload: Partial<PanelPreferencesConfig> } // Updated
+    | { type: 'UPDATE_TOOLS_CONFIG'; payload: Partial<PanelToolsConfig> }; // Updated

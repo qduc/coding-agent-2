@@ -1,24 +1,50 @@
 import React, { createContext, useContext, useReducer } from 'react';
-import { ConfigState, ConfigAction } from '../types';
+import { ConfigState, ConfigAction, LlmProviderKey, PanelToolsConfig, PanelPreferencesConfig } from '../types/config';
+
+// Define initial values for the new structures
+const initialToolsConfig: PanelToolsConfig = {
+  enabled: [],
+  settings: {},
+  permissions: {
+    fileSystem: true,
+    network: true,
+    shell: true,
+  },
+};
+
+const initialPreferencesConfig: PanelPreferencesConfig = {
+  theme: 'dark', // Default theme
+  chat: {
+    autoScroll: true,
+    showTimestamps: true,
+    messageBubbles: true,
+  },
+  fileExplorer: {
+    viewMode: 'list',
+    sortBy: 'name',
+    sortDirection: 'asc',
+  },
+  performance: {
+    cacheResponses: true,
+    lazyLoadImages: false,
+  },
+};
 
 const initialState: ConfigState = {
   llmProvider: 'openai',
   llmConfig: {
-    openai: { apiKey: '', model: 'gpt-4' },
-    anthropic: { apiKey: '', model: 'claude-2' },
-    gemini: { apiKey: '', model: 'gemini-pro' }
+    // Ensure API keys are initialized as empty strings, not undefined
+    openai: { apiKey: '', model: 'gpt-4-turbo' },
+    anthropic: { apiKey: '', model: 'claude-3-opus' },
+    gemini: { apiKey: '', model: 'gemini-1.5-pro' }
   },
-  tools: [],
+  tools: initialToolsConfig, // Use defined initial value
   featureFlags: {
     experimentalFeatures: false,
     codeLens: true,
     autoComplete: true
   },
-  appearance: {
-    theme: 'dark',
-    fontSize: 14,
-    fontFamily: 'monospace'
-  }
+  preferences: initialPreferencesConfig, // Use defined initial value (was appearance)
 };
 
 const ConfigContext = createContext<{
@@ -52,23 +78,21 @@ const reducer = (state: ConfigState, action: ConfigAction): ConfigState => {
           [action.payload]: !state.featureFlags[action.payload]
         }
       };
-    case 'UPDATE_APPEARANCE':
+    case 'UPDATE_PREFERENCES': // Updated
       return {
         ...state,
-        appearance: {
-          ...state.appearance,
-          ...action.payload
+        preferences: {
+          ...state.preferences,
+          ...action.payload // payload is Partial<PanelPreferencesConfig>
         }
       };
-    case 'ADD_TOOL':
+    case 'UPDATE_TOOLS_CONFIG': // Updated
       return {
         ...state,
-        tools: [...state.tools, action.payload]
-      };
-    case 'REMOVE_TOOL':
-      return {
-        ...state,
-        tools: state.tools.filter((tool: { name: string }) => tool.name !== action.payload)
+        tools: {
+          ...state.tools,
+          ...action.payload, // payload is Partial<PanelToolsConfig>
+        }
       };
     default:
       return state;

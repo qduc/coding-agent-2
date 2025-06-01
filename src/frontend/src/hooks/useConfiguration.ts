@@ -1,30 +1,27 @@
 import { useConfigContext } from '../context/ConfigContext';
+import type { ConfigState, LlmProviderKey, PanelToolsConfig, PanelPreferencesConfig } from '../types/config';
 
 export const useConfiguration = () => {
   const { state, dispatch } = useConfigContext();
 
-  const setLlmProvider = (provider: string) => {
+  const setLlmProvider = (provider: LlmProviderKey) => {
     dispatch({ type: 'SET_LLM_PROVIDER', payload: provider });
   };
 
-  const updateLlmConfig = (provider: string, config: any) => {
+  const updateLlmConfig = (provider: LlmProviderKey, config: Partial<ConfigState['llmConfig'][LlmProviderKey]>) => {
     dispatch({ type: 'UPDATE_LLM_CONFIG', payload: { provider, config } });
   };
 
-  const toggleFeatureFlag = (flag: string) => {
+  const toggleFeatureFlag = (flag: keyof ConfigState['featureFlags']) => {
     dispatch({ type: 'TOGGLE_FEATURE_FLAG', payload: flag });
   };
 
-  const updateAppearance = (settings: any) => {
-    dispatch({ type: 'UPDATE_APPEARANCE', payload: settings });
+  const updatePreferences = (settings: Partial<PanelPreferencesConfig>) => { // Updated
+    dispatch({ type: 'UPDATE_PREFERENCES', payload: settings });
   };
 
-  const addTool = (tool: any) => {
-    dispatch({ type: 'ADD_TOOL', payload: tool });
-  };
-
-  const removeTool = (toolName: string) => {
-    dispatch({ type: 'REMOVE_TOOL', payload: toolName });
+  const updateToolsConfig = (config: Partial<PanelToolsConfig>) => { // Updated
+    dispatch({ type: 'UPDATE_TOOLS_CONFIG', payload: config });
   };
 
   return {
@@ -32,8 +29,7 @@ export const useConfiguration = () => {
     setLlmProvider,
     updateLlmConfig,
     toggleFeatureFlag,
-    updateAppearance,
-    addTool,
-    removeTool
+    updatePreferences, // Updated
+    updateToolsConfig, // Updated
   };
 };
