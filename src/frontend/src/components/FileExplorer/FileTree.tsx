@@ -17,6 +17,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   onSelect,
   onToggle,
   depth = 0,
+  className,
 }) => {
   const handleToggle = useCallback((node: FileSystemNode) => {
     if (node.type === 'directory') {
@@ -31,16 +32,16 @@ export const FileTree: React.FC<FileTreeProps> = ({
   return (
     <div className={`file-tree ${className || ''}`}>
       {nodes.map((node) => (
-        <div 
+        <div
           key={node.path}
           className={`file-tree-node ${node.path === selectedPath ? 'selected' : ''}`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
-          <div 
+          <div
             className="file-tree-node-content"
             onClick={() => handleSelect(node)}
           >
-            <span 
+            <span
               className="file-tree-toggle"
               onClick={(e) => {
                 e.stopPropagation();

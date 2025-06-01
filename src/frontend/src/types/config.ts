@@ -1,5 +1,12 @@
 // These types mirror the structure from Configuration['tools'] and Configuration['preferences']
 
+export interface ConfigValidationError {
+    field: string;
+    message: string;
+    type: 'error' | 'warning';
+    path?: string[];
+}
+
 export interface PanelToolsConfig {
     enabled: string[];
     settings: Record<string, any>;
