@@ -1,21 +1,36 @@
 import { useCallback } from 'react';
 import { useChatContext } from '../context/ChatContext';
 import { useWebSocket } from './useWebSocket';
-import { apiService } from '../services/apiService';
+// import { apiService } from '../services/apiService';
+import { ChatMessage } from '../types/chat'; // Ensure ChatMessage type is imported
 
 export const useChat = () => {
   const { state, dispatch } = useChatContext();
-  const { sendMessage } = useWebSocket(process.env.REACT_APP_WS_URL || '');
+  const { sendMessage } = useWebSocket(process.env.REACT_APP_WS_URL || ''); // Ensure this env var is set or provide a default
 
-  const sendChatMessage = useCallback(async (message: string) => {
+  const sendChatMessage = useCallback(async (messageContent: string) => {
     dispatch({ type: 'SET_STREAMING', payload: true });
-    dispatch({ type: 'ADD_MESSAGE', payload: { role: 'user', content: message } });
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(), // Modern browsers
+      role: 'user',
+      content: messageContent,
+      timestamp: new Date(), // Store as Date object, format on display
+    };
+    dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
 
     try {
-      sendMessage(message);
+      sendMessage(messageContent); // Assuming WebSocket expects just the content string
     } catch (error) {
+      console.error("Error sending chat message:", error);
       dispatch({ type: 'SET_STREAMING', payload: false });
-      dispatch({ type: 'ADD_MESSAGE', payload: { role: 'system', content: 'Error sending message' } });
+      const systemErrorMessage: ChatMessage = {
+        id: crypto.randomUUID(), // Modern browsers
+        role: 'system',
+        content: 'Error sending message. Please try again.',
+        timestamp: new Date(), // Store as Date object
+      };
+      dispatch({ type: 'ADD_MESSAGE', payload: systemErrorMessage });
     }
   }, [sendMessage, dispatch]);
 

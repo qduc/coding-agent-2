@@ -2,7 +2,7 @@ import React from 'react';
 import { Configuration } from './types';
 import { Switch } from '../Common/Switch';
 import { Checkbox } from '../Common/Checkbox';
-import { ToolInfo } from '../../../shared/services/schemaAdapter';
+import { ToolInfo } from '../../../../shared/services/schemaAdapter';
 
 interface ToolSettingsProps {
   config: Configuration['tools'];
