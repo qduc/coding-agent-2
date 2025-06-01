@@ -1,4 +1,4 @@
-import { Message } from '../../services/llm';
+import { Message } from '../services/llm';
 
 /**
  * Interface for handling system output with formatting

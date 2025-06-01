@@ -17,7 +17,8 @@ export class CLIToolExecutionContext implements IToolExecutionContext {
     return {
       workingDirectory: this.workingDirectory,
       environment: this.environment,
-      permissions: this.permissions
+      permissions: this.permissions,
+      validateAccess: this.validateAccess.bind(this)
     };
   }
 
@@ -28,14 +29,21 @@ export class CLIToolExecutionContext implements IToolExecutionContext {
   }
   workingDirectory: string;
   environment: Record<string, unknown>;
-  maxFileSize: number;
-  timeout: number;
+  permissions: {
+    fileSystem: boolean;
+    network: boolean;
+    shell: boolean;
+  };
 
   constructor(options?: Partial<IToolExecutionContext>) {
     this.workingDirectory = options?.workingDirectory || process.cwd();
     this.environment = { ...process.env, ...options?.environment };
-    this.maxFileSize = options?.maxFileSize || 1024 * 1024 * 5; // 5MB default
-    this.timeout = options?.timeout || 30000; // 30s default
+    this.permissions = {
+      fileSystem: true,
+      network: true,
+      shell: true,
+      ...options?.permissions
+    };
   }
 
   async validatePath(filePath: string): Promise<boolean> {

@@ -1,11 +1,10 @@
 import { ISessionManager, Message } from '../../shared/interfaces/ISessionManager';
-import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs-extra';
 import path from 'path';
 
 export class CLISessionManager implements ISessionManager {
   async startSession(sessionId?: string): Promise<void> {
-    this.sessionId = sessionId || uuidv4();
+    this.sessionId = sessionId || crypto.randomUUID();
     this.persistencePath = path.join(
       path.dirname(this.persistencePath),
       `${this.sessionId}.json`
@@ -45,7 +44,7 @@ export class CLISessionManager implements ISessionManager {
   private persistencePath: string;
 
   constructor(persistenceDir?: string) {
-    this.sessionId = uuidv4();
+    this.sessionId = crypto.randomUUID();
     this.persistencePath = path.join(
       persistenceDir || path.join(process.cwd(), '.sessions'),
       `${this.sessionId}.json`
