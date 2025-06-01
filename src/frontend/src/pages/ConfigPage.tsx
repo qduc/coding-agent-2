@@ -16,7 +16,10 @@ export default function ConfigPage() {
         <ConfigPanel 
           onConfigChange={() => setHasChanges(true)}
           hasChanges={hasChanges}
-          onSave={() => setHasChanges(false)}
+          onSave={() => {
+            setHasChanges(false);
+            return Promise.resolve();
+          }}
         />
       </div>
     </MainLayout>
