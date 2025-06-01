@@ -1,14 +1,182 @@
-/**
- * REST API types and interfaces
- */
+import type { ProjectDiscoveryResult, ToolErrorCode, ToolSchema } from '../../shared/types';
+import type { LogLevel } from '../../shared/utils/logger';
 
+/**
+ * Core API Response Types
+ */
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
-  error?: string;
+  error?: ApiError;
+  timestamp: Date;
+  metadata?: {
+    page?: number;
+    pageSize?: number;
+    total?: number;
+  };
+}
+
+export interface ApiError {
+  code: string;
+  message: string;
+  details?: any;
+  timestamp: Date;
+  stack?: string;
+  validationErrors?: ValidationError[];
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+  code: string;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  metadata: {
+    page: number;
+    pageSize: number;
+    total: number;
+    hasNext: boolean;
+  };
+}
+
+export interface StreamingResponse<T = any> {
+  event: 'data' | 'error' | 'complete';
+  data?: T;
+  error?: ApiError;
+}
+
+/**
+ * Message Types
+ */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  timestamp: Date;
+  metadata?: {
+    model?: string;
+    tokens?: number;
+    tools?: ToolCall[];
+  };
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: any;
   timestamp: Date;
 }
 
+export interface ToolExecutionResult {
+  id: string;
+  toolCallId: string;
+  name: string;
+  output: any;
+  success: boolean;
+  error?: {
+    code: ToolErrorCode;
+    message: string;
+    details?: any;
+  };
+  timestamp: Date;
+  durationMs: number;
+}
+
+/**
+ * Session Management
+ */
+export interface WebSessionState {
+  id: string;
+  createdAt: Date;
+  lastActive: Date;
+  messages: ChatMessage[];
+  projectContext?: ProjectContext;
+  metadata?: {
+    ipAddress?: string;
+    userAgent?: string;
+    location?: string;
+  };
+}
+
+export interface SessionInfo {
+  id: string;
+  createdAt: Date;
+  lastActive: Date;
+  messageCount: number;
+  title?: string;
+  projectPath?: string;
+}
+
+export type ConversationHistory = ChatMessage[];
+
+/**
+ * Configuration Types
+ */
+export interface WebConfiguration {
+  llm: {
+    provider: 'openai' | 'anthropic' | 'gemini';
+    model: string;
+    apiKey?: string;
+    baseUrl?: string;
+    temperature?: number;
+    maxTokens?: number;
+  };
+  tools: {
+    enabled: boolean;
+    list: ToolConfig[];
+  };
+  logging: {
+    level: LogLevel;
+    persist: boolean;
+  };
+  features: {
+    streaming: boolean;
+    sessions: boolean;
+    fileAccess: boolean;
+  };
+}
+
+export interface ToolConfig {
+  name: string;
+  enabled: boolean;
+  permissions: {
+    fileSystem: boolean;
+    network: boolean;
+    shell: boolean;
+  };
+  schema: ToolSchema;
+}
+
+/**
+ * Project Types
+ */
+export interface ProjectContext {
+  discovery: ProjectDiscoveryResult;
+  fileTree: FileSystemNode[];
+  metadata: ProjectMetadata;
+}
+
+export interface FileSystemNode {
+  path: string;
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+  modified?: Date;
+  children?: FileSystemNode[];
+}
+
+export interface ProjectMetadata {
+  name: string;
+  version?: string;
+  description?: string;
+  mainFile?: string;
+  dependencies?: string[];
+}
+
+/**
+ * Health & Status Types
+ */
 export interface HealthCheckResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   version: string;
@@ -16,6 +184,7 @@ export interface HealthCheckResponse {
   services: {
     llm: 'connected' | 'disconnected' | 'error';
     database?: 'connected' | 'disconnected' | 'error';
+    fileSystem?: 'connected' | 'disconnected' | 'error';
   };
 }
 
@@ -26,12 +195,11 @@ export interface ConfigResponse {
     toolExecution: boolean;
     streaming: boolean;
     sessions: boolean;
+    fileAccess: boolean;
   };
-}
-
-export interface ErrorResponse {
-  error: string;
-  code: string;
-  timestamp: Date;
-  details?: any;
+  limits: {
+    maxMessageLength: number;
+    maxFileSize: number;
+    maxToolExecutionTime: number;
+  };
 }
