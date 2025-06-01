@@ -121,6 +121,43 @@ export class WebSessionManager implements ISessionManager {
   }
 
   /**
+   * Create a new session
+   */
+  createSession(): ChatSession {
+    const sessionId = uuidv4();
+    const newSession: ChatSession = {
+      id: sessionId,
+      messages: [],
+      createdAt: new Date(),
+      lastActivity: new Date()
+    };
+
+    this.sessions.set(sessionId, newSession);
+    return newSession;
+  }
+
+  /**
+   * End session by ID (overloaded version that takes sessionId)
+   * @param sessionId The ID of the session to end
+   */
+  terminateSession(sessionId: string): boolean {
+    return this.sessions.delete(sessionId);
+  }
+
+  /**
+   * Clear history for a session
+   */
+  clearHistory(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.messages = [];
+      session.lastActivity = new Date();
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Convert ChatMessage[] to Message[] format
    */
   private convertChatMessagesToMessages(chatMessages: ChatMessage[]): Message[] {

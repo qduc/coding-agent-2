@@ -70,6 +70,47 @@ export const ProjectMetadataSchema = z.object({
 /**
  * Common Validation Types
  */
-export type ValidationResult<T> = 
+export type ValidationResult<T> =
   | { success: true; data: T }
   | { success: false; errors: z.ZodIssue[] };
+
+/**
+ * Validation Helper Functions
+ */
+
+export const configSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  apiKey: z.string().optional(),
+  maxTokens: z.number().int().positive().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  features: z.object({
+    streaming: z.boolean().default(true),
+    sessions: z.boolean().default(true),
+    fileAccess: z.boolean().default(true),
+    toolExecution: z.boolean().default(true)
+  }).optional()
+});
+
+export const providerConfigSchema = z.object({
+  provider: z.enum(['openai', 'anthropic', 'local']),
+  model: z.string().min(1),
+  apiKey: z.string().min(1),
+  endpoint: z.string().url().optional()
+});
+
+export function validateConfig(data: unknown): ValidationResult<any> {
+  const result = configSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return { success: false, errors: result.error.issues };
+}
+
+export function validateProviderConfig(data: unknown): ValidationResult<any> {
+  const result = providerConfigSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return { success: false, errors: result.error.issues };
+}

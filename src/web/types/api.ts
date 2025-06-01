@@ -1,4 +1,5 @@
-import type { ProjectDiscoveryResult, ToolErrorCode, ToolSchema } from '../../shared/types';
+import type { ToolErrorCode, ToolSchema } from '../../shared/tools/types';
+import type { ProjectDiscoveryResult } from '../../shared/utils/projectDiscovery';
 import type { LogLevel } from '../../shared/utils/logger';
 
 /**
@@ -7,13 +8,18 @@ import type { LogLevel } from '../../shared/utils/logger';
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
-  error?: ApiError;
+  error?: ApiError | string;
   timestamp: Date;
   metadata?: {
     page?: number;
     pageSize?: number;
     total?: number;
   };
+}
+
+export interface ErrorResponse extends ApiResponse<never> {
+  success: false;
+  error: ApiError | string;
 }
 
 export interface ApiError {
@@ -108,6 +114,9 @@ export interface SessionInfo {
   projectPath?: string;
 }
 
+// Re-export the ChatSession type from websocket.ts
+export type { ChatSession } from './websocket';
+
 export type ConversationHistory = ChatMessage[];
 
 /**
@@ -158,6 +167,31 @@ export interface ToolConfig {
     shell: boolean;
   };
   schema: ToolSchema;
+}
+
+export interface ConfigValidationResult {
+  isValid: boolean;
+  errors?: ValidationError[];
+}
+
+export interface ConfigProviderSettings {
+  provider: string;
+  model: string;
+  apiKey?: string;
+  endpoint?: string;
+}
+
+export interface ConfigToolSettings {
+  enabled: boolean;
+  whitelist?: string[];
+  blacklist?: string[];
+}
+
+export interface ConfigFeatureFlags {
+  streaming: boolean;
+  sessions: boolean;
+  fileAccess: boolean;
+  toolExecution: boolean;
 }
 
 /**

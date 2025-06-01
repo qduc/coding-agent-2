@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { WebSessionManager } from '../implementations/WebSessionManager';
 import { ApiResponse, SessionInfo, ChatSession, ChatMessage, ValidationError } from '../types/api';
 import { validateRequest } from '../middleware/validation';
-import { rateLimit } from '../middleware/rateLimiter';
+import { generalRateLimit } from '../middleware/rateLimiter';
 import { paginate } from '../utils/pagination';
+import { z } from 'zod';
 
 const router = Router();
 const sessionManager = new WebSessionManager();
@@ -67,7 +68,7 @@ router.get('/api/sessions/:sessionId', validateRequest({ sessionId: 'string' }),
   try {
     const { sessionId } = req.params;
     const session = sessionManager.getSession(sessionId);
-    
+
     if (!session) {
       return res.status(404).json({
         success: false,
@@ -108,7 +109,7 @@ router.delete('/api/sessions/:sessionId', validateRequest({ sessionId: 'string' 
   try {
     const { sessionId } = req.params;
     const success = sessionManager.endSession(sessionId);
-    
+
     if (!success) {
       return res.status(404).json({
         success: false,
@@ -141,15 +142,15 @@ router.delete('/api/sessions/:sessionId', validateRequest({ sessionId: 'string' 
 });
 
 // History Management Endpoints
-router.get('/api/sessions/:sessionId/history', 
-  validateRequest({ sessionId: 'string' }), 
+router.get('/api/sessions/:sessionId/history',
+  validateRequest({ sessionId: 'string' }),
   paginate(),
   async (req, res) => {
     try {
       const { sessionId } = req.params;
       const { page = 1, pageSize = 20 } = req.query;
       const session = sessionManager.getSession(sessionId);
-      
+
       if (!session) {
         return res.status(404).json({
           success: false,
@@ -193,8 +194,8 @@ router.get('/api/sessions/:sessionId/history',
   }
 );
 
-router.post('/api/sessions/:sessionId/history', 
-  validateRequest({ 
+router.post('/api/sessions/:sessionId/history',
+  validateRequest({
     sessionId: 'string',
     content: 'string',
     role: ['user', 'assistant', 'system']
@@ -203,7 +204,7 @@ router.post('/api/sessions/:sessionId/history',
     try {
       const { sessionId } = req.params;
       const { content, role } = req.body;
-      
+
       const session = sessionManager.getSession(sessionId);
       if (!session) {
         return res.status(404).json({
@@ -245,13 +246,13 @@ router.post('/api/sessions/:sessionId/history',
   }
 );
 
-router.delete('/api/sessions/:sessionId/history', 
+router.delete('/api/sessions/:sessionId/history',
   validateRequest({ sessionId: 'string' }),
   async (req, res) => {
     try {
       const { sessionId } = req.params;
       const session = sessionManager.getSession(sessionId);
-      
+
       if (!session) {
         return res.status(404).json({
           success: false,
@@ -287,7 +288,7 @@ router.delete('/api/sessions/:sessionId/history',
 );
 
 router.get('/api/sessions/:sessionId/history/search',
-  validateRequest({ 
+  validateRequest({
     sessionId: 'string',
     query: 'string'
   }),
@@ -297,7 +298,7 @@ router.get('/api/sessions/:sessionId/history/search',
       const { sessionId, query } = req.params;
       const { page = 1, pageSize = 20 } = req.query;
       const session = sessionManager.getSession(sessionId);
-      
+
       if (!session) {
         return res.status(404).json({
           success: false,
@@ -310,7 +311,7 @@ router.get('/api/sessions/:sessionId/history/search',
         });
       }
 
-      const results = session.messages.filter(message => 
+      const results = session.messages.filter(message =>
         message.content.toLowerCase().includes(query.toLowerCase())
       );
       const total = results.length;

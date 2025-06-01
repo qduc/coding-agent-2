@@ -12,13 +12,13 @@ const paginationSchema = z.object({
 
 // Validation middleware factory
 export const validate = (schema: z.ZodSchema, target: 'body' | 'query' | 'params' = 'body') => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       req[target] = await schema.parseAsync(req[target]);
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map(err => ({
+        const errors = (error as ZodError).errors.map((err: any) => ({
           field: err.path.join('.'),
           message: err.message,
         }));
@@ -35,17 +35,20 @@ export const validate = (schema: z.ZodSchema, target: 'body' | 'query' | 'params
         };
 
         logger.warn('Validation failed', { errors });
-        return res.status(400).json(response);
+        res.status(400).json(response);
+        return;
       }
       next(error);
     }
   };
 };
 
+export const validateRequest = validate;
+
 // Specific validators
 export const validateSessionId = (req: Request, res: Response, next: NextFunction) => {
   const sessionId = req.headers['x-session-id'] || req.query.sessionId;
-  
+
   try {
     if (sessionId) {
       sessionIdSchema.parse(sessionId);
@@ -61,7 +64,7 @@ export const validateSessionId = (req: Request, res: Response, next: NextFunctio
       },
       timestamp: new Date(),
     };
-    res.status(400).json(response);
+    return res.status(400).json(response);
   }
 };
 

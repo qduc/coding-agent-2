@@ -1,5 +1,4 @@
 import { Helmet } from 'react-helmet-async';
-import MainLayout from '../components/Layout/MainLayout';
 import ChatInterface from '../components/Chat/ChatInterface';
 import { useChat } from '../hooks/useChat';
 
@@ -7,7 +6,7 @@ export default function ChatPage() {
   const { messages, sendMessage, isStreaming } = useChat();
 
   return (
-    <MainLayout>
+    <>
       <Helmet>
         <title>Chat | DevAssistant</title>
         <meta name="description" content="Interactive chat interface with AI assistant" />
@@ -21,6 +20,6 @@ export default function ChatPage() {
           // and are optional in ChatInterfaceProps, so no explicit passing needed if not available.
         />
       </div>
-    </MainLayout>
+    </>
   );
 }

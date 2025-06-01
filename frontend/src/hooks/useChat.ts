@@ -6,7 +6,7 @@ import { ChatMessage } from '../types/chat'; // Ensure ChatMessage type is impor
 
 export const useChat = () => {
   const { state, dispatch } = useChatContext();
-  const { sendMessage } = useWebSocket(process.env.REACT_APP_WS_URL || ''); // Ensure this env var is set or provide a default
+  const { sendMessage } = useWebSocket(import.meta.env.VITE_WS_URL || 'ws://localhost:3001'); // Using Vite environment variables
 
   const sendChatMessage = useCallback(async (messageContent: string) => {
     dispatch({ type: 'SET_STREAMING', payload: true });

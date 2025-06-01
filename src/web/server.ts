@@ -9,17 +9,7 @@ import path from 'path';
 import { corsMiddleware, generalLimiter, errorHandler, notFoundHandler } from './middleware';
 
 // Import routes
-import { 
-  healthRoutes,
-  configRoutes,
-  apiRoutes,
-  authRoutes,
-  toolsRoutes,
-  projectRoutes,
-  chatRoutes,
-  fileRoutes,
-  userRoutes
-} from './routes';
+import mainRouter from './routes'; // Added
 
 // Import additional middleware
 import { requestLogger, responseLogger } from './middleware/logging';
@@ -85,7 +75,7 @@ export class WebServer {
 
     // Request logging
     this.app.use(requestLogger);
-    
+
     // CORS
     this.app.use(corsMiddleware);
 
@@ -98,7 +88,7 @@ export class WebServer {
 
     // Rate limiting
     this.app.use('/api', generalLimiter);
-    this.app.use('/api/tools', validateApiKey); // Additional auth for tools API
+    // this.app.use('/api/tools', validateApiKey); // Additional auth for tools API // Removed: To be applied within the specific tool routes
 
     // Response logging
     this.app.use(responseLogger);
@@ -114,17 +104,19 @@ export class WebServer {
    */
   private setupRoutes(): void {
     // Health check routes (no /api prefix for easier load balancer access)
-    this.app.use('/', healthRoutes);
+    // this.app.use('/', healthRoutes); // Removed
 
     // API routes
-    this.app.use('/api', apiRoutes);
-    this.app.use('/api/config', configRoutes);
-    this.app.use('/api/auth', authRoutes);
-    this.app.use('/api/tools', toolsRoutes);
-    this.app.use('/api/projects', projectRoutes);
-    this.app.use('/api/chat', chatRoutes);
-    this.app.use('/api/files', fileRoutes);
-    this.app.use('/api/users', userRoutes);
+    // this.app.use('/api', apiRoutes); // Removed
+    // this.app.use('/api/config', configRoutes); // Removed
+    // this.app.use('/api/auth', authRoutes); // Removed
+    // this.app.use('/api/tools', toolsRoutes); // Removed
+    // this.app.use('/api/project', projectRoutes); // Removed
+    // this.app.use('/api/chat', chatRoutes); // Removed
+    // this.app.use('/api/files', fileRoutes); // Removed
+    // this.app.use('/api/user', userRoutes); // Removed
+
+    this.app.use('/', mainRouter); // Added
 
     // Serve React app for all other routes in production
     if (process.env.NODE_ENV === 'production') {

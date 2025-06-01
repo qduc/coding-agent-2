@@ -1,5 +1,5 @@
 import { lazy, Suspense, ReactNode } from 'react';
-import { Routes, Route, BrowserRouter } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { HelmetProvider } from 'react-helmet-async';
 
@@ -39,7 +39,6 @@ function GlobalProviders({ children }: GlobalProvidersProps) {
 function App() {
   return (
     <HelmetProvider>
-      <BrowserRouter> {/* BrowserRouter should be high in the component tree */}
         <AppProvider>
           <ConfigProvider> {/* For useTheme and other config-dependent hooks */}
             <ChatProvider>
@@ -78,7 +77,6 @@ function App() {
             </ChatProvider>
           </ConfigProvider>
         </AppProvider>
-      </BrowserRouter>
     </HelmetProvider>
   );
 }

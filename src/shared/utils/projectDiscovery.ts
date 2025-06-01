@@ -50,9 +50,15 @@ export class ProjectDiscovery {
 
   /**
    * Run complete project discovery and return structured results
+   * @param forceRefresh Force a refresh of the discovery instead of using cached data
    */
-  async discover(): Promise<ProjectDiscoveryResult> {
+  async discover(forceRefresh: boolean = false): Promise<ProjectDiscoveryResult> {
     const executedAt = new Date();
+
+    // Clear cache if force refresh is set
+    if (forceRefresh) {
+      this.logger.debug('Forcing refresh of project discovery');
+    }
 
     // If the working directory does not exist, return minimal info
     if (!fs.existsSync(this.workingDirectory)) {
@@ -435,5 +441,126 @@ Tech Stack:
 ${discovery.techStack}
 
 Entry Points: ${discovery.entryPoints.join(', ') || 'None found'}`;
+  }
+
+  /**
+   * Analyze project structure (alias for discover with force refresh option)
+   */
+  async analyze(forceRefresh: boolean = false): Promise<ProjectDiscoveryResult> {
+    return this.discover(forceRefresh);
+  }
+
+  /**
+   * Generate file tree structure
+   */
+  async getFileTree(maxDepth: number = 3): Promise<any[]> {
+    try {
+      const baseDir = this.workingDirectory;
+      return this.buildFileTree(baseDir, '', 0, maxDepth);
+    } catch (error) {
+      this.logger.error('Error generating file tree', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Search for files matching pattern
+   */
+  async searchFiles(pattern: string): Promise<string[]> {
+    try {
+      const baseDir = this.workingDirectory;
+      const allFiles = await this.listFilesRecursively(baseDir);
+
+      // Simple glob pattern matching
+      return allFiles.filter(file => {
+        const relativePath = path.relative(baseDir, file);
+        return this.matchesGlobPattern(relativePath, pattern);
+      });
+    } catch (error) {
+      this.logger.error('Error searching files', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Detect technologies used in project
+   */
+  async detectTechnologies(): Promise<string> {
+    try {
+      return this.detectTechStackWithNodeJS();
+    } catch (error) {
+      this.logger.error('Error detecting technologies', error as Error);
+      return '';
+    }
+  }
+
+  /**
+   * Build file tree structure
+   */
+  private buildFileTree(baseDir: string, relativePath: string, currentDepth: number, maxDepth: number): any[] {
+    if (currentDepth > maxDepth) return [];
+
+    const currentPath = path.join(baseDir, relativePath);
+    const files = fs.readdirSync(currentPath);
+    const result = [];
+
+    for (const file of files) {
+      // Skip hidden files
+      if (file.startsWith('.')) continue;
+
+      const filePath = path.join(currentPath, file);
+      const fileRelativePath = path.join(relativePath, file);
+      const stats = fs.statSync(filePath);
+
+      if (stats.isDirectory()) {
+        const children = currentDepth < maxDepth
+          ? this.buildFileTree(baseDir, fileRelativePath, currentDepth + 1, maxDepth)
+          : [];
+
+        result.push({
+          path: fileRelativePath,
+          name: file,
+          type: 'directory',
+          children: children
+        });
+      } else {
+        result.push({
+          path: fileRelativePath,
+          name: file,
+          type: 'file',
+          size: stats.size
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * List all files recursively
+   */
+  private async listFilesRecursively(dir: string): Promise<string[]> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const files = await Promise.all(
+      entries.map(entry => {
+        const res = path.resolve(dir, entry.name);
+        return entry.isDirectory() ? this.listFilesRecursively(res) : res;
+      })
+    );
+    return Array.prototype.concat(...files);
+  }
+
+  /**
+   * Simple glob pattern matching
+   */
+  private matchesGlobPattern(filePath: string, pattern: string): boolean {
+    // Convert glob to regex
+    const regexPattern = pattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '.*')
+      .replace(/\?/g, '.');
+
+    const regex = new RegExp(`^${regexPattern}$`, 'i');
+    return regex.test(filePath);
   }
 }

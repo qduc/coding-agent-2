@@ -3,13 +3,45 @@ import { rateLimit } from 'express-rate-limit';
 import { ToolError, ToolErrorCode } from '../../shared/tools/types';
 import { ApiResponse, ApiError } from '../types/api';
 import { validateRequest } from '../middleware/validation';
-import { getTools, getToolByName, getToolsByCategory } from '../../shared/tools/registry';
-import { ToolExecutionContext } from '../../shared/tools/types';
+import { tools } from '../../shared/tools';
+import { IToolExecutionContext } from '../../shared/interfaces/IToolExecutionContext';
 import { WebToolExecutionContext } from '../implementations/WebToolExecutionContext';
 import { Logger } from '../../shared/utils/logger';
 
 const router = Router();
 const logger = Logger.getInstance();
+
+// Simple registry functions
+const getTools = () => {
+  return Object.entries(tools).map(([name, ToolClass]) => {
+    const instance = new ToolClass();
+    return {
+      name: instance.name,
+      description: instance.description,
+      schema: instance.schema
+    };
+  });
+};
+
+const getToolByName = (name: string) => {
+  const ToolClass = tools[name];
+  if (!ToolClass) return null;
+  const instance = new ToolClass();
+  return {
+    name: instance.name,
+    description: instance.description,
+    schema: instance.schema
+  };
+};
+
+const getToolsByCategory = () => {
+  const toolList = getTools();
+  return {
+    'file-system': toolList.filter(t => ['ls', 'read', 'write', 'glob'].includes(t.name)),
+    'search': toolList.filter(t => ['ripgrep'].includes(t.name)),
+    'execution': toolList.filter(t => ['bash'].includes(t.name))
+  };
+};
 
 // Rate limiting for tool execution
 const executionLimiter = rateLimit({
@@ -26,216 +58,188 @@ const executionLimiter = rateLimit({
  */
 router.get('/', async (req, res) => {
   try {
-    const tools = getTools();
-    const response: ApiResponse = {
+    const toolList = getTools();
+
+    const response: ApiResponse<any[]> = {
       success: true,
-      data: tools.map(tool => ({
+      data: toolList.map(tool => ({
         name: tool.name,
         description: tool.description,
-        category: tool.category,
         schema: tool.schema
       })),
       timestamp: new Date()
     };
+
     res.json(response);
   } catch (error) {
-    logger.error('Failed to list tools', { error });
-    const response: ApiResponse = {
+    logger.error('Failed to list tools', error);
+
+    const response: ApiResponse<never> = {
       success: false,
-      error: {
-        code: 'TOOLS_LIST_ERROR',
-        message: 'Failed to retrieve tools list',
-        timestamp: new Date()
-      },
+      error: 'Failed to retrieve tools list',
       timestamp: new Date()
     };
+
     res.status(500).json(response);
   }
 });
 
 /**
  * GET /api/tools/:toolName
- * Get specific tool information
+ * Get detailed information about a specific tool
  */
-router.get('/:toolName', validateRequest, async (req, res) => {
+router.get('/:toolName', async (req, res) => {
   try {
-    const tool = getToolByName(req.params.toolName);
+    const { toolName } = req.params;
+    const tool = getToolByName(toolName);
+
     if (!tool) {
-      const response: ApiResponse = {
+      const response: ApiResponse<never> = {
         success: false,
-        error: {
-          code: 'TOOL_NOT_FOUND',
-          message: `Tool '${req.params.toolName}' not found`,
-          timestamp: new Date()
-        },
+        error: `Tool '${toolName}' not found`,
         timestamp: new Date()
       };
+
       return res.status(404).json(response);
     }
 
-    const response: ApiResponse = {
+    const response: ApiResponse<any> = {
       success: true,
       data: {
         name: tool.name,
         description: tool.description,
-        category: tool.category,
-        schema: tool.schema,
-        examples: tool.examples || []
+        schema: tool.schema
       },
       timestamp: new Date()
     };
+
     res.json(response);
   } catch (error) {
-    logger.error('Failed to get tool details', { error, toolName: req.params.toolName });
-    const response: ApiResponse = {
+    logger.error('Failed to get tool details', error);
+
+    const response: ApiResponse<never> = {
       success: false,
-      error: {
-        code: 'TOOL_DETAILS_ERROR',
-        message: 'Failed to retrieve tool details',
-        timestamp: new Date()
-      },
+      error: 'Failed to retrieve tool details',
       timestamp: new Date()
     };
+
     res.status(500).json(response);
   }
 });
 
 /**
- * GET /api/tools/categories
- * Get tools grouped by category
+ * GET /api/tools/category/:category
+ * Get tools by category
  */
-router.get('/categories', async (req, res) => {
+router.get('/category/:category', async (req, res) => {
   try {
+    const { category } = req.params;
     const categorizedTools = getToolsByCategory();
-    const response: ApiResponse = {
+
+    if (!(category in categorizedTools)) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: `Category '${category}' not found`,
+        timestamp: new Date()
+      };
+
+      return res.status(404).json(response);
+    }
+
+    const response: ApiResponse<any[]> = {
       success: true,
-      data: categorizedTools,
+      data: categorizedTools[category as keyof typeof categorizedTools],
       timestamp: new Date()
     };
+
     res.json(response);
   } catch (error) {
-    logger.error('Failed to get tools by category', { error });
-    const response: ApiResponse = {
+    logger.error('Failed to get tools by category', error);
+
+    const response: ApiResponse<never> = {
       success: false,
-      error: {
-        code: 'TOOLS_CATEGORY_ERROR',
-        message: 'Failed to retrieve tools by category',
-        timestamp: new Date()
-      },
+      error: 'Failed to retrieve tools by category',
       timestamp: new Date()
     };
+
     res.status(500).json(response);
   }
 });
 
 /**
  * POST /api/tools/execute
- * Execute a tool with validated parameters
+ * Execute a tool with given parameters
  */
-router.post('/execute', executionLimiter, validateRequest, async (req, res) => {
-  const { toolName, parameters, context } = req.body;
-
+router.post('/execute', executionLimiter, async (req, res) => {
   try {
-    const tool = getToolByName(toolName);
-    if (!tool) {
-      const response: ApiResponse = {
+    const { toolName, parameters, context } = req.body;
+
+    if (!toolName || !parameters) {
+      const response: ApiResponse<never> = {
         success: false,
-        error: {
-          code: 'TOOL_NOT_FOUND',
-          message: `Tool '${toolName}' not found`,
-          timestamp: new Date()
-        },
+        error: 'Tool name and parameters are required',
         timestamp: new Date()
       };
+
+      return res.status(400).json(response);
+    }
+
+    const ToolClass = tools[toolName];
+    if (!ToolClass) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: `Tool '${toolName}' not found`,
+        timestamp: new Date()
+      };
+
       return res.status(404).json(response);
     }
 
-    // Create execution context
+    // Create tool instance and execution context
+    const tool = new ToolClass();
     const executionContext = new WebToolExecutionContext({
-      workingDirectory: context?.workingDirectory || process.cwd(),
-      environment: context?.environment || {},
-      permissions: context?.permissions || {
-        fileSystem: true,
-        network: true,
-        shell: false
-      }
+      ...context
     });
 
-    // Execute the tool
     const result = await tool.execute(parameters, executionContext);
 
-    const response: ApiResponse = {
+    const response: ApiResponse<any> = {
       success: true,
       data: {
-        tool: toolName,
+        toolName,
+        parameters,
         result,
-        executionContext: {
-          workingDirectory: executionContext.workingDirectory,
-          environment: Object.keys(executionContext.environment)
-        }
+        executedAt: new Date()
       },
       timestamp: new Date()
     };
+
     res.json(response);
-
-    logger.info('Tool executed successfully', {
-      tool: toolName,
-      parameters: Object.keys(parameters),
-      executionContext: response.data.executionContext
-    });
   } catch (error) {
-    let apiError: ApiError;
-    let statusCode = 500;
-
     if (error instanceof ToolError) {
-      statusCode = mapToolErrorToStatusCode(error.code);
-      apiError = {
-        code: error.code,
-        message: error.message,
-        details: error.suggestions,
+      const response: ApiResponse<never> = {
+        success: false,
+        error: {
+          message: error.message,
+          code: error.code,
+          suggestions: error.suggestions
+        } as ApiError,
         timestamp: new Date()
       };
-    } else {
-      apiError = {
-        code: 'TOOL_EXECUTION_ERROR',
-        message: 'An unexpected error occurred during tool execution',
-        timestamp: new Date(),
-        stack: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
-      };
+
+      return res.status(400).json(response);
     }
 
-    logger.error('Tool execution failed', {
-      tool: toolName,
-      error: apiError,
-      parameters: req.body.parameters
-    });
+    logger.error('Failed to execute tool', error);
 
-    const response: ApiResponse = {
+    const response: ApiResponse<never> = {
       success: false,
-      error: apiError,
+      error: 'Tool execution failed',
       timestamp: new Date()
     };
-    res.status(statusCode).json(response);
+
+    res.status(500).json(response);
   }
 });
-
-function mapToolErrorToStatusCode(code: ToolErrorCode): number {
-  switch (code) {
-    case 'FILE_NOT_FOUND':
-    case 'INVALID_PATH':
-      return 404;
-    case 'PERMISSION_DENIED':
-      return 403;
-    case 'INVALID_PARAMS':
-    case 'VALIDATION_ERROR':
-      return 400;
-    case 'FILE_TOO_LARGE':
-      return 413;
-    case 'OPERATION_TIMEOUT':
-      return 408;
-    default:
-      return 500;
-  }
-}
 
 export default router;

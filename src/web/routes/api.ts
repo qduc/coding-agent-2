@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { ApiResponse, StreamingResponse } from '../types/api';
-import { 
-  generalLimiter, 
-  chatLimiter, 
-  validateChatMessage, 
-  validateSessionId 
+import {
+  generalLimiter,
+  chatLimiter,
+  validateChatMessage,
+  validateSessionId
 } from '../middleware';
 import { WebSessionManager } from '../implementations/WebSessionManager';
-import { Agent } from '../../shared/agent/Agent';
+import { Agent } from '../../shared/core/agent';
 import { Logger } from '../../shared/utils/logger';
 
 const router = Router();
@@ -68,7 +68,7 @@ router.post('/chat',
     try {
       const { content } = req.body;
       const sessionId = req.headers['x-session-id'] as string;
-      
+
       const session = sessionManager.getOrCreateSession(sessionId);
       const response = await agent.processMessage(content, session);
 
@@ -102,7 +102,7 @@ router.post('/chat/stream',
     try {
       const { content } = req.body;
       const sessionId = req.headers['x-session-id'] as string;
-      
+
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
