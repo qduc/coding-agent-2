@@ -59,7 +59,7 @@ router.post('/api/sessions', generalLimiter, async (req: Request, res: Response)
 
 const sessionIdParamsSchema = z.object({ sessionId: z.string().uuid() });
 
-router.get('/api/sessions/:sessionId', generalLimiter, validateRequest(sessionIdParamsSchema), async (req: Request, res: Response): Promise<void> => {
+router.get('/api/sessions/:sessionId', generalLimiter, validateRequest({ params: sessionIdParamsSchema }), async (req: Request, res: Response): Promise<void> => {
   try {
     // Assuming validateRequest populates req.params correctly after schema validation
     const { sessionId } = req.params as z.infer<typeof sessionIdParamsSchema>;
@@ -92,7 +92,7 @@ router.get('/api/sessions/:sessionId', generalLimiter, validateRequest(sessionId
   }
 });
 
-router.delete('/api/sessions/:sessionId', generalLimiter, validateRequest(sessionIdParamsSchema), async (req: Request, res: Response): Promise<void> => {
+router.delete('/api/sessions/:sessionId', generalLimiter, validateRequest({ params: sessionIdParamsSchema }), async (req: Request, res: Response): Promise<void> => {
   try {
     // Assuming validateRequest populates req.params correctly
     const { sessionId } = req.params as z.infer<typeof sessionIdParamsSchema>;
@@ -208,7 +208,7 @@ router.post('/api/sessions/:sessionId/history',
 
 router.delete('/api/sessions/:sessionId/history',
   generalLimiter,
-  validateRequest(historyParamsSchema), // Changed as params is the only key
+  validateRequest({ params: historyParamsSchema }),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { sessionId } = req.params as z.infer<typeof historyParamsSchema>; // Assuming Zod populates req.params

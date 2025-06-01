@@ -70,19 +70,7 @@ router.get('/status', healthLimiter, async (req: Request, res: Response) => {
       version: process.env.npm_package_version || '0.1.0',
       uptime: process.uptime(),
       // timestamp: new Date(), // Removed: timestamp is part of ApiResponse, not HealthCheckResponse data
-      metrics: {
-        memory: {
-          total: os.totalmem(),
-          free: os.freemem(),
-          used: process.memoryUsage().heapUsed,
-          rss: process.memoryUsage().rss
-        },
-        cpu: {
-          count: os.cpus().length,
-          load: os.loadavg(),
-          // usage: process.cpuUsage() // cpuUsage() returns { user: number, system: number }
-        }
-      } as any, // Cast to any because 'metrics' is not in HealthCheckResponse
+      // metrics removed as it's not part of HealthCheckResponse
       services: {
         llm: llmInitialized ? 'connected' : 'disconnected',
         fileSystem: 'connected', // Changed from 'available'

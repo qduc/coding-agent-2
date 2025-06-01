@@ -56,7 +56,7 @@ router.get('/', generalLimiter, async (req: Request, res: Response) => {
         logUsage: currentConfig.logToolUsage || false,
       },
       logging: {
-        level: (currentConfig.logLevel || 'info') as LogLevel,
+        level: (currentConfig.logLevel || 'info') as unknown as LogLevel,
         persist: currentConfig.enableFileLogging || false,
         maxLogSize: 0, // Placeholder, needs to come from config if available
         maxLogFiles: 0 // Placeholder
@@ -197,7 +197,7 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
         logUsage: newConfig.logToolUsage || false,
       },
       logging: {
-        level: (newConfig.logLevel || 'info') as LogLevel,
+        level: (newConfig.logLevel || 'info') as unknown as LogLevel,
         persist: newConfig.enableFileLogging || false,
         maxLogSize: 0,
         maxLogFiles: 0
@@ -277,7 +277,7 @@ router.post('/validate', generalLimiter, async (req: Request, res: Response) => 
     const response: ApiResponse<ConfigValidationResult> = {
       success: true,
       data: {
-        valid: validation.success,
+        isValid: validation.success,
         errors: validation.success ? undefined : mapZodIssuesToValidationErrors(validation.errors),
         warnings: []
       },

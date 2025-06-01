@@ -203,8 +203,8 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
 
     // Create tool instance and execution context
     const toolInstance = new ToolClass();
-    // Cast context to Partial<IToolExecutionContext> for type safety
-    const executionContext = new WebToolExecutionContext(context as Partial<IToolExecutionContext> || {});
+    // context from req.body is expected to be Partial<IToolExecutionContext> or undefined/null
+    const executionContext = new WebToolExecutionContext(context ?? {});
 
     const result = await toolInstance.execute(parameters, executionContext);
     

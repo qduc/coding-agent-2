@@ -152,10 +152,10 @@ router.get('/context', async (req, res) => {
 
 router.get('/technologies', async (req, res) => {
   try {
-    const techStack = await discovery.detectTechnologies();
+    const techStack: string[] = await discovery.detectTechnologies();
     const response: ApiResponse<string[]> = {
       success: true,
-      data: techStack, // techStack is already string[]
+      data: techStack,
       timestamp: new Date(),
     };
     res.json(response);
