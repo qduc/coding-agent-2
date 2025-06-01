@@ -9,7 +9,7 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
 }
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, variant = 'primary', size = 'md', error = false, ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', error = false, options, ...props }, ref) => {
     return (
       <select
         ref={ref}

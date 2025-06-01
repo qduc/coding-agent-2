@@ -5,10 +5,11 @@ export interface SwitchProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
   variant?: 'primary' | 'secondary';
   size?: 'sm' | 'md' | 'lg';
   onChange?: (checked: boolean) => void;
+  label?: string;
 }
 
 const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
-  ({ className, variant = 'primary', size = 'md', ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', label, ...props }, ref) => {
     return (
       <label className={cn('relative inline-flex items-center cursor-pointer', className)}>
         <input 
@@ -32,6 +33,7 @@ const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
             'bg-gray-200 peer-checked:bg-gray-500 peer-focus:ring-gray-300': variant === 'secondary',
           }
         )} />
+        {label && <span className="ml-2 text-sm font-medium text-gray-900">{label}</span>}
       </label>
     );
   }

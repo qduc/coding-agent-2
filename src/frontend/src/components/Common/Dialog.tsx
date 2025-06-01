@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { cn } from '../../utils/cn';
+import { Button, ButtonVariant } from './Button';
 
 export interface DialogProps {
   isOpen: boolean;
@@ -9,11 +10,16 @@ export interface DialogProps {
   children: React.ReactNode;
   className?: string;
   overlayClassName?: string;
-  actions?: React.ReactNode;
+  actions?: Array<{
+    label: string;
+    onClick: () => void;
+    variant?: ButtonVariant;
+    disabled?: boolean;
+  }>;
 }
 
 export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(
-  ({ isOpen, onClose, title, children, className, overlayClassName }, ref) => {
+  ({ isOpen, onClose, title, children, className, overlayClassName, actions }, ref) => {
     const dialogRef = useRef<HTMLDivElement>(null);
     
     useEffect(() => {
@@ -65,9 +71,18 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(
           <div className="mb-6">
             {children}
           </div>
-          {actions && (
+          {actions && actions.length > 0 && (
             <div className="flex justify-end gap-3">
-              {actions}
+              {actions.map((action, index) => (
+                <Button
+                  key={index}
+                  onClick={action.onClick}
+                  variant={action.variant || 'primary'}
+                  disabled={action.disabled}
+                >
+                  {action.label}
+                </Button>
+              ))}
             </div>
           )}
         </div>

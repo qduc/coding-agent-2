@@ -10,7 +10,7 @@ export interface ErrorMessageProps {
 }
 
 export const ErrorMessage = React.forwardRef<HTMLDivElement, ErrorMessageProps>(
-  ({ message, className, variant = 'primary' }, ref) => {
+  ({ message, errors, className, variant = 'primary', id }, ref) => {
     return (
       <div
         ref={ref}
