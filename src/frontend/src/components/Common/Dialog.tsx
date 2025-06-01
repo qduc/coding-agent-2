@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { cn } from '../../utils/cn';
-import { Button, ButtonVariant } from './Button';
+import { Button } from './Button';
 
 export interface DialogProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ export interface DialogProps {
   actions?: Array<{
     label: string;
     onClick: () => void;
-    variant?: ButtonVariant;
+    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'link';
     disabled?: boolean;
   }>;
 }
