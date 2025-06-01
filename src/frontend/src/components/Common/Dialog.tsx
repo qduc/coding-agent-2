@@ -9,6 +9,7 @@ export interface DialogProps {
   children: React.ReactNode;
   className?: string;
   overlayClassName?: string;
+  actions?: React.ReactNode;
 }
 
 export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(
@@ -61,7 +62,14 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(
           {title && (
             <h2 className="text-xl font-bold mb-4">{title}</h2>
           )}
-          {children}
+          <div className="mb-6">
+            {children}
+          </div>
+          {actions && (
+            <div className="flex justify-end gap-3">
+              {actions}
+            </div>
+          )}
         </div>
       </div>,
       document.body

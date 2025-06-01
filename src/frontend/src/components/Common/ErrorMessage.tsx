@@ -2,9 +2,11 @@ import React from 'react';
 import { cn } from '../../utils/cn';
 
 export interface ErrorMessageProps {
-  message: string;
+  message?: string;
+  errors?: string[];
   className?: string;
   variant?: 'primary' | 'secondary';
+  id?: string;
 }
 
 export const ErrorMessage = React.forwardRef<HTMLDivElement, ErrorMessageProps>(
@@ -12,6 +14,7 @@ export const ErrorMessage = React.forwardRef<HTMLDivElement, ErrorMessageProps>(
     return (
       <div
         ref={ref}
+        id={id}
         className={cn(
           'text-sm font-medium',
           {
@@ -22,6 +25,9 @@ export const ErrorMessage = React.forwardRef<HTMLDivElement, ErrorMessageProps>(
         )}
       >
         {message}
+        {errors && errors.map((error, index) => (
+          <div key={index}>{error}</div>
+        ))}
       </div>
     );
   }

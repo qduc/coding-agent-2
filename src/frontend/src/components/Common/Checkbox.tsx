@@ -1,9 +1,10 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
 
-export interface CheckboxProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'size'> {
   variant?: 'primary' | 'secondary';
   size?: 'sm' | 'md' | 'lg';
+  onChange?: (checked: boolean) => void;
 }
 
 const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
@@ -24,6 +25,11 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
           className
         )}
         {...props}
+        onChange={e => {
+          if (props.onChange) {
+            props.onChange(e.target.checked);
+          }
+        }}
       />
     );
   }

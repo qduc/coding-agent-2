@@ -1,10 +1,11 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
 
-export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   variant?: 'primary' | 'secondary' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   error?: boolean;
+  options?: Array<{ value: string; label: string }>;
 }
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
@@ -28,7 +29,15 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           className
         )}
         {...props}
-      />
+      >
+        {options
+          ? options.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))
+          : props.children}
+      </select>
     );
   }
 );

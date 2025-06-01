@@ -1,9 +1,10 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
 
-export interface SwitchProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface SwitchProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'size'> {
   variant?: 'primary' | 'secondary';
   size?: 'sm' | 'md' | 'lg';
+  onChange?: (checked: boolean) => void;
 }
 
 const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
@@ -14,7 +15,12 @@ const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
           type="checkbox" 
           ref={ref}
           className="sr-only peer" 
-          {...props} 
+          {...props}
+          onChange={e => {
+            if (props.onChange) {
+              props.onChange(e.target.checked);
+            }
+          }}
         />
         <div className={cn(
           "peer rounded-full after:content-[''] after:absolute after:rounded-full after:transition-all",
