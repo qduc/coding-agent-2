@@ -8,13 +8,13 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 # Copy frontend package files
-COPY src/frontend/package*.json ./
+COPY frontend/package*.json ./
 
 # Install dependencies
 RUN npm ci
 
 # Copy frontend source
-COPY src/frontend/ ./
+COPY frontend/ ./
 
 # Build the frontend
 RUN npm run build

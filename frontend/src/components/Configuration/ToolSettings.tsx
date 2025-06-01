@@ -2,7 +2,10 @@ import React from 'react';
 import { Configuration } from './types';
 import { Switch } from '../Common/Switch';
 import { Checkbox } from '../Common/Checkbox';
-import { ToolInfo } from '../../../../shared/services/schemaAdapter';
+interface ToolInfo {
+  name: string;
+  description: string;
+}
 
 interface ToolSettingsProps {
   config: Configuration['tools'];
@@ -25,7 +28,7 @@ const ToolSettings: React.FC<ToolSettingsProps> = ({
     const newEnabled = config.enabled.includes(toolName)
       ? config.enabled.filter(name => name !== toolName)
       : [...config.enabled, toolName];
-    
+
     onChange({
       ...config,
       enabled: newEnabled,
@@ -54,13 +57,13 @@ const ToolSettings: React.FC<ToolSettingsProps> = ({
       <div className="flex justify-between items-center">
         <h3 className="font-medium">Enabled Tools</h3>
         <div className="flex gap-2">
-          <button 
+          <button
             className="text-sm text-primary"
             onClick={() => toggleAllTools(true)}
           >
             Enable All
           </button>
-          <button 
+          <button
             className="text-sm text-primary"
             onClick={() => toggleAllTools(false)}
           >
