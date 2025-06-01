@@ -1,15 +1,12 @@
 export interface FileSystemState {
-    files: Array<{
-        name: string;
-        path: string;
-        content: string;
-        lastModified: Date;
-    }>;
+    fileTree: any[];
     currentFile: string | null;
+    currentDirectory: string | null;
+    isFileOperationInProgress: boolean;
 }
 
 export type FileSystemAction =
-    | { type: 'ADD_FILE'; payload: { name: string; path: string; content: string } }
-    | { type: 'UPDATE_FILE'; payload: { path: string; content: string } }
-    | { type: 'DELETE_FILE'; payload: string }
-    | { type: 'SET_CURRENT_FILE'; payload: string | null };
+    | { type: 'SET_FILE_TREE'; payload: any[] }
+    | { type: 'SET_CURRENT_FILE'; payload: string | null }
+    | { type: 'SET_CURRENT_DIRECTORY'; payload: string | null }
+    | { type: 'SET_FILE_OPERATION'; payload: boolean };

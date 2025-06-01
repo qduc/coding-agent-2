@@ -1,14 +1,20 @@
+export interface ChatMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string;
+    timestamp: Date;
+}
+
 export interface ChatState {
-    messages: Array<{
-        id: string;
-        content: string;
-        sender: 'user' | 'bot';
-        timestamp: Date;
-    }>;
-    currentMessage: string;
+    messages: ChatMessage[];
+    isStreaming: boolean;
+    activeTool: any;
+    sessionId: string | null;
 }
 
 export type ChatAction =
-    | { type: 'ADD_MESSAGE'; payload: { content: string; sender: 'user' | 'bot' } }
-    | { type: 'UPDATE_CURRENT_MESSAGE'; payload: string }
-    | { type: 'CLEAR_MESSAGES' };
+    | { type: 'ADD_MESSAGE'; payload: ChatMessage }
+    | { type: 'SET_STREAMING'; payload: boolean }
+    | { type: 'SET_ACTIVE_TOOL'; payload: any }
+    | { type: 'SET_SESSION'; payload: string | null }
+    | { type: 'CLEAR_CHAT' };
