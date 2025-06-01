@@ -9,7 +9,7 @@ import {
   ConfigFeatureFlags,
   ApiError, // Added ApiError
   ErrorResponse, // Added ErrorResponse
-  ValidationError // Added ValidationError
+  ValidationError
 } from '../types/api';
 import { 
   generalLimiter, 
@@ -17,9 +17,21 @@ import {
 } from '../middleware';
 import { validateConfig, validateProviderConfig } from '../types/validation';
 import { Logger, LogLevel } from '../../shared/utils/logger'; // Imported LogLevel
+import { ZodIssue } from 'zod';
 
 const router = Router();
 const logger = Logger.getInstance();
+
+// Helper function to map Zod issues to ValidationErrors
+function mapZodIssuesToValidationErrors(zodIssues: ZodIssue[]): ValidationError[] {
+  return zodIssues.map((issue: ZodIssue): ValidationError => {
+    return {
+      field: issue.path.join('.'),
+      message: issue.message,
+      code: issue.code, // ZodIssueCode is a string literal union, assignable to string
+    };
+  });
+}
 
 /**
  * Get complete configuration
@@ -156,7 +168,7 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
         error: { 
           code: 'VALIDATION_ERROR',
           message: 'Invalid configuration',
-          validationErrors: validation.errors as ValidationError[], // Assuming validation.errors matches ValidationError[]
+          validationErrors: mapZodIssuesToValidationErrors(validation.errors),
           timestamp: new Date(),
         },
         data: null,
@@ -218,7 +230,7 @@ router.put('/provider', configUpdateLimiter, async (req: Request, res: Response)
         error: { 
           code: 'VALIDATION_ERROR',
           message: 'Invalid provider configuration',
-          validationErrors: validation.errors as ValidationError[], // Assuming validation.errors matches ValidationError[]
+          validationErrors: mapZodIssuesToValidationErrors(validation.errors),
           timestamp: new Date(),
         },
         data: null,
@@ -266,7 +278,7 @@ router.post('/validate', generalLimiter, async (req: Request, res: Response) => 
       success: true,
       data: {
         valid: validation.success,
-        errors: validation.success ? undefined : validation.errors as ValidationError[], // Assuming validation.errors matches ValidationError[]
+        errors: validation.success ? undefined : mapZodIssuesToValidationErrors(validation.errors),
         warnings: []
       },
       timestamp: new Date()
@@ -300,10 +312,9 @@ function getFeatureFlags(): ConfigFeatureFlags {
     toolExecution: true, // from original
     streaming: true,     // from original
     sessions: true,      // from original
-    fileManagement: true, // from original, maps to fileAccess in some contexts
     codeAnalysis: true,  // Added
     autoSave: false,     // Added, assuming default false
-    fileAccess: true     // Added for consistency with type
+    fileAccess: true     // This is the correct property as per ConfigFeatureFlags type
   };
 }
 
@@ -330,6 +341,7 @@ function handleConfigError(res: Response, error: unknown, message: string) {
     timestamp: new Date()
   };
   res.status(500).json(errorResponse);
+  return;
 }
 
 export default router;

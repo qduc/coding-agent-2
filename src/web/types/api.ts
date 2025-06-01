@@ -7,10 +7,7 @@ import { LogLevel } from '../../shared/utils/logger'; // Import directly for re-
  */
 export interface ApiResponse<T = any> {
   success: boolean;
-  data?: T;
-  error?: ApiError | string;
-  success: boolean;
-  data?: T;
+  data?: T | null; // Allow null for data, useful for ErrorResponse
   error?: ApiError | string;
   timestamp: Date;
   metadata?: {
@@ -20,9 +17,10 @@ export interface ApiResponse<T = any> {
   };
 }
 
-export interface ErrorResponse extends ApiResponse<never> {
+export interface ErrorResponse extends ApiResponse<null> { // T is null, so data can be null or undefined
   success: false;
   error: ApiError | string;
+  // data field will be typed as null | undefined from ApiResponse<null>
 }
 
 export interface ApiError {
@@ -206,7 +204,8 @@ export interface ConfigFeatureFlags {
 /**
  * Project Types
  */
-export type { ProjectDiscoveryResult } from '../../shared/utils/projectDiscovery';
+// Removed duplicate export of ProjectDiscoveryResult here, it's handled by the re-export:
+// export type { LogLevel, ProjectDiscoveryResult };
 
 export interface ProjectContext {
   discovery: ProjectDiscoveryResult;

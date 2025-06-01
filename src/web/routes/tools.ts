@@ -1,10 +1,10 @@
-import { Router, Request, Response, NextFunction, RequestHandler } from 'express'; // Added Request, Response, NextFunction, RequestHandler
-import { rateLimit } from 'express-rate-limit'; // Standard import
-import { ToolError } from '../../shared/tools/types'; // Removed ToolErrorCode (unused here)
-import { ApiResponse, ApiError, ErrorResponse } from '../types/api'; // Added ErrorResponse
-// import { validateRequest } from '../middleware/validation'; // validateRequest not used in this file currently
+import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
+import { rateLimit } from 'express-rate-limit';
+import { ToolError } from '../../shared/tools/types';
+import { ApiResponse, ApiError, ErrorResponse } from '../types/api';
+// import { validateRequest } from '../middleware/validation';
 import { tools } from '../../shared/tools';
-// import { IToolExecutionContext } from '../../shared/interfaces/IToolExecutionContext'; // IToolExecutionContext not directly used here
+import { IToolExecutionContext } from '../../shared/interfaces/IToolExecutionContext'; // Added for casting context
 import { WebToolExecutionContext } from '../implementations/WebToolExecutionContext';
 import { Logger } from '../../shared/utils/logger';
 
@@ -71,6 +71,7 @@ const listToolsHandler: RequestHandler = async (req, res, _next) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     logger.error('Failed to list tools', error as Error);
     const apiError: ApiError = {
@@ -81,6 +82,7 @@ const listToolsHandler: RequestHandler = async (req, res, _next) => {
       stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return;
   }
 };
 
@@ -99,7 +101,8 @@ const getToolByNameHandler: RequestHandler = async (req, res, _next) => {
         message: `Tool '${toolName}' not found`,
         timestamp: new Date()
       };
-      return res.status(404).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      res.status(404).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      return;
     }
     
     const responseData = {
@@ -113,6 +116,7 @@ const getToolByNameHandler: RequestHandler = async (req, res, _next) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     logger.error('Failed to get tool details', error as Error);
     const apiError: ApiError = {
@@ -123,6 +127,7 @@ const getToolByNameHandler: RequestHandler = async (req, res, _next) => {
       stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return;
   }
 };
 
@@ -141,7 +146,8 @@ const getToolsByCategoryHandler: RequestHandler = async (req, res, _next) => {
         message: `Category '${category}' not found`,
         timestamp: new Date()
       };
-      return res.status(404).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      res.status(404).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      return;
     }
 
     const responseData = categorizedTools[category as keyof typeof categorizedTools];
@@ -151,6 +157,7 @@ const getToolsByCategoryHandler: RequestHandler = async (req, res, _next) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     logger.error('Failed to get tools by category', error as Error);
     const apiError: ApiError = {
@@ -161,6 +168,7 @@ const getToolsByCategoryHandler: RequestHandler = async (req, res, _next) => {
       stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return;
   }
 };
 
@@ -178,7 +186,8 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
         message: 'Tool name and parameters are required',
         timestamp: new Date()
       };
-      return res.status(400).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      res.status(400).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      return;
     }
 
     const ToolClass = tools[toolName];
@@ -188,12 +197,14 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
         message: `Tool '${toolName}' not found`,
         timestamp: new Date()
       };
-      return res.status(404).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      res.status(404).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      return;
     }
 
     // Create tool instance and execution context
-    const toolInstance = new ToolClass(); // tool was already used as variable name
-    const executionContext = new WebToolExecutionContext(context || {}); // Pass context, ensure it's an object
+    const toolInstance = new ToolClass();
+    // Cast context to Partial<IToolExecutionContext> for type safety
+    const executionContext = new WebToolExecutionContext(context as Partial<IToolExecutionContext> || {});
 
     const result = await toolInstance.execute(parameters, executionContext);
     
@@ -209,20 +220,21 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
       timestamp: new Date()
     };
     res.json(response);
+    return;
   } catch (error) {
     if (error instanceof ToolError) {
       const apiError: ApiError = {
         message: error.message,
         code: error.code,
-        // suggestions: error.suggestions, // Removed as ApiError does not have suggestions
-        details: { // Optional: include suggestions in details if needed
+        details: { 
           originalMessage: error.message,
           suggestions: error.suggestions,
         },
         timestamp: new Date(),
         stack: error.stack 
       };
-      return res.status(400).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      res.status(400).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+      return;
     }
 
     logger.error('Failed to execute tool', error as Error);
@@ -234,6 +246,7 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
       stack: (error instanceof Error) ? error.stack : undefined
     };
     res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
+    return;
   }
 };
 
