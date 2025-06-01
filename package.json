@@ -14,7 +14,10 @@
     "dev:web": "tsc --watch & npm run start:web",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "jest --passWithNoTests --no-watch"
+    "test": "jest --passWithNoTests --no-watch",
+    "frontend": "cd src/frontend && npm run dev",
+    "frontend:build": "cd src/frontend && npm run build",
+    "frontend:preview": "cd src/frontend && npm run preview"
   },
   "keywords": [
     "ai",
@@ -50,7 +53,8 @@
     "tree-sitter-rust": "^0.24.0",
     "tree-sitter-typescript": "^0.23.2",
     "uuid": "^11.1.0",
-    "web-tree-sitter": "^0.25.5"
+    "web-tree-sitter": "^0.25.5",
+    "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
     "@types/body-parser": "^1.19.5",
