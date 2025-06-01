@@ -225,34 +225,33 @@ router.delete('/api/sessions/:sessionId/history',
 
       res.json({
         success: true,
-        data: { id: sessionId },
+        data: { id: sessionId, message: 'History cleared' },
         timestamp: new Date()
-      } as ApiResponse<{ id: string }>);
+      } as ApiResponse<{ id: string; message: string }>);
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: {
-          code: 'HISTORY_CLEAR_ERROR',
-          message: 'Failed to clear history',
-          details: error instanceof Error ? error.message : String(error),
-          timestamp: new Date()
-        },
-        timestamp: new Date()
-      });
+      const apiError: ApiError = { code: 'HISTORY_CLEAR_ERROR', message: 'Failed to clear history', details: String(error), timestamp: new Date() };
+      res.status(500).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
     }
   }
 );
 
+const searchHistoryParamsSchema = z.object({ sessionId: z.string().uuid() });
+// query for search should be in req.query, not req.params
+const searchHistoryQuerySchema = z.object({ 
+  query: z.string(),
+  page: z.string().optional().default('1'),
+  pageSize: z.string().optional().default('20'),
+});
+
+
 router.get('/api/sessions/:sessionId/history/search',
-  validateRequest({
-    sessionId: 'string',
-    query: 'string'
-  }),
+  generalLimiter,
+  validateRequest({ params: searchHistoryParamsSchema, query: searchHistoryQuerySchema }),
   paginate(),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
-      const { sessionId, query } = req.params;
-      const { page = 1, pageSize = 20 } = req.query;
+      const { sessionId } = req.params as ZodSchemaType<typeof searchHistoryParamsSchema>;
+      const { query, page, pageSize } = req.query as ZodSchemaType<typeof searchHistoryQuerySchema>;
       const session = sessionManager.getSession(sessionId);
 
       if (!session) {

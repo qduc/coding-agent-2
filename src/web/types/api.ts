@@ -193,6 +193,9 @@ export interface ConfigFeatureFlags {
   sessions: boolean;
   fileAccess: boolean;
   toolExecution: boolean;
+  // Added based on user request for ConfigFeatureFlags
+  codeAnalysis: boolean;
+  autoSave: boolean;
 }
 
 /**
