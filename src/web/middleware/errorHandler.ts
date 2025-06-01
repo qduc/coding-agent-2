@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ApiResponse, ErrorResponse } from '../types/api';
+import { ApiResponse, ErrorResponse, ApiError } from '../types/api';
 
 /**
  * Global error handling middleware
@@ -12,36 +12,48 @@ export const errorHandler = (
 ): void => {
   console.error('Error occurred:', error);
 
-  const errorResponse: ErrorResponse = {
-    error: error.message || 'Internal server error',
+  let apiError: ApiError = {
+    message: error.message || 'Internal server error',
     code: 'INTERNAL_ERROR',
     timestamp: new Date(),
+    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
   };
+
+  let statusCode = 500;
 
   // Handle specific error types
   if (error.name === 'ValidationError') {
-    errorResponse.code = 'VALIDATION_ERROR';
-    res.status(400).json(errorResponse);
-    return;
+    apiError.code = 'VALIDATION_ERROR';
+    statusCode = 400;
+  } else if (error.name === 'UnauthorizedError') {
+    apiError.code = 'UNAUTHORIZED';
+    statusCode = 401;
+  } else if (error.name === 'NotFoundError') {
+    apiError.code = 'NOT_FOUND';
+    statusCode = 404;
   }
 
-  if (error.name === 'UnauthorizedError') {
-    errorResponse.code = 'UNAUTHORIZED';
-    res.status(401).json(errorResponse);
-    return;
-  }
+  const errorResponse: ErrorResponse = {
+    success: false,
+    error: apiError,
+    timestamp: new Date(),
+  };
 
-  // Default to 500 Internal Server Error
-  res.status(500).json(errorResponse);
+  res.status(statusCode).json(errorResponse);
 };
 
 /**
  * 404 Not Found handler
  */
 export const notFoundHandler = (req: Request, res: Response) => {
-  const errorResponse: ErrorResponse = {
-    error: `Route ${req.method} ${req.path} not found`,
+  const apiError: ApiError = {
+    message: `Route ${req.method} ${req.path} not found`,
     code: 'NOT_FOUND',
+    timestamp: new Date(),
+  };
+  const errorResponse: ErrorResponse = {
+    success: false,
+    error: apiError,
     timestamp: new Date(),
   };
 

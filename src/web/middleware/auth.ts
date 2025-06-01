@@ -12,12 +12,12 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   next();
 };
 
-export const validateApiKey = (req: Request, res: Response, next: NextFunction) => {
+export const validateApiKey = (req: Request, res: Response, next: NextFunction): void => {
   const apiKey = req.headers['x-api-key'] as string;
   const config = configManager.getConfig();
 
-  if (!apiKey || apiKey !== config.apiKey) {
-    return res.status(401).json({
+  if (!apiKey || apiKey !== config.openaiApiKey) {
+    res.status(401).json({
       success: false,
       error: {
         code: 'UNAUTHORIZED',
@@ -26,6 +26,7 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
       },
       timestamp: new Date()
     });
+    return;
   }
 
   next();

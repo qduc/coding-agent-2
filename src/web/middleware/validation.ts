@@ -46,7 +46,7 @@ export const validate = (schema: z.ZodSchema, target: 'body' | 'query' | 'params
 export const validateRequest = validate;
 
 // Specific validators
-export const validateSessionId = (req: Request, res: Response, next: NextFunction) => {
+export const validateSessionId = (req: Request, res: Response, next: NextFunction): void => {
   const sessionId = req.headers['x-session-id'] || req.query.sessionId;
 
   try {
@@ -54,17 +54,20 @@ export const validateSessionId = (req: Request, res: Response, next: NextFunctio
       sessionIdSchema.parse(sessionId);
     }
     next();
+    return;
   } catch (error) {
-    const response: ApiResponse = {
-      success: false,
-      error: {
-        code: 'INVALID_SESSION_ID',
-        message: 'Invalid session ID format',
-        timestamp: new Date(),
-      },
+    const apiError: ApiError = {
+      code: 'INVALID_SESSION_ID',
+      message: 'Invalid session ID format',
       timestamp: new Date(),
     };
-    return res.status(400).json(response);
+    const response: ApiResponse = {
+      success: false,
+      error: apiError,
+      timestamp: new Date(),
+    };
+    res.status(400).json(response);
+    return;
   }
 };
 
@@ -112,46 +115,55 @@ export const validateIf = (condition: (req: Request) => boolean, validator: (req
 
 // Custom validator example
 export const validateFileUpload = (allowedTypes: string[], maxSize: number) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.file) {
-      const response: ApiResponse = {
-        success: false,
-        error: {
-          code: 'FILE_REQUIRED',
-          message: 'File is required',
-          timestamp: new Date(),
-        },
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const file = (req as any).file;
+
+    if (!file) {
+      const apiError: ApiError = {
+        code: 'FILE_REQUIRED',
+        message: 'File is required',
         timestamp: new Date(),
       };
-      return res.status(400).json(response);
+      const response: ApiResponse = {
+        success: false,
+        error: apiError,
+        timestamp: new Date(),
+      };
+      res.status(400).json(response);
+      return;
     }
 
-    if (!allowedTypes.includes(req.file.mimetype)) {
-      const response: ApiResponse = {
-        success: false,
-        error: {
-          code: 'INVALID_FILE_TYPE',
-          message: `Only ${allowedTypes.join(', ')} files are allowed`,
-          timestamp: new Date(),
-        },
+    if (!allowedTypes.includes(file.mimetype)) {
+      const apiError: ApiError = {
+        code: 'INVALID_FILE_TYPE',
+        message: `Only ${allowedTypes.join(', ')} files are allowed`,
         timestamp: new Date(),
       };
-      return res.status(400).json(response);
+      const response: ApiResponse = {
+        success: false,
+        error: apiError,
+        timestamp: new Date(),
+      };
+      res.status(400).json(response);
+      return;
     }
 
-    if (req.file.size > maxSize) {
-      const response: ApiResponse = {
-        success: false,
-        error: {
-          code: 'FILE_TOO_LARGE',
-          message: `File exceeds maximum size of ${maxSize} bytes`,
-          timestamp: new Date(),
-        },
+    if (file.size > maxSize) {
+      const apiError: ApiError = {
+        code: 'FILE_TOO_LARGE',
+        message: `File exceeds maximum size of ${maxSize} bytes`,
         timestamp: new Date(),
       };
-      return res.status(400).json(response);
+      const response: ApiResponse = {
+        success: false,
+        error: apiError,
+        timestamp: new Date(),
+      };
+      res.status(400).json(response);
+      return;
     }
 
     next();
+    return;
   };
 };
