@@ -4,7 +4,7 @@ import { healthLimiter } from '../middleware';
 import { LLMService } from '../../shared/services/llm';
 import os from 'os';
 import process from 'process';
-import { WebSessionManager } from '../sockets/sessionManager';
+import { WebSessionManager } from '../implementations/WebSessionManager';
 
 const router = Router();
 
@@ -55,7 +55,7 @@ router.get('/status', healthLimiter, async (req: Request, res: Response) => {
   try {
     const llmService = new LLMService();
     const llmInitialized = await llmService.initialize();
-    const activeSessions = WebSessionManager.getInstance().getActiveSessionCount();
+    const activeSessions = new WebSessionManager().getActiveSessionCount();
 
     const statusData: HealthCheckResponse = {
       status: 'operational',

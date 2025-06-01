@@ -76,7 +76,10 @@ router.get('/', async (req, res) => {
 
     const response: ApiResponse<never> = {
       success: false,
-      error: 'Failed to retrieve tools list',
+      error: {
+        code: 'TOOL_LIST_ERROR',
+        message: 'Failed to retrieve tools list'
+      },
       timestamp: new Date()
     };
 
@@ -96,7 +99,10 @@ router.get('/:toolName', async (req, res) => {
     if (!tool) {
       const response: ApiResponse<never> = {
         success: false,
-        error: `Tool '${toolName}' not found`,
+        error: {
+          code: 'TOOL_NOT_FOUND',
+          message: `Tool '${toolName}' not found`
+        },
         timestamp: new Date()
       };
 
@@ -139,7 +145,10 @@ router.get('/category/:category', async (req, res) => {
     if (!(category in categorizedTools)) {
       const response: ApiResponse<never> = {
         success: false,
-        error: `Category '${category}' not found`,
+        error: {
+          code: 'CATEGORY_NOT_FOUND',
+          message: `Category '${category}' not found`
+        },
         timestamp: new Date()
       };
 
@@ -177,7 +186,10 @@ router.post('/execute', executionLimiter, async (req, res) => {
     if (!toolName || !parameters) {
       const response: ApiResponse<never> = {
         success: false,
-        error: 'Tool name and parameters are required',
+        error: {
+          code: 'MISSING_PARAMETERS',
+          message: 'Tool name and parameters are required'
+        },
         timestamp: new Date()
       };
 
@@ -234,7 +246,11 @@ router.post('/execute', executionLimiter, async (req, res) => {
 
     const response: ApiResponse<never> = {
       success: false,
-      error: 'Tool execution failed',
+      error: {
+        code: 'TOOL_EXECUTION_FAILED',
+        message: 'Tool execution failed',
+        details: error instanceof Error ? error.message : String(error)
+      },
       timestamp: new Date()
     };
 

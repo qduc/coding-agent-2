@@ -161,7 +161,7 @@ router.get('/api/sessions/:sessionId/history',
           },
           timestamp: new Date()
         });
-      }
+      } as PaginationMetadata
 
       const messages = session.messages;
       const total = messages.length;

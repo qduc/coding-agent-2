@@ -110,10 +110,13 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
     if (!validation.success) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid configuration',
-        details: validation.errors,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid configuration',
+          details: validation.errors
+        },
         timestamp: new Date()
-      });
+      } as ApiResponse);
     }
 
     await configManager.updateConfig(req.body);
@@ -143,10 +146,13 @@ router.put('/provider', configUpdateLimiter, async (req: Request, res: Response)
     if (!validation.success) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid provider configuration',
-        details: validation.errors,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid provider configuration',
+          details: validation.errors
+        },
         timestamp: new Date()
-      });
+      } as ApiResponse);
     }
 
     const currentConfig = configManager.getConfig();
@@ -224,7 +230,11 @@ function handleConfigError(res: Response, error: unknown, message: string) {
   const response: ApiResponse = {
     success: false,
     error: message,
-    details: error instanceof Error ? error.message : undefined,
+    ...(error instanceof Error ? {
+      details: error.message
+    } : {
+      details: String(error)
+    }),
     timestamp: new Date()
   };
   res.status(500).json(response);
