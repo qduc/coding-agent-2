@@ -13,7 +13,7 @@ interface ConfigPanelProps {
   onReset?: () => void;
 }
 
-export const ConfigPanel: React.FC<ConfigPanelProps> = ({
+const ConfigPanel: React.FC<ConfigPanelProps> = ({
   initialConfig,
   onSave,
   onReset,
@@ -164,3 +164,5 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
     </div>
   );
 };
+
+export default ConfigPanel;

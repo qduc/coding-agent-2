@@ -17,7 +17,7 @@ const availableTools: ToolSchema[] = [
   { name: 'web_search', description: 'Search the web' },
 ];
 
-export const ToolSettings: React.FC<ToolSettingsProps> = ({
+const ToolSettings: React.FC<ToolSettingsProps> = ({
   config,
   onChange,
 }) => {
@@ -117,3 +117,5 @@ export const ToolSettings: React.FC<ToolSettingsProps> = ({
     </div>
   );
 };
+
+export default ToolSettings;

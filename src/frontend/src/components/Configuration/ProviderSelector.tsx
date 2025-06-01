@@ -16,7 +16,9 @@ const providerModels = {
   gemini: ['gemini-1.5-pro', 'gemini-1.0-pro'],
 };
 
-export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
+export default ProviderSelector;
+
+const ProviderSelector: React.FC<ProviderSelectorProps> = ({
   config,
   onChange,
   errors,

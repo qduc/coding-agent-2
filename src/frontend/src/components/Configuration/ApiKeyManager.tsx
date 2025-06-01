@@ -12,7 +12,7 @@ interface ApiKeyManagerProps {
   errors: ConfigValidationError[];
 }
 
-export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
+const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
   config,
   activeProvider,
   onChange,
@@ -121,3 +121,5 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     </div>
   );
 };
+
+export default ApiKeyManager;

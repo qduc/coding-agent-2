@@ -9,7 +9,7 @@ interface PreferencesPanelProps {
   onChange: (config: Configuration['preferences']) => void;
 }
 
-export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
+const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
   config,
   onChange,
 }) => {
@@ -177,3 +177,5 @@ export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({
     </div>
   );
 };
+
+export default PreferencesPanel;
