@@ -80,9 +80,11 @@ router.get('/files', async (req, res) => {
         timestamp: new Date(),
       };
       res.json(response);
+      return;
     }
   } catch (error) {
     handleProjectError(res, error);
+    return;
   }
 });
 
