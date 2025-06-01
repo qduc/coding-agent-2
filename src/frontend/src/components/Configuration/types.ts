@@ -43,6 +43,8 @@ export interface Configuration {
 export type ConfigTab = 'provider' | 'apiKeys' | 'tools' | 'preferences';
 
 export interface ConfigValidationError {
+  /** The path to the config field that has an error (e.g. 'provider.model') */
   field: string;
+  /** The error message to display to the user */
   message: string;
 }
