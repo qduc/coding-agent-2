@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { configManager } from '../../shared/core/config';
-import { 
-  ApiResponse, 
+import {
+  ApiResponse,
   WebConfiguration,
   ConfigValidationResult,
   ConfigProviderSettings,
@@ -11,9 +11,9 @@ import {
   ErrorResponse, // Added ErrorResponse
   ValidationError
 } from '../types/api';
-import { 
-  generalLimiter, 
-  configUpdateLimiter 
+import {
+  generalLimiter,
+  configUpdateLimiter
 } from '../middleware';
 import { validateConfig, validateProviderConfig } from '../types/validation';
 import { Logger, LogLevel } from '../../shared/utils/logger'; // Imported LogLevel
@@ -165,7 +165,7 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
     if (!validation.success) {
       const errorResponse: ErrorResponse = {
         success: false,
-        error: { 
+        error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid configuration',
           validationErrors: mapZodIssuesToValidationErrors(validation.errors),
@@ -227,7 +227,7 @@ router.put('/provider', configUpdateLimiter, async (req: Request, res: Response)
     if (!validation.success) {
       const errorResponse: ErrorResponse = {
         success: false,
-        error: { 
+        error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid provider configuration',
           validationErrors: mapZodIssuesToValidationErrors(validation.errors),
@@ -246,7 +246,7 @@ router.put('/provider', configUpdateLimiter, async (req: Request, res: Response)
 
     await configManager.saveConfig(mergedConfig); // Changed updateConfig to saveConfig
     logger.info('Provider configuration updated', { event: 'provider_config_update' });
-    
+
     const newProviderConfig = configManager.getConfig(); // Get the latest config
     const providerSettings: ConfigProviderSettings = {
         provider: newProviderConfig.provider || 'openai',
@@ -279,7 +279,6 @@ router.post('/validate', generalLimiter, async (req: Request, res: Response) => 
       data: {
         isValid: validation.success,
         errors: validation.success ? undefined : mapZodIssuesToValidationErrors(validation.errors),
-        warnings: []
       },
       timestamp: new Date()
     };
@@ -321,8 +320,8 @@ function getFeatureFlags(): ConfigFeatureFlags {
 function handleConfigError(res: Response, error: unknown, message: string) {
   const logger = Logger.getInstance();
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error(message, { 
-    name: err.name, 
+  logger.error(message, {
+    name: err.name,
     message: err.message,
     stack: err.stack
   });
@@ -334,7 +333,7 @@ function handleConfigError(res: Response, error: unknown, message: string) {
     timestamp: new Date()
   };
 
-  const errorResponse: ErrorResponse = { 
+  const errorResponse: ErrorResponse = {
     success: false,
     error: apiError,
     data: null, // Ensure ErrorResponse has a data field, typically null

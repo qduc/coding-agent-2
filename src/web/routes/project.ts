@@ -63,7 +63,7 @@ router.get('/files', async (req, res) => {
     const { path: relativePath = '.' } = req.query;
     const absolutePath = await validatePath(relativePath as string);
     const stats = await fs.stat(absolutePath);
-    
+
     if (stats.isDirectory()) {
       const files = await fs.readdir(absolutePath);
       const response: ApiResponse<string[]> = {
@@ -152,8 +152,8 @@ router.get('/context', async (req, res) => {
 
 router.get('/technologies', async (req, res) => {
   try {
-    const techStack: string[] = await discovery.detectTechnologies();
-    const response: ApiResponse<string[]> = {
+    const techStack: string = await discovery.detectTechnologies();
+    const response: ApiResponse<string> = {
       success: true,
       data: techStack,
       timestamp: new Date(),
@@ -200,7 +200,7 @@ function handleProjectError(res: Response, error: unknown) { // Changed res type
       details: error.stack, // Optionally include stack or more details for ToolError
       timestamp: new Date(),
     };
-    statusCode = 400; 
+    statusCode = 400;
   } else {
     const err = error instanceof Error ? error : new Error(String(error));
     apiError = {

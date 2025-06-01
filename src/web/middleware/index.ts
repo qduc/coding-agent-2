@@ -23,12 +23,11 @@ export {
 export {
   configUpdateLimiter,
   executionLimiter,
-  generalRateLimit
+  generalLimiter
 } from './rateLimiter';
 
 // Also export from rateLimit.ts for backward compatibility
 export {
-  generalLimiter,
   chatLimiter,
   healthLimiter
 } from './rateLimit';

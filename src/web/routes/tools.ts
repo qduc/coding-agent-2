@@ -7,6 +7,7 @@ import { tools } from '../../shared/tools';
 import { IToolExecutionContext } from '../../shared/interfaces/IToolExecutionContext'; // Added for casting context
 import { WebToolExecutionContext } from '../implementations/WebToolExecutionContext';
 import { Logger } from '../../shared/utils/logger';
+import { WebOutputHandler } from '../implementations/WebOutputHandler';
 
 const router = Router();
 const logger = Logger.getInstance();
@@ -104,7 +105,7 @@ const getToolByNameHandler: RequestHandler = async (req, res, _next) => {
       res.status(404).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
       return;
     }
-    
+
     const responseData = {
       name: tool.name,
       description: tool.description,
@@ -204,10 +205,10 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
     // Create tool instance and execution context
     const toolInstance = new ToolClass();
     // context from req.body is expected to be Partial<IToolExecutionContext> or undefined/null
-    const executionContext = new WebToolExecutionContext(context ?? {});
+    const executionContext = new WebToolExecutionContext(new WebOutputHandler(), context?.workingDirectory, context?.permissions);
 
-    const result = await toolInstance.execute(parameters, executionContext);
-    
+    const result = await toolInstance.execute(parameters, context?.retryOptions);
+
     const responseData = {
       toolName,
       parameters,
@@ -226,12 +227,12 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
       const apiError: ApiError = {
         message: error.message,
         code: error.code,
-        details: { 
+        details: {
           originalMessage: error.message,
           suggestions: error.suggestions,
         },
         timestamp: new Date(),
-        stack: error.stack 
+        stack: error.stack
       };
       res.status(400).json({ success: false, error: apiError, timestamp: new Date() } as ErrorResponse);
       return;

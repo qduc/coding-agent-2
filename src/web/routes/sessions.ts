@@ -6,6 +6,7 @@ import { generalLimiter } from '../middleware/rateLimiter';
 import { paginateArray } from '../utils/pagination'; // Removed parsePaginationParams as it's not used in the provided snippet, ensure paginateArray handles parsing if needed
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid'; // For generating message IDs
+import { validate } from '../middleware/validate'; // Import the validate middleware
 
 const router = Router();
 const sessionManager = new WebSessionManager();
@@ -59,7 +60,7 @@ router.post('/api/sessions', generalLimiter, async (req: Request, res: Response)
 
 const sessionIdParamsSchema = z.object({ sessionId: z.string().uuid() });
 
-router.get('/api/sessions/:sessionId', generalLimiter, validateRequest({ params: sessionIdParamsSchema }), async (req: Request, res: Response): Promise<void> => {
+router.get('/api/sessions/:sessionId', generalLimiter, validate(sessionIdParamsSchema, 'params'), async (req: Request, res: Response): Promise<void> => {
   try {
     // Assuming validateRequest populates req.params correctly after schema validation
     const { sessionId } = req.params as z.infer<typeof sessionIdParamsSchema>;
@@ -92,7 +93,7 @@ router.get('/api/sessions/:sessionId', generalLimiter, validateRequest({ params:
   }
 });
 
-router.delete('/api/sessions/:sessionId', generalLimiter, validateRequest({ params: sessionIdParamsSchema }), async (req: Request, res: Response): Promise<void> => {
+router.delete('/api/sessions/:sessionId', generalLimiter, validate(sessionIdParamsSchema, 'params'), async (req: Request, res: Response): Promise<void> => {
   try {
     // Assuming validateRequest populates req.params correctly
     const { sessionId } = req.params as z.infer<typeof sessionIdParamsSchema>;
@@ -127,7 +128,7 @@ const historyQuerySchema = z.object({ page: z.string().optional().default('1'), 
 
 router.get('/api/sessions/:sessionId/history',
   generalLimiter,
-  validateRequest({ params: historyParamsSchema, query: historyQuerySchema }), // Kept as is, per rule for multi-key
+  validate(z.object({ params: historyParamsSchema, query: historyQuerySchema })), // Updated to use validate with a combined schema
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { sessionId } = req.params as z.infer<typeof historyParamsSchema>;
@@ -145,7 +146,7 @@ router.get('/api/sessions/:sessionId/history',
 
       const messages: ChatMessage[] = session.messages;
       const paginatedResponse = paginateArray(messages, Number(page), Number(pageSize));
-      
+
       res.json(paginatedResponse);
       return;
     } catch (error) {
@@ -167,7 +168,7 @@ const addMessageBodySchema = z.object({
 
 router.post('/api/sessions/:sessionId/history',
   generalLimiter,
-  validateRequest({ params: addMessageParamsSchema, body: addMessageBodySchema }), // Kept as is
+  validate(z.object({ params: addMessageParamsSchema, body: addMessageBodySchema })), // Updated to use validate with a combined schema
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { sessionId } = req.params as z.infer<typeof addMessageParamsSchema>;
@@ -208,7 +209,7 @@ router.post('/api/sessions/:sessionId/history',
 
 router.delete('/api/sessions/:sessionId/history',
   generalLimiter,
-  validateRequest({ params: historyParamsSchema }),
+  validate(historyParamsSchema, 'params'),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { sessionId } = req.params as z.infer<typeof historyParamsSchema>; // Assuming Zod populates req.params
@@ -245,7 +246,7 @@ router.delete('/api/sessions/:sessionId/history',
 
 const searchHistoryParamsSchema = z.object({ sessionId: z.string().uuid() });
 // query for search should be in req.query, not req.params
-const searchHistoryQuerySchema = z.object({ 
+const searchHistoryQuerySchema = z.object({
   query: z.string(),
   page: z.string().optional().default('1'),
   pageSize: z.string().optional().default('20'),
@@ -254,7 +255,7 @@ const searchHistoryQuerySchema = z.object({
 
 router.get('/api/sessions/:sessionId/history/search',
   generalLimiter,
-  validateRequest({ params: searchHistoryParamsSchema, query: searchHistoryQuerySchema }), // Kept as is
+  validate(z.object({ params: searchHistoryParamsSchema, query: searchHistoryQuerySchema })), // Updated to use validate with a combined schema
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { sessionId } = req.params as z.infer<typeof searchHistoryParamsSchema>;
@@ -274,7 +275,7 @@ router.get('/api/sessions/:sessionId/history/search',
       const results = session.messages.filter(message =>
         message.content.toLowerCase().includes(searchQuery)
       );
-      
+
       const paginatedResponse = paginateArray(results, Number(page), Number(pageSize));
 
       res.json(paginatedResponse);
