@@ -5,7 +5,39 @@ import { LoadingSpinner } from './LoadingSpinner';
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'link';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+type PolymorphicButtonProps<E extends React.ElementType> = {
+  as?: E;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
+  icon?: React.ReactNode;
+  iconPosition?: 'left' | 'right';
+  fullWidth?: boolean;
+  children: React.ReactNode;
+};
+
+type ButtonProps<E extends React.ElementType> = PolymorphicButtonProps<E> &
+  Omit<React.ComponentPropsWithoutRef<E>, keyof PolymorphicButtonProps<E>>;
+
+const defaultElement = 'button';
+
+export const Button = React.forwardRef(
+  <E extends React.ElementType = typeof defaultElement>(
+    {
+      as,
+      variant = 'primary',
+      size = 'md',
+      loading = false,
+      icon,
+      iconPosition = 'left',
+      fullWidth = false,
+      children,
+      className,
+      disabled,
+      ...props
+    }: ButtonProps<E>,
+    ref: React.ForwardedRef<React.ElementRef<E>>
+  ) => {
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
@@ -52,8 +84,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     return (
-      <button
-        ref={ref}
+      const Component = as || defaultElement;
+      return (
+        <Component
+          ref={ref}
         className={cn(
           'inline-flex items-center justify-center rounded-md font-medium transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-offset-2',
@@ -75,7 +109,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {!loading && icon && iconPosition === 'right' && (
           <span className={cn('ml-2', iconSizeClasses[size])}>{icon}</span>
         )}
-      </button>
+      </Component>
     );
   }
 );
