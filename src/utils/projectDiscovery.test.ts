@@ -62,8 +62,8 @@ describe('ProjectDiscovery', () => {
 
       expect(result.summary).toContain('Node.js/JavaScript project');
       expect(result.techStack).toContain('package.json');
-      expect(result.entryPoints).toContain('./README.md');
-      expect(result.entryPoints).toContain('./index.js');
+      expect(result.entryPoints).toContain('README.md');
+      expect(result.entryPoints).toContain('index.js');
     });
   });
 
@@ -79,7 +79,7 @@ describe('ProjectDiscovery', () => {
 
       expect(result.summary).toContain('Python project');
       expect(result.techStack).toContain('requirements.txt');
-      expect(result.entryPoints).toContain('./main.py');
+      expect(result.entryPoints).toContain('main.py');
     });
   });
 
@@ -123,11 +123,11 @@ describe('ProjectDiscovery', () => {
       await fs.ensureDir(path.join(tempDir, 'src'));
       await fs.ensureDir(path.join(tempDir, 'tests'));
       await fs.writeFile(path.join(tempDir, 'package.json'), '{}');
-      
+
       // Spy on the NodeJS methods we want to verify are called
       const originalCreateTree = discovery['createTreeRepresentationNodeJS'];
       const createTreeSpy = jest.spyOn(discovery as any, 'createTreeRepresentationNodeJS');
-      
+
       // Make tree command fail to force fallback
       execSyncSpy.mockImplementation((command: string) => {
         if (command.includes('tree') || command.includes('find')) {
@@ -142,7 +142,7 @@ describe('ProjectDiscovery', () => {
       expect(result.projectStructure).not.toContain('Unable to determine');
       expect(result.projectStructure.length).toBeGreaterThan(0);
       expect(createTreeSpy).toHaveBeenCalled();
-      
+
       // Restore the original method
       createTreeSpy.mockRestore();
     });
@@ -179,7 +179,7 @@ describe('ProjectDiscovery', () => {
       execSyncSpy.mockImplementation(() => {
         throw new Error('command execution failed');
       });
-      
+
       // Create a discovery instance pointing to a non-existent directory
       // This will cause fs operations to fail naturally without mocking
       const nonExistentDir = path.join(tempDir, 'non-existent-directory');
@@ -203,7 +203,7 @@ describe('ProjectDiscovery', () => {
       execSyncSpy.mockImplementation((command: string) => {
         throw new Error('command execution failed');
       });
-      
+
       // Setup a direct mock implementation of getTechStack to simulate proper detection
       const origGetTechStack = discovery['getTechStack'];
       discovery['getTechStack'] = async function() {
@@ -211,7 +211,7 @@ describe('ProjectDiscovery', () => {
       };
 
       const result = await discovery.discover();
-      
+
       // Restore original method
       discovery['getTechStack'] = origGetTechStack;
 

@@ -30,8 +30,10 @@
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "fs-extra": "^11.2.0",
+    "fuzzy": "^0.1.3",
     "globby": "^13.2.2",
     "inquirer": "^9.2.0",
+    "inquirer-autocomplete-prompt": "^3.0.1",
     "minimatch": "^10.0.1",
     "openai": "^4.28.0",
     "tree-sitter-javascript": "^0.23.1",
@@ -43,6 +45,7 @@
   "devDependencies": {
     "@types/fs-extra": "^11.0.0",
     "@types/inquirer": "^9.0.0",
+    "@types/inquirer-autocomplete-prompt": "^3.0.3",
     "@types/jest": "^29.5.14",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^20.0.0",

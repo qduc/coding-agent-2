@@ -6,6 +6,7 @@ import { Logger, LogLevel } from '../utils/logger';
 
 export interface Config {
   openaiApiKey?: string;
+  openaiApiBaseUrl?: string; // Custom OpenAI-compatible endpoint
   anthropicApiKey?: string;
   geminiApiKey?: string;
   provider?: 'openai' | 'anthropic' | 'gemini';
@@ -41,12 +42,13 @@ export class ConfigManager {
       provider: 'openai',
       verbose: false,
       logToolUsage: true,
-      streaming: false, // Disable streaming by default
+      streaming: false,
       // Default logging configuration
       logLevel: 'info',
       enableFileLogging: true,
       enableConsoleLogging: false, // Disable general console logging by default
       enableToolConsoleLogging: true, // But keep tool messages in console
+      openaiApiBaseUrl: 'https://api.openai.com/v1', // Default to official endpoint
     };
 
     let fileConfig: Partial<Config> = {};
@@ -66,8 +68,20 @@ export class ConfigManager {
 
     // Environment variables take precedence
     const envConfig: Partial<Config> = {};
-    if (process.env.OPENAI_API_KEY) {
+
+    // Load API keys from environment
+    const baseUrl = this.config?.openaiApiBaseUrl || defaultConfig.openaiApiBaseUrl;
+    const isOpenRouter = baseUrl?.includes('openrouter.ai');
+
+    if (isOpenRouter && process.env.OPENROUTER_API_KEY) {
+      envConfig.openaiApiKey = process.env.OPENROUTER_API_KEY;
+    } else if (!isOpenRouter && process.env.OPENAI_API_KEY) {
       envConfig.openaiApiKey = process.env.OPENAI_API_KEY;
+    }
+
+    // Other configs
+    if (process.env.OPENAI_API_BASE_URL) {
+      envConfig.openaiApiBaseUrl = process.env.OPENAI_API_BASE_URL;
     }
     if (process.env.ANTHROPIC_API_KEY) {
       envConfig.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
@@ -279,6 +293,7 @@ export class ConfigManager {
 
     if (config.provider === 'openai') {
       console.log(`OpenAI API Key: ${config.openaiApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
+      console.log(`OpenAI API Base URL: ${chalk.white(config.openaiApiBaseUrl || 'https://api.openai.com/v1')}`);
     } else if (config.provider === 'anthropic') {
       console.log(`Anthropic API Key: ${config.anthropicApiKey ? chalk.green('✓ Configured') : chalk.red('✗ Not set')}`);
     } else if (config.provider === 'gemini') {
@@ -296,10 +311,12 @@ export class ConfigManager {
    */
   async setupWizard(): Promise<void> {
     const inquirer = await import('inquirer');
+    const fetch = (await import('node-fetch')).default;
 
     console.log(chalk.yellow('🔧 Coding Agent Setup'));
     console.log(chalk.gray('Let\'s configure your coding agent...'));
     console.log();
+
 
     // Select provider first
     const { provider } = await inquirer.default.prompt([
@@ -309,22 +326,72 @@ export class ConfigManager {
         message: 'Select LLM provider:',
         default: this.config.provider,
         choices: [
-          { name: 'OpenAI (GPT-4o, o3-mini, GPT-4.1)', value: 'openai' },
+          { name: 'OpenAI (GPT-4o, o3-mini, GPT-4.1, or compatible)', value: 'openai' },
           { name: 'Anthropic (Claude 4, Claude 3.7)', value: 'anthropic' },
           { name: 'Google Gemini (Gemini 2.5, 2.0)', value: 'gemini' }
         ]
       }
     ]);
 
+    let openaiApiBaseUrl = 'https://api.openai.com/v1';
+    let openaiEndpointChoice = 'official';
+    if (provider === 'openai') {
+      // Prompt for OpenAI endpoint type
+      const { endpointType } = await inquirer.default.prompt([
+        {
+          type: 'list',
+          name: 'endpointType',
+          message: 'Choose your OpenAI endpoint:',
+          default: 'official',
+          choices: [
+            { name: 'Official OpenAI (https://api.openai.com/v1)', value: 'official' },
+            { name: 'OpenRouter (https://openrouter.ai/api/v1)', value: 'openrouter' },
+            { name: 'Custom OpenAI-compatible endpoint', value: 'custom' }
+          ]
+        }
+      ]);
+      openaiEndpointChoice = endpointType;
+      if (endpointType === 'official') {
+        openaiApiBaseUrl = 'https://api.openai.com/v1';
+      } else if (endpointType === 'openrouter') {
+        openaiApiBaseUrl = 'https://openrouter.ai/api/v1';
+      } else {
+        // Custom endpoint
+        const { endpointUrl } = await inquirer.default.prompt([
+          {
+            type: 'input',
+            name: 'endpointUrl',
+            message: 'Enter your OpenAI-compatible API endpoint URL:',
+            default: this.config.openaiApiBaseUrl || 'https://api.openai.com/v1',
+            validate: (input: string) => {
+              if (!input.trim()) return 'Endpoint URL is required';
+              try { new URL(input); return true; } catch { return 'Invalid URL'; }
+            }
+          }
+        ]);
+        openaiApiBaseUrl = endpointUrl;
+      }
+    }
+
     // Get API key based on provider
     const needsApiKey = provider === 'openai' ? !this.hasOpenAIKey() :
                        provider === 'anthropic' ? !this.hasAnthropicKey() :
                        !this.hasGeminiKey();
 
+    // Always get apiKey from config if not entered interactively
+    let apiKey = '';
     if (needsApiKey) {
       if (provider === 'openai') {
-        console.log(chalk.cyan('OpenAI API Key:'));
-        console.log(chalk.gray('You can get your API key from: https://platform.openai.com/api-keys'));
+        if (openaiEndpointChoice === 'official') {
+          console.log(chalk.cyan('OpenAI API Key:'));
+          console.log(chalk.gray('You can get your API key from: https://platform.openai.com/api-keys'));
+        } else if (openaiEndpointChoice === 'openrouter') {
+          console.log(chalk.cyan('OpenRouter API Key:'));
+          console.log(chalk.gray('You can get your API key from: https://openrouter.ai/keys'));
+        } else {
+          console.log(chalk.cyan('OpenAI-Compatible API Key:'));
+          console.log(chalk.gray('You can get your API key from your custom endpoint provider.'));
+        }
       } else if (provider === 'anthropic') {
         console.log(chalk.cyan('Anthropic API Key:'));
         console.log(chalk.gray('You can get your API key from: https://console.anthropic.com/'));
@@ -334,18 +401,29 @@ export class ConfigManager {
       }
       console.log();
 
-      const { apiKey } = await inquirer.default.prompt([
+      const { apiKey: enteredKey } = await inquirer.default.prompt([
         {
           type: 'password',
           name: 'apiKey',
-          message: `Enter your ${provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key:`,
+          message: `Enter your ${provider === 'openai'
+            ? (openaiEndpointChoice === 'official' ? 'OpenAI' : openaiEndpointChoice === 'openrouter' ? 'OpenRouter' : 'OpenAI-Compatible')
+            : provider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key:`,
           mask: '*',
           validate: (input: string) => {
             if (!input.trim()) {
               return 'API key is required';
             }
-            if (provider === 'openai' && !input.startsWith('sk-')) {
-              return 'OpenAI API keys start with "sk-"';
+            if (provider === 'openai') {
+              if (openaiEndpointChoice === 'official') {
+                if (!input.startsWith('sk-')) {
+                  return 'OpenAI API keys start with "sk-"';
+                }
+              } else if (openaiEndpointChoice === 'openrouter') {
+                if (!input.startsWith('org-') && !input.startsWith('sk-or-')) {
+                  return 'OpenRouter API keys start with "org-" or "sk-or-"';
+                }
+              }
+              // For custom, accept any key
             }
             if (provider === 'anthropic' && !input.startsWith('sk-ant-')) {
               return 'Anthropic API keys start with "sk-ant-"';
@@ -357,7 +435,7 @@ export class ConfigManager {
           }
         }
       ]);
-
+      apiKey = enteredKey;
       if (provider === 'openai') {
         this.setOpenAIKey(apiKey);
       } else if (provider === 'anthropic') {
@@ -365,70 +443,133 @@ export class ConfigManager {
       } else if (provider === 'gemini') {
         this.setGeminiKey(apiKey);
       }
+    } else {
+      // If not entered, get from config (env or memory)
+      if (provider === 'openai') {
+        apiKey = this.getOpenAIKey() || '';
+      } else if (provider === 'anthropic') {
+        apiKey = this.getAnthropicKey() || '';
+      } else if (provider === 'gemini') {
+        apiKey = this.getGeminiKey() || '';
+      }
     }
 
-    // Get model choices based on provider
-    const modelChoices = provider === 'openai'
-      ? [
-          { name: 'o3-mini (Latest Reasoning Model)', value: 'o3-mini' },
-          { name: 'GPT-4.1 (Advanced Reasoning)', value: 'gpt-4.1' },
-          { name: 'GPT-4o 2024-11-20 (Latest, Enhanced)', value: 'gpt-4o-2024-11-20' },
-          { name: 'GPT-4o (Stable)', value: 'gpt-4o' },
-          { name: 'GPT-4o Mini (Fast & Efficient)', value: 'gpt-4o-mini' }
-        ]
-      : provider === 'anthropic'
-        ? [
-            { name: 'Claude 4 Opus (Latest, Most Capable)', value: 'claude-opus-4-20250514' },
-            { name: 'Claude 4 Sonnet (Latest, Balanced)', value: 'claude-sonnet-4-20250514' },
-            { name: 'Claude 3.7 Sonnet (Enhanced)', value: 'claude-3-7-sonnet-20250219' },
-            { name: 'Claude 3.5 Sonnet (Stable)', value: 'claude-3-5-sonnet-20241022' },
-            { name: 'Claude 3.5 Haiku (Fast)', value: 'claude-3-5-haiku-20241022' }
-          ]
-        : [
-            { name: 'Gemini 2.5 Flash (Latest, Fast)', value: 'gemini-2.5-flash-preview-05-20' },
-            { name: 'Gemini 2.5 Pro (Latest, Most Capable)', value: 'gemini-2.5-pro-preview-05-06' },
-            { name: 'Gemini 2.0 Flash (Multimodal)', value: 'gemini-2.0-flash' },
-            { name: 'Gemini 1.5 Pro (Stable)', value: 'gemini-1.5-pro-002' },
-            { name: 'Gemini 1.5 Flash (Fast)', value: 'gemini-1.5-flash-002' }
-          ];
-
-    // Optional configuration
-    const { model, maxTokens, logToolUsage, streaming } = await inquirer.default.prompt([
-      {
-        type: 'list',
-        name: 'model',
-        message: `Select ${provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Google Gemini'} model:`,
-        default: this.config.model,
-        choices: modelChoices
-      },
-      {
-        type: 'number',
-        name: 'maxTokens',
-        message: 'Maximum tokens per response:',
-        default: this.config.maxTokens,
-        validate: (input: number) => {
-          if (input < 100 || input > 32000) {
-            return 'Must be between 100 and 32000';
-          }
-          return true;
+    let model = this.config.model;
+    if (provider === 'openai') {
+      // Try to fetch models from the endpoint
+      let models: { id: string; object: string }[] = [];
+      let fetchFailed = false;
+      try {
+        const res = await fetch(`${openaiApiBaseUrl.replace(/\/$/, '')}/models`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (Array.isArray(data.data)) {
+          models = data.data.filter((m: any) => typeof m.id === 'string');
+        } else {
+          fetchFailed = true;
         }
-      },
-      {
-        type: 'confirm',
-        name: 'logToolUsage',
-        message: 'Enable tool usage logging?',
-        default: this.config.logToolUsage || false
-      },
-      {
-        type: 'confirm',
-        name: 'streaming',
-        message: 'Enable response streaming? (real-time output)',
-        default: this.config.streaming || false
+      } catch (err) {
+        fetchFailed = true;
       }
-    ]);
+
+      if (!fetchFailed && models.length > 0) {
+        // Use autocomplete prompt if many models
+        let chosenModel = model;
+        if (models.length > 10) {
+          // Dynamically register inquirer-autocomplete-prompt
+          const autocompletePrompt = (await import('inquirer-autocomplete-prompt')).default;
+          inquirer.default.registerPrompt('autocomplete', autocompletePrompt);
+          const fuzzy = (await import('fuzzy')).default;
+          const modelChoices = models.map(m => m.id);
+          const searchModels = (_: any, input: string) => {
+            input = input || '';
+            return Promise.resolve(
+              fuzzy.filter(input, modelChoices).map((el: any) => el.original)
+            );
+          };
+          const { model: autoModel } = await inquirer.default.prompt([
+            {
+              type: 'autocomplete',
+              name: 'model',
+              message: 'Select a model from your endpoint (type to filter):',
+              source: searchModels,
+              default: model
+            }
+          ]);
+          chosenModel = autoModel;
+        } else {
+          const { model: listModel } = await inquirer.default.prompt([
+            {
+              type: 'list',
+              name: 'model',
+              message: 'Select a model from your endpoint:',
+              choices: models.map(m => ({ name: m.id, value: m.id })),
+              default: model
+            }
+          ]);
+          chosenModel = listModel;
+        }
+        model = chosenModel;
+      } else {
+        // Fallback: let user enter model name manually
+        console.log(chalk.red('Could not fetch models from the endpoint.'));
+        const { model: manualModel } = await inquirer.default.prompt([
+          {
+            type: 'input',
+            name: 'model',
+            message: 'Enter the model name to use:',
+            default: model || 'gpt-4o-2024-11-20',
+            validate: (input: string) => input.trim() ? true : 'Model name is required'
+          }
+        ]);
+        model = manualModel;
+      }
+    } else if (provider === 'anthropic') {
+      const modelChoices = [
+        { name: 'Claude 4 Opus (Latest, Most Capable)', value: 'claude-opus-4-20250514' },
+        { name: 'Claude 4 Sonnet (Latest, Balanced)', value: 'claude-sonnet-4-20250514' },
+        { name: 'Claude 3.7 Sonnet (Enhanced)', value: 'claude-3-7-sonnet-20250219' },
+        { name: 'Claude 3.5 Sonnet (Stable)', value: 'claude-3-5-sonnet-20241022' },
+        { name: 'Claude 3.5 Haiku (Fast)', value: 'claude-3-5-haiku-20241022' }
+      ];
+      const { model: chosenModel } = await inquirer.default.prompt([
+        {
+          type: 'list',
+          name: 'model',
+          message: 'Select Anthropic model:',
+          default: model,
+          choices: modelChoices
+        }
+      ]);
+      model = chosenModel;
+    } else if (provider === 'gemini') {
+      const modelChoices = [
+        { name: 'Gemini 2.5 Flash (Latest, Fast)', value: 'gemini-2.5-flash-preview-05-20' },
+        { name: 'Gemini 2.5 Pro (Latest, Most Capable)', value: 'gemini-2.5-pro-preview-05-06' },
+        { name: 'Gemini 2.0 Flash (Multimodal)', value: 'gemini-2.0-flash' },
+        { name: 'Gemini 1.5 Pro (Stable)', value: 'gemini-1.5-pro-002' },
+        { name: 'Gemini 1.5 Flash (Fast)', value: 'gemini-1.5-flash-002' }
+      ];
+      const { model: chosenModel } = await inquirer.default.prompt([
+        {
+          type: 'list',
+          name: 'model',
+          message: 'Select Google Gemini model:',
+          default: model,
+          choices: modelChoices
+        }
+      ]);
+      model = chosenModel;
+    }
 
     // Save configuration (excluding API key)
-    await this.saveConfig({ provider, model, maxTokens, logToolUsage, streaming });
+    const configToSave: Partial<Config> = { provider, model };
+    if (provider === 'openai') {
+      configToSave.openaiApiBaseUrl = openaiApiBaseUrl;
+    }
+    await this.saveConfig(configToSave);
 
     console.log();
     console.log(chalk.green('✅ Configuration saved!'));
@@ -439,6 +580,9 @@ export class ConfigManager {
         ? 'ANTHROPIC_API_KEY'
         : 'GEMINI_API_KEY';
     console.log(chalk.gray(`Set ${envVar} environment variable for persistent usage.`));
+    if (provider === 'openai') {
+      console.log(chalk.gray(`Set OPENAI_API_BASE_URL if you want to override the endpoint in the future.`));
+    }
     console.log();
   }
 }

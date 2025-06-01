@@ -140,25 +140,47 @@ export class LLMService implements LLMProvider {
 
     logger.debug('Initializing OpenAI provider', { model: config.model }, 'LLMService');
 
-    if (!config.openaiApiKey) {
-      logger.error('OpenAI API key not configured', undefined, {}, 'LLMService');
+    // For OpenRouter, we need to use OPENROUTER_API_KEY instead of OPENAI_API_KEY
+    const isOpenRouter = config.openaiApiBaseUrl?.includes('openrouter.ai');
+    const apiKey = isOpenRouter ? process.env.OPENROUTER_API_KEY : config.openaiApiKey;
+
+    if (!apiKey) {
+      logger.error(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} API key not configured`, undefined, {}, 'LLMService');
       return false;
     }
 
+    const baseURL = isOpenRouter
+      ? 'https://openrouter.ai/api/v1'
+      : (config.openaiApiBaseUrl || 'https://api.openai.com/v1');
+
     this.openai = new OpenAI({
-      apiKey: config.openaiApiKey
+      apiKey,
+      baseURL,
+      defaultHeaders: isOpenRouter ? {
+        'HTTP-Referer': 'https://github.com/qduc/coding-agent',  // Required by OpenRouter
+        'X-Title': 'coding-agent',  // Helps OpenRouter identify your app
+        'OpenAI-Organization': 'openrouter',  // Required for OpenRouter
+      } : undefined
     });
 
     try {
-      // Test the connection
-      await this.testOpenAIConnection();
+      // Test the connection - for OpenRouter we'll use a different endpoint
+      if (isOpenRouter) {
+        await this.openai!.chat.completions.create({
+          messages: [{ role: 'user', content: 'test' }],
+          model: 'openai/gpt-3.5-turbo',  // OpenRouter requires full model path
+          max_tokens: 1
+        });
+      } else {
+        await this.testOpenAIConnection();
+      }
       this.currentProvider = this;
       this.initialized = true;
-      logger.info('OpenAI provider initialized successfully', { model: config.model }, 'LLMService');
+      logger.info(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} provider initialized successfully`, { model: config.model }, 'LLMService');
       return true;
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error('Unknown error');
-      logger.error('Failed to initialize OpenAI provider', errorObj, { model: config.model }, 'LLMService');
+      logger.error(`Failed to initialize ${isOpenRouter ? 'OpenRouter' : 'OpenAI'} provider`, errorObj, { model: config.model }, 'LLMService');
       return false;
     }
   }
