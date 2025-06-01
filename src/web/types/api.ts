@@ -125,15 +125,27 @@ export interface WebConfiguration {
   tools: {
     enabled: boolean;
     list: ToolConfig[];
+    maxFileSize: number;
+    timeout: number;
+    logUsage: boolean;
   };
   logging: {
     level: LogLevel;
     persist: boolean;
+    maxLogSize: number;
+    maxLogFiles: number;
   };
   features: {
     streaming: boolean;
     sessions: boolean;
     fileAccess: boolean;
+    codeAnalysis: boolean;
+    autoSave: boolean;
+  };
+  ui?: {
+    theme?: 'light' | 'dark' | 'system';
+    fontSize?: number;
+    lineHeight?: number;
   };
 }
 
