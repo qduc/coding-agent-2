@@ -68,18 +68,19 @@ const ButtonComponent = (
     ...restProps
   } = props;
 
+  const iconOnly = !children && !!icon;
   const variantClasses = {
-    primary: 'bg-primary text-white hover:bg-primary-dark focus:ring-primary',
-    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 focus:ring-secondary',
-    danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-destructive',
+    primary: 'bg-primary text-white shadow hover:shadow-md focus:ring-primary transform hover:-translate-y-0.5 transition-transform duration-200 ease-in-out',
+    secondary: 'bg-secondary text-secondary-foreground shadow hover:shadow-md focus:ring-secondary transform hover:-translate-y-0.5 transition-transform duration-200 ease-in-out',
+    danger: 'bg-destructive text-destructive-foreground shadow hover:shadow-md focus:ring-destructive transform hover:-translate-y-0.5 transition-transform duration-200 ease-in-out',
     ghost: 'hover:bg-accent hover:text-accent-foreground focus:ring-accent',
     link: 'text-primary underline-offset-4 hover:underline focus:ring-primary',
   };
 
   const sizeClasses = {
-    sm: 'h-9 px-3 text-sm',
-    md: 'h-10 px-4 py-2 text-base',
-    lg: 'h-11 px-8 text-lg',
+    sm: iconOnly ? 'h-8 w-8 p-1.5' : 'h-9 px-3 py-2',
+    md: iconOnly ? 'h-10 w-10 p-2' : 'h-10 px-4 py-2',
+    lg: iconOnly ? 'h-11 w-11 p-2.5' : 'h-11 px-8 py-3',
   };
 
   const iconSizeClasses = {
@@ -89,25 +90,25 @@ const ButtonComponent = (
   };
 
   const buttonClasses = cn(
-    'inline-flex items-center justify-center rounded-md font-medium transition-colors',
+    'inline-flex items-center justify-center rounded-md font-medium transition-colors duration-200 ease-in-out',
     'focus:outline-none focus:ring-2 focus:ring-offset-2',
     'disabled:opacity-50 disabled:cursor-not-allowed',
     variantClasses[variant],
     sizeClasses[size],
-    fullWidth && 'w-full',
+    fullWidth && !iconOnly && 'w-full',
     className
   );
 
   const content = (
     <>
       {loading ? (
-        <LoadingSpinner size={size} className={iconPosition === 'left' ? 'mr-2' : 'ml-2'} />
+        <LoadingSpinner size={size} className={iconOnly ? '' : (iconPosition === 'left' ? 'mr-2' : 'ml-2')} />
       ) : icon && iconPosition === 'left' ? (
-        <span className={cn('mr-2', iconSizeClasses[size])}>{icon}</span>
+        <span className={cn(iconOnly ? '' : 'mr-2', iconSizeClasses[size])}>{icon}</span>
       ) : null}
       {children}
       {!loading && icon && iconPosition === 'right' && (
-        <span className={cn('ml-2', iconSizeClasses[size])}>{icon}</span>
+        <span className={cn(iconOnly ? '' : 'ml-2', iconSizeClasses[size])}>{icon}</span>
       )}
     </>
   );

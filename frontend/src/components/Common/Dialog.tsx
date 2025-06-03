@@ -79,17 +79,27 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(
         aria-modal="true"
         role="dialog"
       >
-        <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
         <div
           ref={combinedRef}
           className={cn(
-            'relative z-10 bg-white dark:bg-neutral-800 rounded-lg shadow-lg p-6 max-w-md w-full motion-reduce:animate-none',
+            'relative z-10 bg-white dark:bg-neutral-800 rounded-lg shadow-lg p-6 max-w-[calc(100vw-2rem)] md:max-w-md w-full motion-reduce:animate-none',
             isVisible ? 'animate-dialog-content-show' : 'opacity-0 scale-95', // Apply animation or ensure initial state for exit
             className
           )}
         >
+          <button
+            type="button"
+            className="absolute top-4 right-4 rounded-md p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
           {title && (
-            <h2 className="text-xl font-bold mb-4">{title}</h2>
+            <h2 className="text-xl font-bold mb-4 pr-6">{title}</h2>
           )}
           <div className="mb-6">
             {children}
