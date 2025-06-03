@@ -6,22 +6,26 @@ interface StatusBarProps {
   activeTools?: number;
   sessionName?: string;
   latency?: number;
+  className?: string;
 }
 
 export default function StatusBar({
   connectionStatus = 'disconnected',
   activeTools = 0,
   sessionName = 'Default',
-  latency = 0
+  latency = 0,
+  className,
 }: StatusBarProps) {
   const statusColors = {
     connected: 'bg-green-500',
     connecting: 'bg-yellow-500',
     disconnected: 'bg-red-500'
   };
-
   return (
-    <footer className="flex items-center justify-between px-4 py-2 bg-gray-800 border-t border-gray-700 text-xs">
+    <footer className={cn(
+      'flex items-center justify-between px-4 py-2 bg-gray-800 text-gray-100 text-xs',
+      className
+    )}>
       <div className="flex items-center space-x-4">
         <div className="flex items-center">
           <div className={cn(

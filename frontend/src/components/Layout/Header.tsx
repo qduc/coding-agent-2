@@ -7,13 +7,15 @@ interface HeaderProps {
   onMenuToggle: () => void;
   onDarkModeToggle: () => void;
   connectionStatus?: ConnectionStatus;
+  className?: string;
 }
 
 export default function Header({
   darkMode,
   onMenuToggle,
   onDarkModeToggle,
-  connectionStatus = 'disconnected'
+  connectionStatus = 'disconnected',
+  className,
 }: HeaderProps) {
   const statusColors = {
     connected: 'bg-green-500',
@@ -22,7 +24,12 @@ export default function Header({
   };
 
   return (
-    <header className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
+    <header
+      className={cn(
+        'flex items-center justify-between p-4 bg-gray-800 text-gray-100', // Base styles
+        className // Will receive grid positioning and borders from MainLayout
+      )}
+    >
       <div className="flex items-center space-x-4">
         <Button 
           variant="ghost" 

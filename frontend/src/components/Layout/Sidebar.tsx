@@ -7,96 +7,89 @@ type SidebarTab = 'files' | 'tools' | 'sessions';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  className?: string;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, className }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
 
   return (
-    <>
-      {/* Overlay for mobile */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
-          onClick={onClose}
-        />
-      )}
+    <aside className={cn('flex flex-col h-full bg-gray-800 border-r border-gray-700', className)}>
+      <div className="flex flex-col h-full">
+        {/* Optional: Mobile close button inside sidebar */}
+        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+          <h2
+            className={cn(
+              'text-lg font-semibold transition-opacity duration-200',
+              isOpen ? 'opacity-100' : 'md:opacity-0 md:w-0 md:overflow-hidden'
+            )}
+          >
+            Explorer
+          </h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="md:hidden text-gray-400 hover:text-gray-200"
+            aria-label="Close sidebar"
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            }
+          />
+        </div>
 
-      <aside className={cn(
-        'fixed md:relative z-30 w-64 h-full bg-gray-800 border-r border-gray-700 transition-all duration-300 ease-in-out',
-        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-      )}>
-        <div className="flex flex-col h-full">
-          <div className="p-4 border-b border-gray-700">
-            <h2 className="text-lg font-semibold">Explorer</h2>
-          </div>
-
-          <div className="flex border-b border-gray-700">
+        <div className="flex border-b border-gray-700">
+          {(['files', 'tools', 'sessions'] as SidebarTab[]).map((tab) => (
             <Button
+              key={tab}
               variant="ghost"
               size="sm"
               className={cn(
-                'flex-1 rounded-none',
-                activeTab === 'files' ? 'bg-gray-700' : ''
+                'flex-1 rounded-none py-3 px-2 text-xs md:text-sm', // Adjusted padding/text size
+                activeTab === tab ? 'bg-gray-700' : ''
               )}
-              onClick={() => setActiveTab('files')}
+              onClick={() => setActiveTab(tab)}
             >
-              Files
+              {/* Icon could go here, always visible */}
+              <span
+                className={cn(
+                  'capitalize transition-opacity duration-200',
+                  isOpen ? 'opacity-100' : 'md:opacity-0 md:w-0 md:overflow-hidden md:pointer-events-none'
+                )}
+              >
+                {tab}
+              </span>
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                'flex-1 rounded-none',
-                activeTab === 'tools' ? 'bg-gray-700' : ''
-              )}
-              onClick={() => setActiveTab('tools')}
-            >
-              Tools
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                'flex-1 rounded-none',
-                activeTab === 'sessions' ? 'bg-gray-700' : ''
-              )}
-              onClick={() => setActiveTab('sessions')}
-            >
-              Sessions
-            </Button>
-          </div>
+          ))}
+        </div>
 
-          <div className="flex-1 overflow-auto p-2">
+        <div className="flex-1 overflow-auto p-2">
+          <div
+            className={cn(
+              'transition-opacity duration-200',
+              isOpen ? 'opacity-100' : 'md:opacity-0 md:pointer-events-none'
+            )}
+          >
             {activeTab === 'files' && (
               <div className="space-y-1">
-                {/* File explorer content would go here */}
-                <div className="text-sm text-gray-400 p-2">
-                  File explorer coming soon
-                </div>
+                <div className="text-sm text-gray-400 p-2">File explorer coming soon</div>
               </div>
             )}
-
             {activeTab === 'tools' && (
               <div className="space-y-1">
-                {/* Tools content would go here */}
-                <div className="text-sm text-gray-400 p-2">
-                  Tools coming soon
-                </div>
+                <div className="text-sm text-gray-400 p-2">Tools coming soon</div>
               </div>
             )}
-
             {activeTab === 'sessions' && (
               <div className="space-y-1">
-                {/* Sessions content would go here */}
-                <div className="text-sm text-gray-400 p-2">
-                  Sessions coming soon
-                </div>
+                <div className="text-sm text-gray-400 p-2">Sessions coming soon</div>
               </div>
             )}
           </div>
         </div>
-      </aside>
-    </>
+      </div>
+    </aside>
   );
 }
