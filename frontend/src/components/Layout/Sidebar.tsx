@@ -40,19 +40,18 @@ export default function Sidebar({ isOpen, onClose, className }: SidebarProps) {
             onClick={onClose}
             className={cn('text-gray-400 hover:text-gray-200', isOpen ? 'md:hidden' : '')} // Show close button on mobile when open, or always if sidebar is narrow and open
             aria-label="Close sidebar"
-            icon={
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            }
-          />
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </Button>
         </div>
 
         <div className="flex border-b border-gray-700">
           {(['files', 'tools', 'sessions'] as SidebarTab[]).map((tab) => (
             <Button
               key={tab}
-              variant={activeTab === tab ? 'solid' : 'ghost'} // Make active tab more prominent
+              variant={activeTab === tab ? 'primary' : 'ghost'} // Make active tab more prominent
               size="sm"
               className={cn(
                 'flex-1 rounded-none py-3 px-2 text-xs md:text-sm justify-center',

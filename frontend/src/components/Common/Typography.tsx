@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import cn from 'classnames';
+import { cn } from '../../utils/cn';
 
 type TextVariant = 'body' | 'caption' | 'small' | 'mono';
 
@@ -17,14 +17,14 @@ interface HeadingProps {
   children: ReactNode;
 }
 
-export const Text = ({ 
-  as: Tag = 'p', 
-  variant = 'body', 
-  className, 
-  children 
+export const Text = ({
+  as: Tag = 'p',
+  variant = 'body',
+  className,
+  children
 }: TextProps) => {
   const baseClasses = 'text-gray-900 dark:text-gray-100';
-  
+
   const variantClasses = {
     body: 'text-base',
     caption: 'text-sm text-gray-600 dark:text-gray-400',
@@ -43,16 +43,14 @@ export const Text = ({
   );
 };
 
-export const Heading = ({ 
-  as: Tag, 
-  level, 
-  className, 
-  children 
+export const Heading = ({
+  as,
+  level,
+  className,
+  children
 }: HeadingProps) => {
-  if (!Tag) {
-    Tag = `h${level}` as React.ElementType;
-  }
-  
+  const Tag = (as || `h${level}`) as keyof JSX.IntrinsicElements;
+
   const sizeClasses = {
     1: 'text-5xl font-bold',
     2: 'text-4xl font-bold',
