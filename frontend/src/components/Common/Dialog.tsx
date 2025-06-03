@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import ReactDOM, { createPortal } from 'react-dom';
 import { cn } from '../../utils/cn';
 import { Button } from './Button';
 
@@ -20,48 +20,71 @@ export interface DialogProps {
 
 export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(
   ({ isOpen, onClose, title, children, className, overlayClassName, actions }, ref) => {
-    const dialogRef = useRef<HTMLDivElement>(null);
-    
+    const internalDialogRef = useRef<HTMLDivElement>(null);
+    const combinedRef = ref || internalDialogRef;
+
+    // State to control mounting/unmounting for exit animations
+    const [isMounted, setIsMounted] = useState(isOpen);
+    // State to control visibility classes for enter/exit transitions
+    const [isVisible, setIsVisible] = useState(false);
+
     useEffect(() => {
+      if (isOpen) {
+        setIsMounted(true);
+        // Delay setting isVisible to true to allow CSS transitions to catch the change
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => setIsVisible(true));
+        });
+      } else {
+        setIsVisible(false); // Start exit animation
+        // Unmount after animation duration
+        const timer = setTimeout(() => setIsMounted(false), 200); // Corresponds to animation duration
+        return () => clearTimeout(timer);
+      }
+    }, [isOpen]);
+
+    useEffect(() => {
+      if (!isMounted) return; // Don't add listeners if not mounted
+
       const handleEscape = (e: KeyboardEvent) => {
         if (e.key === 'Escape') onClose();
       };
+
+      // const handleOutsideClick = (e: MouseEvent) => { // Now handled by overlay click
+      //   if (combinedRef.current && !combinedRef.current.contains(e.target as Node)) {
+      //     onClose();
+      //   }
+      // };
       
-      const handleOutsideClick = (e: MouseEvent) => {
-        if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
-          onClose();
-        }
-      };
-      
-      if (isOpen) {
-        document.addEventListener('keydown', handleEscape);
-        document.addEventListener('mousedown', handleOutsideClick);
-        document.body.style.overflow = 'hidden';
-      }
+      document.addEventListener('keydown', handleEscape);
+      // document.addEventListener('mousedown', handleOutsideClick);
+      document.body.style.overflow = 'hidden';
       
       return () => {
         document.removeEventListener('keydown', handleEscape);
-        document.removeEventListener('mousedown', handleOutsideClick);
+        // document.removeEventListener('mousedown', handleOutsideClick);
         document.body.style.overflow = 'unset';
       };
-    }, [isOpen, onClose]);
+    }, [isMounted, onClose, combinedRef]);
     
-    if (!isOpen) return null;
+    if (!isMounted) return null;
     
-    return ReactDOM.createPortal(
+    return createPortal(
       <div
         className={cn(
-          'fixed inset-0 z-50 flex items-center justify-center',
+          'fixed inset-0 z-50 flex items-center justify-center motion-reduce:animate-none',
+          isVisible ? 'animate-dialog-overlay-show' : 'opacity-0', // Apply animation or ensure initial state for exit
           overlayClassName
         )}
         aria-modal="true"
         role="dialog"
       >
-        <div className="fixed inset-0 bg-black/50" />
+        <div className="fixed inset-0 bg-black/50" onClick={onClose} />
         <div
-          ref={ref || dialogRef}
+          ref={combinedRef}
           className={cn(
-            'relative z-10 bg-white rounded-lg shadow-lg p-6 max-w-md w-full',
+            'relative z-10 bg-white dark:bg-neutral-800 rounded-lg shadow-lg p-6 max-w-md w-full motion-reduce:animate-none',
+            isVisible ? 'animate-dialog-content-show' : 'opacity-0 scale-95', // Apply animation or ensure initial state for exit
             className
           )}
         >
@@ -87,7 +110,7 @@ export const Dialog = React.forwardRef<HTMLDivElement, DialogProps>(
           )}
         </div>
       </div>,
-      document.body
+      document.getElementById('dialog-root') || document.body // Prefer a dedicated root if available
     );
   }
 );

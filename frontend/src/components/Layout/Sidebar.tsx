@@ -13,15 +13,23 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose, className }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
 
+  // Base classes for the sidebar
+  const baseClasses = 'flex flex-col h-full bg-gray-800 border-r border-gray-700 fixed inset-y-0 left-0 z-30';
+  // Transition classes
+  const transitionClasses = 'transition-all duration-300 ease-in-out motion-reduce:transition-none';
+  // Width classes based on isOpen state
+  const widthClasses = isOpen ? 'w-64' : 'w-0 md:w-20'; // Collapsed to 0 on mobile, 20 (for icons) on md+
+  // Classes for content visibility based on isOpen state
+  const contentVisibilityClasses = isOpen ? 'opacity-100' : 'opacity-0 md:opacity-100'; // Content fully visible when open, hidden on mobile when closed, icons visible on md+ when closed
+
   return (
-    <aside className={cn('flex flex-col h-full bg-gray-800 border-r border-gray-700', className)}>
+    <aside className={cn(baseClasses, transitionClasses, widthClasses, className)}>
       <div className="flex flex-col h-full">
-        {/* Optional: Mobile close button inside sidebar */}
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
           <h2
             className={cn(
               'text-lg font-semibold transition-opacity duration-200',
-              isOpen ? 'opacity-100' : 'md:opacity-0 md:w-0 md:overflow-hidden'
+              isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none' // Hide title completely when closed
             )}
           >
             Explorer
@@ -30,7 +38,7 @@ export default function Sidebar({ isOpen, onClose, className }: SidebarProps) {
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="md:hidden text-gray-400 hover:text-gray-200"
+            className={cn('text-gray-400 hover:text-gray-200', isOpen ? 'md:hidden' : '')} // Show close button on mobile when open, or always if sidebar is narrow and open
             aria-label="Close sidebar"
             icon={
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -44,19 +52,22 @@ export default function Sidebar({ isOpen, onClose, className }: SidebarProps) {
           {(['files', 'tools', 'sessions'] as SidebarTab[]).map((tab) => (
             <Button
               key={tab}
-              variant="ghost"
+              variant={activeTab === tab ? 'solid' : 'ghost'} // Make active tab more prominent
               size="sm"
               className={cn(
-                'flex-1 rounded-none py-3 px-2 text-xs md:text-sm', // Adjusted padding/text size
-                activeTab === tab ? 'bg-gray-700' : ''
+                'flex-1 rounded-none py-3 px-2 text-xs md:text-sm justify-center',
+                activeTab === tab ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'
               )}
               onClick={() => setActiveTab(tab)}
             >
-              {/* Icon could go here, always visible */}
+              {/* Placeholder for Icon - TODO: Add actual icons */}
+              <span className={cn(!isOpen && 'md:block hidden')}> {/* Icon placeholder */}
+                {tab.substring(0,1).toUpperCase()}
+              </span>
               <span
                 className={cn(
                   'capitalize transition-opacity duration-200',
-                  isOpen ? 'opacity-100' : 'md:opacity-0 md:w-0 md:overflow-hidden md:pointer-events-none'
+                  isOpen ? 'opacity-100 ml-2' : 'opacity-0 w-0 overflow-hidden md:hidden' // Text only visible when open
                 )}
               >
                 {tab}
@@ -64,12 +75,12 @@ export default function Sidebar({ isOpen, onClose, className }: SidebarProps) {
             </Button>
           ))}
         </div>
-
-        <div className="flex-1 overflow-auto p-2">
+        {/* Ensure content area also respects the transition and overflow */}
+        <div className={cn('flex-1 overflow-y-auto overflow-x-hidden p-2 transition-opacity duration-300', isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto')}>
           <div
             className={cn(
               'transition-opacity duration-200',
-              isOpen ? 'opacity-100' : 'md:opacity-0 md:pointer-events-none'
+              isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none md:opacity-100' // Content hidden when sidebar is collapsed on mobile
             )}
           >
             {activeTab === 'files' && (
