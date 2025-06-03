@@ -54,6 +54,47 @@ module.exports = {
         relaxed: '1.625',
         loose: '2',
       },
+      boxShadow: {
+        xs: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        sm: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+        DEFAULT: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        md: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+        lg: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        xl: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        inner: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+      },
+      backdropBlur: {
+        sm: '4px',
+        DEFAULT: '8px',
+        md: '12px',
+      },
+      colors: {
+        primary: {
+          DEFAULT: '#3B82F6',
+          light: '#93C5FD',
+          dark: '#1D4ED8',
+        },
+        secondary: {
+          DEFAULT: '#6B7280',
+          light: '#9CA3AF',
+          dark: '#374151',
+        },
+        destructive: {
+          DEFAULT: '#EF4444',
+          light: '#FECACA',
+          dark: '#B91C1C',
+        },
+      },
+      transitionTimingFunction: {
+        'in-out': 'cubic-bezier(0.4, 0, 0.2, 1)',
+        'out': 'cubic-bezier(0, 0, 0.2, 1)',
+        'in': 'cubic-bezier(0.4, 0, 1, 1)',
+      },
+      transitionDuration: {
+        '150': '150ms',
+        '200': '200ms',
+        '300': '300ms',
+      },
     },
   },
   plugins: [],
