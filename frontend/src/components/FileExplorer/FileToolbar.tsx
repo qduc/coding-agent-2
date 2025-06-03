@@ -1,3 +1,6 @@
+import { Button } from '@/components/ui/button';
+import { RefreshCw, List, Grid } from 'lucide-react'; // Optional icons
+import { cn } from '@/lib/utils';
 import { FileViewMode } from './types';
 
 interface FileToolbarProps {
@@ -9,40 +12,35 @@ interface FileToolbarProps {
 export const FileToolbar = ({
   viewMode,
   onViewModeChange,
-  onRefresh, // Destructure onRefresh
+  onViewModeChange,
+  onRefresh,
 }: FileToolbarProps) => {
   return (
-    <div className="flex items-center justify-between p-2 border-b bg-gray-50 dark:bg-gray-800">
+    <div className="flex items-center justify-between p-2 border-b border-border bg-muted/50">
       <div className="flex items-center space-x-2">
-        <span className="text-sm text-gray-600 dark:text-gray-300">File Explorer</span>
-        <button
-          className="px-3 py-1 text-sm rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600"
-          onClick={onRefresh} // Call onRefresh
-        >
+        <span className="text-sm text-muted-foreground">File Explorer</span>
+        <Button variant="outline" size="sm" onClick={onRefresh}>
+          <RefreshCw className="mr-2 h-4 w-4" /> {/* Optional icon */}
           Refresh
-        </button>
+        </Button>
       </div>
-      <div className="flex space-x-2">
-        <button
-          className={`px-3 py-1 text-sm rounded ${
-            viewMode === 'list' 
-              ? 'bg-blue-100 dark:bg-blue-900' 
-              : 'hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
+      <div className="flex space-x-1"> {/* Reduced space for icon buttons if used */}
+        <Button
+          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+          size="sm" // or "icon" if only using icons
           onClick={() => onViewModeChange('list')}
         >
-          List
-        </button>
-        <button
-          className={`px-3 py-1 text-sm rounded ${
-            viewMode === 'grid' 
-              ? 'bg-blue-100 dark:bg-blue-900' 
-              : 'hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
+          <List className="h-4 w-4 md:mr-2" /> {/* Optional icon, hide text on small screens */}
+          <span className="hidden md:inline">List</span>
+        </Button>
+        <Button
+          variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+          size="sm" // or "icon"
           onClick={() => onViewModeChange('grid')}
         >
-          Grid
-        </button>
+          <Grid className="h-4 w-4 md:mr-2" /> {/* Optional icon */}
+          <span className="hidden md:inline">Grid</span>
+        </Button>
       </div>
     </div>
   );
