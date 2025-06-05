@@ -63,36 +63,50 @@ export class BoxRenderer {
     const headerPadding = Math.max(0, boxWidth - headerContentWidth - 6); // 6 = "╭─ " + " ╮"
     const topBorder = '╭─ ' + chalk.cyan(langText) + ' ' + '─'.repeat(headerPadding) + ' ' + chalk.gray(copyIndicator) + ' ╮';
 
-    // Format code lines
-    const formattedLines = codeLines.map((line, index) => {
-      // Handle truncation for long lines
-      let lineContent;
-      if (line.length > contentWidth) {
-        lineContent = line.substring(0, contentWidth - 3) + '...';
+    // Format code lines with wrapping for long lines
+    const processedLines: string[] = [];
+    codeLines.forEach((line, sourceLineIndex) => {
+      if (line.length <= contentWidth) {
+        // Short line - display normally
+        const lineContent = line.padEnd(contentWidth);
+        let formattedLine;
+        if (showLineNumbers) {
+          const lineNum = (sourceLineIndex + 1).toString().padStart(maxLineNumWidth, ' ');
+          const lineNumFormatted = chalk.gray.dim(lineNum + ' │ ');
+          formattedLine = chalk.gray('│ ') + lineNumFormatted + lineContent + chalk.gray(' │');
+        } else {
+          formattedLine = chalk.gray('│ ') + lineContent + chalk.gray(' │');
+        }
+        processedLines.push(formattedLine);
       } else {
-        lineContent = line;
+        // Long line - wrap it
+        let remaining = line;
+        let isFirstChunk = true;
+        while (remaining.length > 0) {
+          const chunk = remaining.substring(0, contentWidth);
+          const lineContent = chunk.padEnd(contentWidth);
+          let formattedLine;
+          if (showLineNumbers) {
+            // Show line number only on first chunk, indent continuation lines
+            const lineNumDisplay = isFirstChunk 
+              ? (sourceLineIndex + 1).toString().padStart(maxLineNumWidth, ' ')
+              : ' '.repeat(maxLineNumWidth);
+            const lineNumFormatted = chalk.gray.dim(lineNumDisplay + ' │ ');
+            formattedLine = chalk.gray('│ ') + lineNumFormatted + lineContent + chalk.gray(' │');
+          } else {
+            formattedLine = chalk.gray('│ ') + lineContent + chalk.gray(' │');
+          }
+          processedLines.push(formattedLine);
+          remaining = remaining.substring(contentWidth);
+          isFirstChunk = false;
+        }
       }
-
-      // Apply padding to ensure consistent width
-      lineContent = lineContent.padEnd(contentWidth);
-
-      // Construct the line with borders and line numbers if required
-      let formattedLine;
-      if (showLineNumbers) {
-        const lineNum = (index + 1).toString().padStart(maxLineNumWidth, ' ');
-        const lineNumFormatted = chalk.gray.dim(lineNum + ' │ ');
-        formattedLine = chalk.gray('│ ') + lineNumFormatted + lineContent + chalk.gray(' │');
-      } else {
-        formattedLine = chalk.gray('│ ') + lineContent + chalk.gray(' │');
-      }
-
-      return formattedLine;
     });
 
     const bottomBorder = '╰' + '─'.repeat(boxWidth - 1) + '╯';
 
     return '\n' + chalk.gray(topBorder) + '\n' +
-           formattedLines.join('\n') + '\n' +
+           processedLines.join('\n') + '\n' +
            chalk.gray(bottomBorder) + '\n';
   }
 
@@ -105,9 +119,19 @@ export class BoxRenderer {
     const titleWidth = this.getDisplayWidth(title);
     const headerPadding = Math.max(0, boxWidth - titleWidth - 4); // 4 = "┌ " + " ┐"
     const topBorder = '┌─' + title + '─'.repeat(headerPadding) + '┐';
-    const contentLines = content.split('\n').map(line => {
-      const trimmed = line.length > boxWidth - 4 ? line.substring(0, boxWidth - 7) + '...' : line;
-      return '│ ' + trimmed.padEnd(boxWidth - 4) + ' │';
+    const contentLines = content.split('\n').flatMap(line => {
+      if (line.length <= boxWidth - 4) {
+        return ['│ ' + line.padEnd(boxWidth - 4) + ' │'];
+      }
+      // Wrap long lines instead of truncating
+      const wrapped: string[] = [];
+      let remaining = line;
+      while (remaining.length > 0) {
+        const chunk = remaining.substring(0, boxWidth - 4);
+        wrapped.push('│ ' + chunk.padEnd(boxWidth - 4) + ' │');
+        remaining = remaining.substring(boxWidth - 4);
+      }
+      return wrapped;
     });
     const bottomBorder = '└' + '─'.repeat(boxWidth - 2) + '┘';
     return '\n' + topBorder + '\n' +

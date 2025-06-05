@@ -169,7 +169,6 @@ export class LLMService implements LLMProvider {
         await this.openai!.chat.completions.create({
           messages: [{ role: 'user', content: 'test' }],
           model: 'openai/gpt-3.5-turbo',  // OpenRouter requires full model path
-          max_tokens: 1
         });
       } else {
         await this.testOpenAIConnection();
@@ -280,9 +279,7 @@ export class LLMService implements LLMProvider {
       const stream = await this.openai!.chat.completions.create({
         model: config.model || 'gpt-4-turbo-preview',
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-        max_tokens: config.maxTokens || 4000,
         stream: true,
-        temperature: 0.7
       });
 
       let fullContent = '';
@@ -360,8 +357,6 @@ export class LLMService implements LLMProvider {
       const response = await this.openai!.chat.completions.create({
         model: config.model || 'gpt-4o-2024-11-20',
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-        max_tokens: config.maxTokens || 8000,
-        temperature: 0.7
       });
 
       const responseContent = response.choices[0]?.message?.content || '';
@@ -430,8 +425,6 @@ export class LLMService implements LLMProvider {
           ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
           ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id })
         })),
-        max_tokens: config.maxTokens || 8000,
-        temperature: 0.7
       };
 
       // Add function calling if functions are provided
@@ -526,8 +519,6 @@ export class LLMService implements LLMProvider {
           ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
           ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id })
         })),
-        max_tokens: config.maxTokens || 4000,
-        temperature: 0.7,
         stream: true
       };
 
