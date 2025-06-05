@@ -205,7 +205,7 @@ const executeToolHandler: RequestHandler = async (req, res, _next) => {
     // Create tool instance and execution context
     const toolInstance = new ToolClass();
     // context from req.body is expected to be Partial<IToolExecutionContext> or undefined/null
-    const executionContext = new WebToolExecutionContext(new WebOutputHandler(), context?.workingDirectory, context?.permissions);
+    // const executionContext = new WebToolExecutionContext(new WebOutputHandler(socket), context?.workingDirectory, context?.permissions);
 
     const result = await toolInstance.execute(parameters, context?.retryOptions);
 

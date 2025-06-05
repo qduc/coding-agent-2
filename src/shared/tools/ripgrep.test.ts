@@ -85,18 +85,20 @@ This project has UserNotFound errors.
       expect(error.message).toContain('Invalid search path');
     });
 
-    it('should reject file as search path', async () => {
+    it('should accept file as search path', async () => {
       await createTestFiles();
       const filePath = path.join(tempDir, 'src', 'auth.js');
 
       const result = await ripgrepTool.execute({
-        pattern: 'test',
+        pattern: 'login',
         path: filePath
       });
 
-      expect(result.success).toBe(false);
-      const error = result.error as ToolError;
-      expect(error.message).toContain('not a directory');
+      expect(result.success).toBe(true);
+      const data = result.output as RipgrepResult;
+      expect(data.matches.length).toBeGreaterThan(0);
+      // When searching a single file, should return just the filename
+      expect(data.matches[0].file).toBe('auth.js');
     });
   });
 

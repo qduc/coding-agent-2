@@ -6,7 +6,7 @@ import { generalLimiter } from '../middleware/rateLimiter';
 import { paginateArray } from '../utils/pagination'; // Removed parsePaginationParams as it's not used in the provided snippet, ensure paginateArray handles parsing if needed
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid'; // For generating message IDs
-import { validate } from '../middleware/validate'; // Import the validate middleware
+import { validate } from '../middleware/validation'; // Import the validate middleware
 
 const router = Router();
 const sessionManager = new WebSessionManager();

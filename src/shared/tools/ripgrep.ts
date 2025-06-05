@@ -24,7 +24,7 @@ import { validatePath } from './validation';
 export interface RipgrepParams {
   /** Search pattern (can be regex) */
   pattern: string;
-  /** Directory to search in (default: current directory) */
+  /** Directory or file to search in (default: current directory) */
   path?: string;
   /** Include lines after matches for context */
   after?: number;
@@ -108,7 +108,7 @@ export interface RipgrepResult {
 
 export class RipgrepTool extends BaseTool {
   readonly name = 'ripgrep';
-  readonly description = 'Fast text search across files with context, filtering, and statistics - perfect for code archaeology, debugging, and refactoring';
+  readonly description = 'Fast text search across files and directories with context, filtering, and statistics - perfect for code archaeology, debugging, and refactoring';
   private ripgrepPath: string | null = null;
 
   constructor(context: Partial<ToolContext> = {}) {
@@ -177,7 +177,7 @@ export class RipgrepTool extends BaseTool {
       },
       path: {
         type: 'string',
-        description: 'Directory to search in (default: current directory)'
+        description: 'Directory or file to search in (default: current directory)'
       },
       after: {
         type: 'number',
@@ -318,13 +318,16 @@ export class RipgrepTool extends BaseTool {
 
       const absolutePath = path.resolve(searchPath);
 
-      // Check if it's a directory
+      // Check if it's a directory or file
       const stats_fs = await fs.stat(absolutePath);
-      if (!stats_fs.isDirectory()) {
+      const isDirectory = stats_fs.isDirectory();
+      const isFile = stats_fs.isFile();
+      
+      if (!isDirectory && !isFile) {
         return this.createErrorResult(
-          `Search path is not a directory: ${searchPath}`,
+          `Search path is neither a directory nor a file: ${searchPath}`,
           'INVALID_PATH',
-          ['Provide a directory path instead of a file']
+          ['Provide a valid directory or file path']
         );
       }
 
@@ -536,29 +539,41 @@ export class RipgrepTool extends BaseTool {
     const matches: RipgrepMatch[] = [];
     const stats: RipgrepStats = { filesSearched: 0, matchesFound: 0, linesScanned: 0, executionTime: 0, filesSkipped: 0 };
     let filesToProcess: string[] = [];
-    // Collect files recursively
-    const collect = async (dir: string) => {
-      const entries = await fs.readdir(dir);
-      for (const name of entries) {
-        // Skip hidden if not requested
-        if (!includeHidden && name.startsWith('.')) continue;
-        const full = path.join(dir, name);
-        let stat;
-        try { stat = await fs.stat(full); } catch { stats.filesSkipped++; continue; }
-        // Skip blocked paths
-        if (this.isBlockedPath(full)) {
-          stats.filesSkipped++;
-          continue;
+    
+    // Check if searchPath is a file or directory
+    const searchStat = await fs.stat(searchPath);
+    
+    if (searchStat.isFile()) {
+      // If it's a file, just add it to the process list
+      filesToProcess.push(searchPath);
+    } else {
+      // If it's a directory, collect files recursively
+      const collect = async (dir: string) => {
+        const entries = await fs.readdir(dir);
+        for (const name of entries) {
+          // Skip hidden if not requested
+          if (!includeHidden && name.startsWith('.')) continue;
+          const full = path.join(dir, name);
+          let stat;
+          try { stat = await fs.stat(full); } catch { stats.filesSkipped++; continue; }
+          // Skip blocked paths
+          if (this.isBlockedPath(full)) {
+            stats.filesSkipped++;
+            continue;
+          }
+          if (stat.isDirectory()) {
+            // Recurse into subdirectory
+            await collect(full);
+          } else {
+            // Add file to process list
+            filesToProcess.push(full);
+          }
         }
-        if (stat.isDirectory()) {
-          // Recurse into subdirectory
-          await collect(full);
-        } else {
-          // Add file to process list
-          filesToProcess.push(full);
-        }
-      }
-    };
+      };
+      
+      // Start collecting files from directory
+      await collect(searchPath);
+    }
 
     // Execute search on file content
     const searchInFile = async (file: string) => {
@@ -610,8 +625,11 @@ export class RipgrepTool extends BaseTool {
 
           // Only add match if pattern was actually found
           if (foundMatch) {
+            // For single file searches, use just the filename; for directory searches, use relative path
+            const displayPath = searchStat.isFile() ? path.basename(file) : path.relative(searchPath, file);
+            
             matches.push({
-              file: path.relative(searchPath, file),
+              file: displayPath,
               lineNumber: lineNumber + 1,
               column: columnNumber,
               line: line,
@@ -632,9 +650,6 @@ export class RipgrepTool extends BaseTool {
         stats.filesSkipped++;
       }
     };
-
-    // Start collecting files
-    await collect(searchPath);
 
     // Process each collected file
     for (const file of filesToProcess) {

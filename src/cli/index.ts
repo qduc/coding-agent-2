@@ -70,12 +70,10 @@ async function main() {
           configManager.getConfig().streaming;
 
         // Create CLI implementations
-        const inputHandler = new CLIInputHandler();
         const toolContext = new CLIToolExecutionContext();
 
         // Create and initialize agent with CLI implementations
         const agent = new Agent({
-          inputHandler,
           toolContext
         });
         const initialized = await agent.initialize();

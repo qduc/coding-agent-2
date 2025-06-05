@@ -8,10 +8,10 @@ import { webServer } from './server';
 async function startServer() {
   try {
     // Validate environment
-    if (!process.env.API_KEY) {
-      console.error('❌ API_KEY environment variable is required');
-      process.exit(1);
-    }
+    // if (!process.env.API_KEY) {
+    //   console.error('❌ API_KEY environment variable is required');
+    //   process.exit(1);
+    // }
 
     // Log startup info
     console.log('🚀 Starting Coding Agent Web Server');
