@@ -3,8 +3,7 @@
  *
  * Provides file writing functionality with support for:
  * - Creating new files with content
- * - Appending to existing files
- * - Overwriting files with confirmation
+ * - Modifying existing files with unified diff patches
  * - Backup creation for safety
  * - Security validation to prevent writing to sensitive paths
  */
@@ -17,20 +16,12 @@ import { validatePath } from './validation';
 
 export interface WriteParams {
   path: string;
-  content?: string;
+  content?: string;   // For full writes
+  diff?: string;      // For patching existing files
   encoding?: 'utf8' | 'binary' | 'base64';
-  mode?: 'create' | 'patch';
   backup?: boolean;
   createDirs?: boolean;
   atomic?: boolean;
-  // Patch-specific parameters
-  patches?: Array<{
-    startLine: number;
-    endLine?: number;
-    originalContent?: string;  // For validation
-    newContent: string;
-  }>;
-  validateContext?: boolean;
 }
 
 export interface WriteResult {
@@ -38,28 +29,23 @@ export interface WriteResult {
   bytesWritten: number;
   created: boolean;
   backupPath?: string;
-  mode: string;
+  mode: 'create' | 'patch';
 }
 
 export class WriteTool extends BaseTool {
   readonly name = 'write';
-  readonly description = 'Write content to files with safety features and backup support';
+  readonly description = 'Write content to files with safety features and backup support. Use either content (for full writes) or diff (for patching existing files)';
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path to write to' },
-      content: { type: 'string', description: 'Content to write to the file (required for create mode)' },
+      content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
+      diff: { type: 'string', description: 'Unified diff to apply to an existing file (only for modifying existing files)' },
       encoding: {
         type: 'string',
         description: 'File encoding',
         enum: ['utf8', 'binary', 'base64'],
         default: 'utf8'
-      },
-      mode: {
-        type: 'string',
-        description: 'Write mode: create (new file) or patch (modify existing)',
-        enum: ['create', 'patch'],
-        default: 'create'
       },
       backup: {
         type: 'boolean',
@@ -75,27 +61,13 @@ export class WriteTool extends BaseTool {
         type: 'boolean',
         description: 'Use atomic write operation (write to temp file then move)',
         default: true
-      },
-      patches: {
-        type: 'array',
-        description: 'Array of patches to apply (required for patch mode)',
-        items: {
-          type: 'object',
-          properties: {
-            startLine: { type: 'number', description: 'Starting line number (1-based)' },
-            endLine: { type: 'number', description: 'Ending line number (1-based), defaults to startLine' },
-            originalContent: { type: 'string', description: 'Original content for validation' },
-            newContent: { type: 'string', description: 'New content to replace with' }
-          }
-        }
-      },
-      validateContext: {
-        type: 'boolean',
-        description: 'Validate original content matches before applying patches',
-        default: true
       }
     },
     required: ['path'],
+    oneOf: [
+      { required: ['content'] },
+      { required: ['diff'] }
+    ],
     additionalProperties: false
   };
 
@@ -103,22 +75,27 @@ export class WriteTool extends BaseTool {
     const {
       path: filePath,
       content,
+      diff,
       encoding = 'utf8',
-      mode = 'create',
       backup = true,
       createDirs = true,
-      atomic = true,
-      patches,
-      validateContext = true
+      atomic = true
     } = params;
 
-    // Explicitly validate mode
-    const allowedModes = ['create', 'patch'];
-    if (typeof mode !== 'string' || !allowedModes.includes(mode)) {
+    // Validate that exactly one of content or diff is provided
+    if (!content && !diff) {
       return this.createErrorResult(
-        `Invalid mode: ${mode}. Must be one of: create, patch`,
+        'Either content or diff must be provided',
         'VALIDATION_ERROR',
-        ['Use a valid mode: create or patch']
+        ['Provide either content for full writes or diff for patching existing files']
+      );
+    }
+
+    if (content && diff) {
+      return this.createErrorResult(
+        'Cannot provide both content and diff',
+        'VALIDATION_ERROR',
+        ['Choose either content for full writes or diff for patching existing files']
       );
     }
 
@@ -129,23 +106,6 @@ export class WriteTool extends BaseTool {
         `Invalid encoding: ${encoding}. Must be one of: utf8, binary, base64`,
         'VALIDATION_ERROR',
         ['Use a valid encoding: utf8, binary, or base64']
-      );
-    }
-
-    // Validate mode-specific parameters
-    if (mode === 'create' && !content) {
-      return this.createErrorResult(
-        'Content is required for create mode',
-        'VALIDATION_ERROR',
-        ['Provide content parameter for create mode']
-      );
-    }
-
-    if (mode === 'patch' && (!patches || patches.length === 0)) {
-      return this.createErrorResult(
-        'Patches array is required for patch mode',
-        'VALIDATION_ERROR',
-        ['Provide patches parameter for patch mode']
       );
     }
 
@@ -187,18 +147,19 @@ export class WriteTool extends BaseTool {
 
       const fileExists = await fs.pathExists(absolutePath);
 
-      // Handle different modes
-      if (mode === 'create') {
+      let finalContent: string;
+      let mode: 'create' | 'patch';
+      let contentSize: number;
+
+      if (content !== undefined) {
+        // Full content write
+        mode = 'create';
         if (fileExists) {
-          return this.createErrorResult(
-            `File already exists: ${filePath}`,
-            'VALIDATION_ERROR',
-            ['Use patch mode to modify existing files', 'Choose a different filename']
-          );
+          mode = 'patch'; // Actually overwriting existing file
         }
 
-        // Check content size for create mode
-        const contentSize = Buffer.byteLength(content!, encoding as BufferEncoding);
+        // Check content size
+        contentSize = Buffer.byteLength(content, encoding as BufferEncoding);
         if (contentSize > this.context.maxFileSize) {
           return this.createErrorResult(
             `Content size (${contentSize} bytes) exceeds maximum allowed size (${this.context.maxFileSize} bytes)`,
@@ -207,22 +168,32 @@ export class WriteTool extends BaseTool {
           );
         }
 
-        const shouldBackup = false; // No backup needed for new files
-        return await this.performWrite(absolutePath, content!, encoding as BufferEncoding, mode, shouldBackup, atomic, fileExists, contentSize);
-      } else if (mode === 'patch') {
+        finalContent = content;
+      } else {
+        // Diff mode
+        mode = 'patch';
         if (!fileExists) {
           return this.createErrorResult(
-            `File does not exist: ${filePath}`,
+            `File does not exist: ${filePath}. Cannot apply diff to non-existent file.`,
             'VALIDATION_ERROR',
-            ['Create the file first with create mode', 'Check the file path']
+            ['Create the file first with a content write', 'Check the file path']
           );
         }
 
-        // Apply patches and get the modified content
-        const patchedContent = await this.applyPatches(absolutePath, patches!, validateContext);
+        // Apply unified diff
+        const currentContent = await fs.readFile(absolutePath, 'utf8');
+        try {
+          finalContent = this.applyDiff(currentContent, diff!);
+        } catch (error) {
+          if (error instanceof ToolError) throw error;
+          throw new ToolError(
+            `Failed to apply diff: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'VALIDATION_ERROR'
+          );
+        }
 
         // Check content size for patched content
-        const contentSize = Buffer.byteLength(patchedContent, encoding as BufferEncoding);
+        contentSize = Buffer.byteLength(finalContent, encoding as BufferEncoding);
         if (contentSize > this.context.maxFileSize) {
           return this.createErrorResult(
             `Patched content size (${contentSize} bytes) exceeds maximum allowed size (${this.context.maxFileSize} bytes)`,
@@ -230,18 +201,10 @@ export class WriteTool extends BaseTool {
             [`Reduce patch size to keep content under ${this.context.maxFileSize} bytes`]
           );
         }
-
-        const shouldBackup = backup && !atomic; // Backup only if not using atomic writes
-        return await this.performWrite(absolutePath, patchedContent, encoding as BufferEncoding, mode, shouldBackup, atomic, fileExists, contentSize);
       }
 
-      // This should never happen due to validation above
-      return this.createErrorResult(
-        `Unsupported mode: ${mode}`,
-        'VALIDATION_ERROR',
-        ['Use a valid mode: create or patch']
-      );
-
+      const shouldBackup = backup && fileExists && !atomic; // Backup only for existing files and non-atomic writes
+      return await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, atomic, fileExists, contentSize);
     } catch (error) {
       if (error instanceof ToolError) throw error;
       throw new ToolError(
@@ -324,7 +287,7 @@ export class WriteTool extends BaseTool {
     absolutePath: string,
     content: string,
     encoding: BufferEncoding,
-    mode: string,
+    mode: 'create' | 'patch',
     shouldBackup: boolean,
     atomic: boolean,
     fileExists: boolean,
@@ -347,8 +310,8 @@ export class WriteTool extends BaseTool {
       let bytesWritten = 0;
       const created = !fileExists;
 
-      if (atomic && (mode === 'patch' || mode === 'create')) {
-        // Use atomic write for create and patch modes
+      if (atomic) {
+        // Use atomic write
         tempPath = `${absolutePath}.tmp.${Date.now()}.${process.pid}`;
         await fs.writeFile(tempPath, content, encoding);
         await fs.move(tempPath, absolutePath, { overwrite: true });
@@ -416,69 +379,130 @@ export class WriteTool extends BaseTool {
   }
 
   /**
-   * Apply patches to existing file content
+   * Apply unified diff to existing content
    */
-  private async applyPatches(
-    filePath: string,
-    patches: Array<{
-      startLine: number;
-      endLine?: number;
-      originalContent?: string;
-      newContent: string;
-    }>,
-    validateContext: boolean
-  ): Promise<string> {
-    // Read current file content
-    const currentContent = await fs.readFile(filePath, 'utf8');
-    const lines = currentContent.split('\n');
+  private applyDiff(currentContent: string, diff: string): string {
+    // Split the current content and the diff into lines
+    const currentLines = currentContent.split('\n');
+    const diffLines = diff.split('\n');
 
-    // Validate and sort patches by line number (reverse order to maintain line numbers)
-    const sortedPatches = patches
-      .map(patch => ({
-        ...patch,
-        endLine: patch.endLine || patch.startLine
-      }))
-      .sort((a, b) => b.startLine - a.startLine); // Reverse order
+    // We'll reconstruct the file line by line
+    const resultLines: string[] = [];
+    let currentLineIndex = 0;
 
-    // Validate patch line numbers
-    for (const patch of sortedPatches) {
-      if (patch.startLine < 1 || patch.startLine > lines.length) {
-        throw new ToolError(
-          `Patch start line ${patch.startLine} is out of range (file has ${lines.length} lines)`,
-          'VALIDATION_ERROR'
-        );
+    // State for the current hunk
+    let hunkStartLine = 0;
+    let hunkLineCount = 0;
+    let hunkLines: string[] = [];
+    let inHunk = false;
+
+    for (const diffLine of diffLines) {
+      if (diffLine.startsWith('--- ') || diffLine.startsWith('+++ ')) {
+        // Skip file header lines
+        continue;
       }
-      if (patch.endLine < patch.startLine || patch.endLine > lines.length) {
-        throw new ToolError(
-          `Patch end line ${patch.endLine} is out of range or before start line`,
-          'VALIDATION_ERROR'
-        );
+
+      if (diffLine.startsWith('@@')) {
+        // Start of a new hunk
+        if (inHunk) {
+          // Apply the previous hunk
+          this.applyHunk(resultLines, currentLines, hunkStartLine, hunkLineCount, hunkLines);
+          hunkLines = [];
+        }
+
+        // Parse hunk header: @@ -startLine,lineCount +startLine,lineCount @@
+        const hunkHeader = diffLine.match(/@@ \-(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+        if (!hunkHeader) {
+          throw new ToolError(`Invalid hunk header: ${diffLine}`, 'VALIDATION_ERROR');
+        }
+
+        // The start line in the original file (1-based)
+        hunkStartLine = parseInt(hunkHeader[1], 10);
+        hunkLineCount = parseInt(hunkHeader[2] || '1', 10);
+        inHunk = true;
+        hunkLines = [];
+        continue;
+      }
+
+      if (inHunk) {
+        hunkLines.push(diffLine);
       }
     }
 
-    // Apply patches in reverse order
-    for (const patch of sortedPatches) {
-      const startIdx = patch.startLine - 1; // Convert to 0-based
-      const endIdx = patch.endLine - 1;
+    // Apply the last hunk if we were in one
+    if (inHunk) {
+      this.applyHunk(resultLines, currentLines, hunkStartLine, hunkLineCount, hunkLines);
+    }
 
-      // Validate original content if provided
-      if (validateContext && patch.originalContent !== undefined) {
-        const originalLines = lines.slice(startIdx, endIdx + 1);
-        const originalText = originalLines.join('\n');
+    // Append any remaining lines after the last hunk
+    while (currentLineIndex < currentLines.length) {
+      resultLines.push(currentLines[currentLineIndex]);
+      currentLineIndex++;
+    }
 
-        if (originalText !== patch.originalContent) {
+    return resultLines.join('\n');
+  }
+
+  private applyHunk(
+    resultLines: string[],
+    currentLines: string[],
+    hunkStartLine: number,
+    hunkLineCount: number,
+    hunkLines: string[]
+  ) {
+    // Convert to 0-based index for the start of the hunk in the original file
+    const startIndex = hunkStartLine - 1;
+
+    // First, push all lines from the current file up to the start of the hunk
+    while (currentLineIndex < startIndex) {
+      resultLines.push(currentLines[currentLineIndex]);
+      currentLineIndex++;
+    }
+
+    // Now process the hunk
+    let hunkIndex = 0;
+    let lineCount = 0;
+
+    while (hunkIndex < hunkLines.length) {
+      const line = hunkLines[hunkIndex];
+      hunkIndex++;
+
+      if (line.startsWith(' ')) {
+        // Context line: should match the current file
+        const contextLine = line.substring(1);
+        if (currentLines[currentLineIndex] !== contextLine) {
           throw new ToolError(
-            `Original content validation failed at lines ${patch.startLine}-${patch.endLine}. Expected content does not match actual content.`,
+            `Context mismatch at line ${currentLineIndex + 1}. Expected: '${contextLine}', found: '${currentLines[currentLineIndex]}'`,
             'VALIDATION_ERROR'
           );
         }
+        resultLines.push(contextLine);
+        currentLineIndex++;
+        lineCount++;
+      } else if (line.startsWith('-')) {
+        // Deletion: skip the line in the original file
+        const deletionLine = line.substring(1);
+        if (currentLines[currentLineIndex] !== deletionLine) {
+          throw new ToolError(
+            `Deletion mismatch at line ${currentLineIndex + 1}. Expected: '${deletionLine}', found: '${currentLines[currentLineIndex]}'`,
+            'VALIDATION_ERROR'
+          );
+        }
+        currentLineIndex++;
+        lineCount++;
+      } else if (line.startsWith('+')) {
+        // Insertion: add the new line
+        resultLines.push(line.substring(1));
+      } else {
+        // Invalid line in hunk
+        throw new ToolError(`Invalid diff line: ${line}`, 'VALIDATION_ERROR');
       }
-
-      // Apply the patch
-      const newLines = patch.newContent.split('\n');
-      lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
     }
 
-    return lines.join('\n');
+    // After processing the hunk, skip the remaining lines in the original hunk (if any)
+    const linesToSkip = hunkLineCount - lineCount;
+    for (let i = 0; i < linesToSkip; i++) {
+      currentLineIndex++;
+    }
   }
 }
