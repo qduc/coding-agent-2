@@ -383,126 +383,122 @@ export class WriteTool extends BaseTool {
    */
   private applyDiff(currentContent: string, diff: string): string {
     // Split the current content and the diff into lines
-    const currentLines = currentContent.split('\n');
+    const originalLines = currentContent.split('\n');
     const diffLines = diff.split('\n');
 
-    // We'll reconstruct the file line by line
     const resultLines: string[] = [];
-    let currentLineIndex = 0;
+    let currentLineIndex = 0;  // current position in originalLines
 
-    // State for the current hunk
-    let hunkStartLine = 0;
-    let hunkLineCount = 0;
-    let hunkLines: string[] = [];
-    let inHunk = false;
+    let i = 0;
+    while (i < diffLines.length) {
+      const line = diffLines[i];
+      i++;
 
-    for (const diffLine of diffLines) {
-      if (diffLine.startsWith('--- ') || diffLine.startsWith('+++ ')) {
-        // Skip file header lines
+      // Skip file headers
+      if (line.startsWith('--- ') || line.startsWith('+++ ')) {
         continue;
       }
 
-      if (diffLine.startsWith('@@')) {
-        // Start of a new hunk
-        if (inHunk) {
-          // Apply the previous hunk
-          this.applyHunk(resultLines, currentLines, hunkStartLine, hunkLineCount, hunkLines);
-          hunkLines = [];
+      // Check for hunk header
+      const hunkHeaderMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      if (hunkHeaderMatch) {
+        const origStart = parseInt(hunkHeaderMatch[1], 10);
+        const origCount = parseInt(hunkHeaderMatch[2] || '1', 10);
+        // const patchedStart = parseInt(hunkHeaderMatch[3], 10);
+        // const patchedCount = parseInt(hunkHeaderMatch[4] || '1', 10);
+
+        // Copy lines from currentLineIndex to origStart-1 (0-based index: origStart-1)
+        while (currentLineIndex < origStart - 1) {
+          if (currentLineIndex >= originalLines.length) {
+            throw new ToolError(
+              `Hunk starts beyond end of file (line ${origStart})`,
+              'VALIDATION_ERROR'
+            );
+          }
+          resultLines.push(originalLines[currentLineIndex]);
+          currentLineIndex++;
         }
 
-        // Parse hunk header: @@ -startLine,lineCount +startLine,lineCount @@
-        const hunkHeader = diffLine.match(/@@ \-(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-        if (!hunkHeader) {
-          throw new ToolError(`Invalid hunk header: ${diffLine}`, 'VALIDATION_ERROR');
+        // Process the hunk lines
+        let lineCountInHunk = 0;
+        let j = i;
+        // Collect all lines until next hunk or end of diff
+        while (j < diffLines.length && !diffLines[j].startsWith('@@')) {
+          j++;
+        }
+        const hunkLines = diffLines.slice(i, j);
+        i = j;  // move outer index to next hunk
+
+        for (const hunkLine of hunkLines) {
+          if (hunkLine === '\\ No newline at end of file') {
+            // Ignore this marker
+            continue;
+          }
+
+          if (hunkLine.startsWith(' ')) {
+            // Context line: must match
+            if (currentLineIndex >= originalLines.length) {
+              throw new ToolError(
+                `Context line beyond end of file at line ${currentLineIndex + 1}`,
+                'VALIDATION_ERROR'
+              );
+            }
+            const contextLine = hunkLine.substring(1);
+            if (originalLines[currentLineIndex] !== contextLine) {
+              throw new ToolError(
+                `Context mismatch at line ${currentLineIndex + 1}: expected '${contextLine}', found '${originalLines[currentLineIndex]}'`,
+                'VALIDATION_ERROR'
+              );
+            }
+            resultLines.push(contextLine);
+            currentLineIndex++;
+            lineCountInHunk++;
+          } else if (hunkLine.startsWith('-')) {
+            // Deletion: must match and skip
+            if (currentLineIndex >= originalLines.length) {
+              throw new ToolError(
+                `Deletion beyond end of file at line ${currentLineIndex + 1}`,
+                'VALIDATION_ERROR'
+              );
+            }
+            const deletionLine = hunkLine.substring(1);
+            if (originalLines[currentLineIndex] !== deletionLine) {
+              throw new ToolError(
+                `Deletion mismatch at line ${currentLineIndex + 1}: expected '${deletionLine}', found '${originalLines[currentLineIndex]}'`,
+                'VALIDATION_ERROR'
+              );
+            }
+            currentLineIndex++;
+            lineCountInHunk++;
+          } else if (hunkLine.startsWith('+')) {
+            // Addition: add to result
+            resultLines.push(hunkLine.substring(1));
+          } else {
+            throw new ToolError(
+              `Invalid diff line: ${hunkLine}`,
+              'VALIDATION_ERROR'
+            );
+          }
         }
 
-        // The start line in the original file (1-based)
-        hunkStartLine = parseInt(hunkHeader[1], 10);
-        hunkLineCount = parseInt(hunkHeader[2] || '1', 10);
-        inHunk = true;
-        hunkLines = [];
-        continue;
-      }
-
-      if (inHunk) {
-        hunkLines.push(diffLine);
+        // Verify we processed the expected number of original lines
+        if (lineCountInHunk !== origCount) {
+          throw new ToolError(
+            `Hunk line count mismatch: expected ${origCount} original lines, processed ${lineCountInHunk}`,
+            'VALIDATION_ERROR'
+          );
+        }
+      } else {
+        // Skip lines that are not part of a hunk (like index lines)
       }
     }
 
-    // Apply the last hunk if we were in one
-    if (inHunk) {
-      this.applyHunk(resultLines, currentLines, hunkStartLine, hunkLineCount, hunkLines);
-    }
-
-    // Append any remaining lines after the last hunk
-    while (currentLineIndex < currentLines.length) {
-      resultLines.push(currentLines[currentLineIndex]);
+    // Copy remaining original lines
+    while (currentLineIndex < originalLines.length) {
+      resultLines.push(originalLines[currentLineIndex]);
       currentLineIndex++;
     }
 
     return resultLines.join('\n');
-  }
-
-  private applyHunk(
-    resultLines: string[],
-    currentLines: string[],
-    hunkStartLine: number,
-    hunkLineCount: number,
-    hunkLines: string[]
-  ) {
-    // Convert to 0-based index for the start of the hunk in the original file
-    const startIndex = hunkStartLine - 1;
-
-    // First, push all lines from the current file up to the start of the hunk
-    while (currentLineIndex < startIndex) {
-      resultLines.push(currentLines[currentLineIndex]);
-      currentLineIndex++;
-    }
-
-    // Now process the hunk
-    let hunkIndex = 0;
-    let lineCount = 0;
-
-    while (hunkIndex < hunkLines.length) {
-      const line = hunkLines[hunkIndex];
-      hunkIndex++;
-
-      if (line.startsWith(' ')) {
-        // Context line: should match the current file
-        const contextLine = line.substring(1);
-        if (currentLines[currentLineIndex] !== contextLine) {
-          throw new ToolError(
-            `Context mismatch at line ${currentLineIndex + 1}. Expected: '${contextLine}', found: '${currentLines[currentLineIndex]}'`,
-            'VALIDATION_ERROR'
-          );
-        }
-        resultLines.push(contextLine);
-        currentLineIndex++;
-        lineCount++;
-      } else if (line.startsWith('-')) {
-        // Deletion: skip the line in the original file
-        const deletionLine = line.substring(1);
-        if (currentLines[currentLineIndex] !== deletionLine) {
-          throw new ToolError(
-            `Deletion mismatch at line ${currentLineIndex + 1}. Expected: '${deletionLine}', found: '${currentLines[currentLineIndex]}'`,
-            'VALIDATION_ERROR'
-          );
-        }
-        currentLineIndex++;
-        lineCount++;
-      } else if (line.startsWith('+')) {
-        // Insertion: add the new line
-        resultLines.push(line.substring(1));
-      } else {
-        // Invalid line in hunk
-        throw new ToolError(`Invalid diff line: ${line}`, 'VALIDATION_ERROR');
-      }
-    }
-
-    // After processing the hunk, skip the remaining lines in the original hunk (if any)
-    const linesToSkip = hunkLineCount - lineCount;
-    for (let i = 0; i < linesToSkip; i++) {
-      currentLineIndex++;
-    }
   }
 }
