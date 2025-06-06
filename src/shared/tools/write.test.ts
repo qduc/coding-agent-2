@@ -61,9 +61,14 @@ describe('WriteTool', () => {
       expect(schema.required).toContain('path');
       expect(schema.properties.path.type).toBe('string');
       expect(schema.properties.content.type).toBe('string');
+      expect(schema.properties.diff.type).toBe('string');
       expect(schema.properties.encoding.enum).toContain('utf8');
-      expect(schema.properties.mode.enum).toContain('create');
-      expect(schema.properties.mode.enum).toContain('patch');
+      expect(schema.properties.encoding.enum).toContain('binary');
+      expect(schema.properties.encoding.enum).toContain('base64');
+      expect(schema.oneOf).toEqual([
+        { required: ['content'] },
+        { required: ['diff'] }
+      ]);
     });
   });
 
@@ -90,33 +95,33 @@ describe('WriteTool', () => {
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
     });
 
-    it('should require content for create mode', async () => {
-      const result = await writeTool.execute({ path: 'file.txt', mode: 'create' });
+    it('should require either content or diff', async () => {
+      const result = await writeTool.execute({ path: 'file.txt' });
       expect(result.success).toBe(false);
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
-      expect((result.error as ToolError).message).toContain('Content is required for create mode');
+      expect((result.error as ToolError).message).toContain('Must provide either content or diff');
     });
 
-    it('should require patches for patch mode', async () => {
-      const result = await writeTool.execute({ path: 'file.txt', mode: 'patch' });
+    it('should not allow both content and diff', async () => {
+      const result = await writeTool.execute({ path: 'file.txt', content: 'x', diff: 'y' });
       expect(result.success).toBe(false);
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
-      expect((result.error as ToolError).message).toContain('Patches array is required for patch mode');
+      expect((result.error as ToolError).message).toContain('Cannot provide both content and diff');
     });
   });
 
   describe('Basic File Writing', () => {
-    it('should create a new file', async () => {
+    it('should create a new file with content', async () => {
       const filePath = path.join(tempDir, 'test.txt');
-      const result = await writeTool.execute({ path: filePath, content: 'hello', mode: 'create' });
+      const result = await writeTool.execute({ path: filePath, content: 'hello' });
       expect(result.success).toBe(true);
       expect(await fs.readFile(filePath, 'utf8')).toBe('hello');
     });
 
-    it('should not overwrite existing file in create mode', async () => {
+    it('should not overwrite existing file with content', async () => {
       const filePath = path.join(tempDir, 'test.txt');
       await fs.writeFile(filePath, 'old');
-      const result = await writeTool.execute({ path: filePath, content: 'new', mode: 'create' });
+      const result = await writeTool.execute({ path: filePath, content: 'new' });
       expect(result.success).toBe(false);
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
       expect(await fs.readFile(filePath, 'utf8')).toBe('old');
@@ -138,59 +143,55 @@ describe('WriteTool', () => {
       await fs.writeFile(testFile, 'line 1\nline 2\nline 3\nline 4\n');
     });
 
-    it('should patch existing file', async () => {
+    it('should patch existing file with diff', async () => {
+      const diff = `--- a/${testFile}\n+++ b/${testFile}\n@@ -2,1 +2,1 @@\n-line 2\n+modified line 2`;
       const result = await writeTool.execute({
         path: testFile,
-        mode: 'patch',
-        patches: [{
-          startLine: 2,
-          newContent: 'modified line 2'
-        }]
+        diff
       });
       expect(result.success).toBe(true);
       const content = await fs.readFile(testFile, 'utf8');
       expect(content).toBe('line 1\nmodified line 2\nline 3\nline 4\n');
     });
 
-    it('should patch multiple lines', async () => {
+    it('should patch multiple lines with diff', async () => {
+      const diff = `--- a/${testFile}\n+++ b/${testFile}\n@@ -2,2 +2,1 @@\n-line 2\n-line 3\n+replaced lines 2-3`;
       const result = await writeTool.execute({
         path: testFile,
-        mode: 'patch',
-        patches: [{
-          startLine: 2,
-          endLine: 3,
-          newContent: 'replaced lines 2-3'
-        }]
+        diff
       });
       expect(result.success).toBe(true);
       const content = await fs.readFile(testFile, 'utf8');
       expect(content).toBe('line 1\nreplaced lines 2-3\nline 4\n');
     });
 
-    it('should validate original content when validateContext is true', async () => {
+    it('should validate context when validateContext is true', async () => {
+      const diff = `--- a/${testFile}\n+++ b/${testFile}\n@@ -2,1 +2,1 @@\n-line 2\n+modified line 2`;
       const result = await writeTool.execute({
         path: testFile,
-        mode: 'patch',
+        diff,
         validateContext: true,
-        patches: [{
-          startLine: 2,
-          originalContent: 'wrong content',
-          newContent: 'new content'
-        }]
+        contextLines: 1
       });
-      expect(result.success).toBe(false);
-      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
-      expect((result.error as ToolError).message).toContain('Original content validation failed');
+      expect(result.success).toBe(true);
+
+      const badDiff = `--- a/${testFile}\n+++ b/${testFile}\n@@ -2,1 +2,1 @@\n-wrong context\n+modified line 2`;
+      const badResult = await writeTool.execute({
+        path: testFile,
+        diff: badDiff,
+        validateContext: true,
+        contextLines: 1
+      });
+      expect(badResult.success).toBe(false);
+      expect((badResult.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect((badResult.error as ToolError).message).toContain('Context validation failed');
     });
 
-    it('should apply multiple patches in correct order', async () => {
+    it('should apply multiple changes in one diff', async () => {
+      const diff = `--- a/${testFile}\n+++ b/${testFile}\n@@ -1,1 +1,1 @@\n-line 1\n+modified line 1\n@@ -4,1 +4,1 @@\n-line 4\n+modified line 4`;
       const result = await writeTool.execute({
         path: testFile,
-        mode: 'patch',
-        patches: [
-          { startLine: 1, newContent: 'modified line 1' },
-          { startLine: 4, newContent: 'modified line 4' }
-        ]
+        diff
       });
       expect(result.success).toBe(true);
       const content = await fs.readFile(testFile, 'utf8');
@@ -199,25 +200,25 @@ describe('WriteTool', () => {
 
     it('should fail when patching non-existent file', async () => {
       const nonExistentFile = path.join(tempDir, 'does-not-exist.txt');
+      const diff = `--- a/${nonExistentFile}\n+++ b/${nonExistentFile}\n@@ -1,1 +1,1 @@\n-test\n+new content`;
       const result = await writeTool.execute({
         path: nonExistentFile,
-        mode: 'patch',
-        patches: [{ startLine: 1, newContent: 'test' }]
+        diff
       });
       expect(result.success).toBe(false);
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
       expect((result.error as ToolError).message).toContain('File does not exist');
     });
 
-    it('should validate patch line numbers', async () => {
+    it('should validate diff format', async () => {
+      const badDiff = `invalid diff format`;
       const result = await writeTool.execute({
         path: testFile,
-        mode: 'patch',
-        patches: [{ startLine: 10, newContent: 'invalid line' }]
+        diff: badDiff
       });
       expect(result.success).toBe(false);
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
-      expect((result.error as ToolError).message).toContain('out of range');
+      expect((result.error as ToolError).message).toContain('Invalid diff format');
     });
   });
 
