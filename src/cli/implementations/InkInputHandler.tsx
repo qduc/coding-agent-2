@@ -1,15 +1,125 @@
-import * as readline from 'readline';
-import * as fs from 'fs-extra';
-import * as path from 'path';
+import React, { useState, useEffect } from 'react';
+import { render, Box, Text, useInput, useApp } from 'ink';
 import { IInputHandler } from '../../shared/interfaces/IInputHandler';
 import { GlobTool, GlobMatch } from '../../shared/tools/glob';
 import { IToolExecutionContext } from '../../shared/interfaces/IToolExecutionContext';
 import { ToolContext } from '../../shared/tools/types';
+import * as path from 'path';
+import chalk from 'chalk';
 
-export class CLIInputHandler implements IInputHandler {
-  private rl: readline.Interface;
+// Component for handling user input
+const InputComponent = ({ 
+  onSubmit, 
+  prompt = 'You (@ + TAB for files, q to quit): ',
+  initialInput = '',
+  fileCompletions = [],
+  showCompletions = false,
+  onExit,
+  onTabCompletion
+}: { 
+  onSubmit: (input: string) => void;
+  prompt?: string;
+  initialInput?: string;
+  fileCompletions?: string[];
+  showCompletions?: boolean;
+  onExit: () => void;
+  onTabCompletion: (partialPath: string) => void;
+}) => {
+  const [input, setInput] = useState(initialInput);
+  const [cursorPosition, setCursorPosition] = useState(initialInput.length);
+  const { exit } = useApp();
+
+  useInput((inputChar: string, key: any) => {
+    if (key.return) {
+      // Submit on Enter
+      onSubmit(input);
+      setInput('');
+      setCursorPosition(0);
+      return;
+    }
+
+    if (key.escape || (key.ctrl && inputChar === 'c')) {
+      // Exit on Escape or Ctrl+C
+      onExit();
+      exit();
+      return;
+    }
+
+    if (key.backspace || key.delete) {
+      // Handle backspace
+      if (cursorPosition > 0) {
+        setInput(prev => prev.substring(0, cursorPosition - 1) + prev.substring(cursorPosition));
+        setCursorPosition(prev => Math.max(0, prev - 1));
+      }
+      return;
+    }
+
+    if (key.leftArrow) {
+      // Move cursor left
+      setCursorPosition(prev => Math.max(0, prev - 1));
+      return;
+    }
+
+    if (key.rightArrow) {
+      // Move cursor right
+      setCursorPosition(prev => Math.min(input.length, prev + 1));
+      return;
+    }
+
+    if (key.tab && input.includes('@')) {
+      // Handle tab completion for files
+      const lastAtIndex = input.lastIndexOf('@');
+      const afterAt = input.substring(lastAtIndex + 1);
+      const partialPath = afterAt.split(/\s/)[0]; // Get path until next space
+
+      // Request file completions
+      onTabCompletion(partialPath);
+
+      if (fileCompletions.length > 0 && showCompletions) {
+        // Use the first completion
+        const beforeAt = input.substring(0, lastAtIndex + 1);
+
+        // Replace the partial path with the completion
+        const newInput = beforeAt + fileCompletions[0];
+        setInput(newInput);
+        setCursorPosition(newInput.length);
+      }
+      return;
+    }
+
+    // Regular input handling
+    if (!key.ctrl && !key.meta && inputChar && inputChar.length === 1) {
+      setInput(prev => 
+        prev.substring(0, cursorPosition) + inputChar + prev.substring(cursorPosition)
+      );
+      setCursorPosition(prev => prev + 1);
+    }
+  });
+
+  return (
+    <>
+      <Box>
+        <Text color="green">{prompt}</Text>
+        <Text>{input}</Text>
+      </Box>
+      {showCompletions && fileCompletions.length > 0 && (
+        <Box flexDirection="column" marginLeft={2}>
+          {fileCompletions.slice(0, 5).map((completion, index) => (
+            <Text key={index} color="blue">{completion}</Text>
+          ))}
+        </Box>
+      )}
+    </>
+  );
+};
+
+export class InkInputHandler implements IInputHandler {
   private globTool: GlobTool;
   private toolContext: ToolContext;
+  private inputPromise: Promise<string> | null = null;
+  private inputResolve: ((value: string) => void) | null = null;
+  private fileCompletions: string[] = [];
+  private showCompletions: boolean = false;
 
   constructor(execContext?: IToolExecutionContext) {
     // Convert IToolExecutionContext to ToolContext for the glob tool
@@ -21,34 +131,50 @@ export class CLIInputHandler implements IInputHandler {
       allowedExtensions: [],
       blockedPaths: ['node_modules', '.git', 'dist', 'build', '.next', 'coverage']
     };
-    
-    this.globTool = new GlobTool(this.toolContext);
 
-    this.rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      completer: this.completer.bind(this),
-      // Ensure SIGINT is properly handled
-      terminal: true
-    });
+    this.globTool = new GlobTool(this.toolContext);
   }
 
   async readInput(prompt?: string): Promise<string> {
-    return new Promise((resolve) => {
-      this.rl.question(prompt || 'You (@ + TAB for files, q to quit): ', (answer) => {
-        const trimmedAnswer = answer.trim();
-
-        // Handle quit commands
-        if (trimmedAnswer.toLowerCase() === 'q' || 
-            trimmedAnswer.toLowerCase() === 'quit') {
-          console.log('Exiting...');
-          this.close();
-          process.exit(0);
-        }
-
-        resolve(trimmedAnswer);
-      });
+    this.inputPromise = new Promise<string>((resolve) => {
+      this.inputResolve = resolve;
     });
+
+    // Render the Ink component
+    const { unmount } = render(
+      <InputComponent 
+        onSubmit={(input) => {
+          if (this.inputResolve) {
+            this.inputResolve(input);
+            this.inputResolve = null;
+          }
+          unmount();
+        }}
+        prompt={prompt || 'You (@ + TAB for files, q to quit): '}
+        fileCompletions={this.fileCompletions}
+        showCompletions={this.showCompletions}
+        onExit={() => {
+          console.log('Exiting...');
+          process.exit(0);
+        }}
+        onTabCompletion={async (partialPath) => {
+          this.fileCompletions = await this.getFileCompletions(partialPath);
+          this.showCompletions = this.fileCompletions.length > 0;
+        }}
+      />
+    );
+
+    const result = await this.inputPromise;
+    this.inputPromise = null;
+
+    // Handle quit commands
+    if (result.trim().toLowerCase() === 'q' || 
+        result.trim().toLowerCase() === 'quit') {
+      console.log('Exiting...');
+      process.exit(0);
+    }
+
+    return result;
   }
 
   async readCommand(): Promise<{command: string; args: string[]}> {
@@ -64,7 +190,6 @@ export class CLIInputHandler implements IInputHandler {
     onInput: (input: string) => Promise<void>,
     onEnd: () => void
   ): Promise<void> {
-    this.setupInterruptHandler();
     try {
       while (true) {
         const input = await this.readInput();
@@ -74,8 +199,8 @@ export class CLIInputHandler implements IInputHandler {
         }
         await onInput(input);
       }
-    } finally {
-      this.close();
+    } catch (error) {
+      console.error('Error in interactive mode:', error);
     }
   }
 
@@ -88,68 +213,8 @@ export class CLIInputHandler implements IInputHandler {
   }
 
   close() {
-    if (this.rl) {
-      this.rl.close();
-    }
-    // Ensure we clean up any lingering listeners
+    // Clean up any resources
     process.removeAllListeners('SIGINT');
-  }
-
-  private setupInterruptHandler() {
-    // Remove any existing listeners to avoid duplicates
-    this.rl.removeAllListeners('SIGINT');
-    process.removeAllListeners('SIGINT');
-
-    // Handle SIGINT on the readline interface
-    this.rl.on('SIGINT', () => {
-      console.log('\n'); // New line for clean output
-      this.rl.question('Exit? (y/n) ', (answer) => {
-        if (answer.toLowerCase() === 'y' || answer.toLowerCase() === '') {
-          this.close();
-          process.exit(0);
-        } else {
-          // Continue with a fresh prompt
-          console.log('Continuing...');
-          this.rl.prompt();
-        }
-      });
-    });
-
-    // Fallback: Handle SIGINT on the process level
-    process.on('SIGINT', () => {
-      console.log('\nForce exit...');
-      this.close();
-      process.exit(0);
-    });
-  }
-
-  /**
-   * Tab completion handler for file references with @
-   */
-  private async completer(line: string): Promise<[string[], string]> {
-    try {
-      // Only provide completions after @ symbol
-      const lastAtIndex = line.lastIndexOf('@');
-      if (lastAtIndex === -1) {
-        return [[], line];
-      }
-
-      // Extract the partial path after @
-      const beforeAt = line.substring(0, lastAtIndex + 1);
-      const afterAt = line.substring(lastAtIndex + 1);
-      const partialPath = afterAt.split(/\s/)[0]; // Get path until next space
-
-      // Get file completions
-      const completions = await this.getFileCompletions(partialPath);
-      
-      // Return completions with the full line context
-      const hits = completions.map(completion => beforeAt + completion);
-      return [hits, line];
-
-    } catch (error) {
-      // Return no completions on error
-      return [[], line];
-    }
   }
 
   /**
@@ -206,12 +271,12 @@ export class CLIInputHandler implements IInputHandler {
       return matches.map((match: GlobMatch) => {
         const relativePath = path.relative(this.toolContext.workingDirectory, match.path);
         const formattedPath = relativePath || match.name;
-        
+
         // Add trailing slash for directories
         if (match.type === 'directory') {
           return formattedPath + '/';
         }
-        
+
         return formattedPath;
       });
 
@@ -226,7 +291,7 @@ export class CLIInputHandler implements IInputHandler {
   private isRelevantFile(match: GlobMatch): boolean {
     // Skip hidden files and irrelevant extensions
     if (match.hidden) return false;
-    
+
     // Common code file extensions
     const codeExtensions = [
       '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h',
@@ -234,15 +299,15 @@ export class CLIInputHandler implements IInputHandler {
       '.rb', '.go', '.rs', '.swift', '.kt', '.scala', '.cs', '.vb',
       '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg'
     ];
-    
+
     // Common document extensions
     const docExtensions = [
       '.md', '.txt', '.rst', '.pdf', '.doc', '.docx'
     ];
-    
+
     // Always include directories
     if (match.type === 'directory') return true;
-    
+
     // Include files with relevant extensions
     const ext = path.extname(match.name).toLowerCase();
     return codeExtensions.includes(ext) || docExtensions.includes(ext) || ext === '';
