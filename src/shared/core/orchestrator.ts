@@ -8,13 +8,27 @@ import { BaseTool } from '../tools';
 import { LLMService } from '../services/llm';
 import chalk from 'chalk';
 import { ProjectDiscoveryResult } from '../utils/projectDiscovery';
-import { ConversationManager, ConversationMessage } from '../handlers/ConversationManager';
-import { ToolExecutionHandler, ToolCall } from '../handlers/ToolExecutionHandler';
+import { ConversationManager } from '../handlers/ConversationManager';
+import { ToolExecutionHandler } from '../handlers/ToolExecutionHandler';
 import { ProviderStrategyFactory, ProviderStrategy } from '../handlers/ProviderStrategyFactory';
 import { SystemPromptBuilder } from '../utils/SystemPromptBuilder';
 
-// Re-export interfaces for backwards compatibility
-export { ConversationMessage, ToolCall };
+// Define interfaces locally to avoid import issues
+export interface ConversationMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: any[];
+  tool_call_id?: string;
+}
+
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
 
 export class ToolOrchestrator {
   private conversationManager: ConversationManager;

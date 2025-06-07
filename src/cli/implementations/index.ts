@@ -1,3 +1,3 @@
 export * from './CLIToolExecutionContext';
-export * from './CommanderInputHandler';
-// export * from './InkInputHandler'; // Temporarily disabled due to ESM/CommonJS issues
+export * from './InkInputHandler';
+// export * from './CommanderInputHandler'; // Replaced with InkInputHandler

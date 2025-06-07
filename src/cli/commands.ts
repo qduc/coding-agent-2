@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { Agent } from '../shared/core/agent';
-import { CommanderInputHandler } from './implementations';
+import { InkInputHandler } from './implementations';
 import { CLIToolExecutionContext } from './implementations';
 import { configManager } from '../shared/core/config';
 import chalk from 'chalk';
@@ -60,7 +60,7 @@ export function configureCommands(program: Command, version: string): void {
 
       // Create CLI implementations
       const toolContext = new CLIToolExecutionContext();
-      const inputHandler = new CommanderInputHandler(toolContext);
+      const inputHandler = new InkInputHandler(toolContext);
 
       // Create and initialize agent with CLI implementations
       const agent = new Agent({
@@ -205,7 +205,7 @@ export async function handleDirectCommand(command: string, agent: Agent, options
 /**
  * Start interactive chat mode
  */
-export async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false, inputHandler?: CommanderInputHandler) {
+export async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false, inputHandler?: InkInputHandler) {
   if (options.verbose) {
     console.log(chalk.blue('Starting interactive chat mode...'));
   }
