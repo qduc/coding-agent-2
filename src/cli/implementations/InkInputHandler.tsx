@@ -48,21 +48,21 @@ const InputComponent = ({
     if (key.backspace || key.delete) {
       // Handle backspace
       if (cursorPosition > 0) {
-        setInput(prev => prev.substring(0, cursorPosition - 1) + prev.substring(cursorPosition));
-        setCursorPosition(prev => Math.max(0, prev - 1));
+        setInput((prev: string) => prev.substring(0, cursorPosition - 1) + prev.substring(cursorPosition));
+        setCursorPosition((prev: number) => Math.max(0, prev - 1));
       }
       return;
     }
 
     if (key.leftArrow) {
       // Move cursor left
-      setCursorPosition(prev => Math.max(0, prev - 1));
+      setCursorPosition((prev: number) => Math.max(0, prev - 1));
       return;
     }
 
     if (key.rightArrow) {
       // Move cursor right
-      setCursorPosition(prev => Math.min(input.length, prev + 1));
+      setCursorPosition((prev: number) => Math.min(input.length, prev + 1));
       return;
     }
 
@@ -89,10 +89,10 @@ const InputComponent = ({
 
     // Regular input handling
     if (!key.ctrl && !key.meta && inputChar && inputChar.length === 1) {
-      setInput(prev => 
+      setInput((prev: string) => 
         prev.substring(0, cursorPosition) + inputChar + prev.substring(cursorPosition)
       );
-      setCursorPosition(prev => prev + 1);
+      setCursorPosition((prev: number) => prev + 1);
     }
   });
 
@@ -120,6 +120,8 @@ export class InkInputHandler implements IInputHandler {
   private inputResolve: ((value: string) => void) | null = null;
   private fileCompletions: string[] = [];
   private showCompletions: boolean = false;
+  private inkModule: any = null;
+  private reactModule: any = null;
 
   constructor(execContext?: IToolExecutionContext) {
     // Convert IToolExecutionContext to ToolContext for the glob tool
