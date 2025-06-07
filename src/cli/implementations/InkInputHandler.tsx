@@ -206,10 +206,9 @@ export class InkInputHandler implements IInputHandler {
 
   private isExitCommand(input: string): boolean {
     const normalized = input.toLowerCase().trim();
-    return normalized === 'exit' || 
-           normalized === 'quit' || 
-           normalized === 'q' || 
-           normalized === ':q';
+    return normalized === '/exit' || 
+           normalized === '/quit' || 
+           normalized === '/q';
   }
 
   close() {

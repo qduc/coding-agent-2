@@ -75,13 +75,13 @@ export class CommanderInputHandler implements IInputHandler {
             // Submit input
             this.cleanup();
             console.log();
-            
+
             const trimmedInput = currentInput.trim();
-            if (trimmedInput.toLowerCase() === 'q' || trimmedInput.toLowerCase() === 'quit') {
+            if (trimmedInput.toLowerCase() === '/q' || trimmedInput.toLowerCase() === '/quit' || trimmedInput.toLowerCase() === '/exit') {
               console.log('Exiting...');
               process.exit(0);
             }
-            
+
             resolve(trimmedInput);
           }
           return;
@@ -125,7 +125,7 @@ export class CommanderInputHandler implements IInputHandler {
           if (currentInput.length > 0) {
             currentInput = currentInput.slice(0, -1);
             this.redrawInput(currentInput);
-            
+
             // Update file list if we're in @ mode
             if (showingFileList) {
               const result = this.parseAtContext(currentInput);
@@ -235,10 +235,9 @@ export class CommanderInputHandler implements IInputHandler {
 
   private isExitCommand(input: string): boolean {
     const normalized = input.toLowerCase().trim();
-    return normalized === 'exit' || 
-           normalized === 'quit' || 
-           normalized === 'q' || 
-           normalized === ':q';
+    return normalized === '/exit' || 
+           normalized === '/quit' || 
+           normalized === '/q';
   }
 
   close() {
@@ -252,20 +251,20 @@ export class CommanderInputHandler implements IInputHandler {
    */
   private parseKeyData(buffer: Buffer): any {
     const str = buffer.toString();
-    
+
     // Common key mappings
     if (str === '\r' || str === '\n') return { name: 'return' };
     if (str === '\t') return { name: 'tab' };
     if (str === '\x1b') return { name: 'escape' };
     if (str === '\x7f' || str === '\b') return { name: 'backspace' };
     if (str === '\x03') return { name: 'c', ctrl: true };
-    
+
     // Arrow keys
     if (str === '\x1b[A') return { name: 'up' };
     if (str === '\x1b[B') return { name: 'down' };
     if (str === '\x1b[C') return { name: 'right' };
     if (str === '\x1b[D') return { name: 'left' };
-    
+
     return { name: str, ctrl: false, shift: false };
   }
 
@@ -275,11 +274,11 @@ export class CommanderInputHandler implements IInputHandler {
   private parseAtContext(input: string): { position: number; partial: string } | null {
     const lastAtIndex = input.lastIndexOf('@');
     if (lastAtIndex === -1) return null;
-    
+
     const afterAt = input.substring(lastAtIndex + 1);
     const spaceIndex = afterAt.indexOf(' ');
     const partial = spaceIndex === -1 ? afterAt : afterAt.substring(0, spaceIndex);
-    
+
     return { position: lastAtIndex, partial };
   }
 
@@ -318,7 +317,7 @@ export class CommanderInputHandler implements IInputHandler {
    */
   private filterFiles(files: string[], partial: string): string[] {
     if (!partial) return files.slice(0, 10);
-    
+
     const matches = files
       .map(file => ({
         file,
@@ -333,7 +332,7 @@ export class CommanderInputHandler implements IInputHandler {
       })
       .slice(0, 10) // Show max 10 files in dropdown
       .map(match => match.file);
-    
+
     return matches;
   }
 
@@ -343,63 +342,63 @@ export class CommanderInputHandler implements IInputHandler {
   private fuzzyScore(text: string, pattern: string): number {
     const textLower = text.toLowerCase();
     const patternLower = pattern.toLowerCase();
-    
+
     if (textLower === patternLower) return 1000; // Exact match
     if (textLower.startsWith(patternLower)) return 900; // Prefix match
-    
+
     let score = 0;
     let textIndex = 0;
     let patternIndex = 0;
     let consecutiveMatches = 0;
     let firstMatchIndex = -1;
-    
+
     while (textIndex < text.length && patternIndex < pattern.length) {
       const textChar = textLower[textIndex];
       const patternChar = patternLower[patternIndex];
-      
+
       if (textChar === patternChar) {
         if (firstMatchIndex === -1) firstMatchIndex = textIndex;
-        
+
         // Bonus for consecutive matches
         consecutiveMatches++;
         score += 10 + (consecutiveMatches * 5);
-        
+
         // Bonus for matches at word boundaries
         if (textIndex === 0 || text[textIndex - 1] === '/' || text[textIndex - 1] === '.' || text[textIndex - 1] === '-' || text[textIndex - 1] === '_') {
           score += 15;
         }
-        
+
         // Bonus for camelCase matches
         if (textIndex > 0 && text[textIndex].toUpperCase() === text[textIndex] && text[textIndex - 1].toLowerCase() === text[textIndex - 1]) {
           score += 10;
         }
-        
+
         patternIndex++;
       } else {
         consecutiveMatches = 0;
       }
-      
+
       textIndex++;
     }
-    
+
     // Did we match all pattern characters?
     if (patternIndex < pattern.length) return 0;
-    
+
     // Bonus for shorter files (more relevant)
     score += Math.max(0, 100 - text.length);
-    
+
     // Bonus for earlier first match
     if (firstMatchIndex >= 0) {
       score += Math.max(0, 50 - firstMatchIndex);
     }
-    
+
     // Bonus for matching file extension
     const patternExt = this.getFileExtension(pattern);
     const textExt = this.getFileExtension(text);
     if (patternExt && textExt && patternExt === textExt) {
       score += 25;
     }
-    
+
     return score;
   }
 
@@ -410,10 +409,10 @@ export class CommanderInputHandler implements IInputHandler {
     const textLower = text.toLowerCase();
     const patternLower = pattern.toLowerCase();
     const indices: number[] = [];
-    
+
     let textIndex = 0;
     let patternIndex = 0;
-    
+
     while (textIndex < text.length && patternIndex < pattern.length) {
       if (textLower[textIndex] === patternLower[patternIndex]) {
         indices.push(textIndex);
@@ -421,7 +420,7 @@ export class CommanderInputHandler implements IInputHandler {
       }
       textIndex++;
     }
-    
+
     return indices;
   }
 
@@ -431,11 +430,11 @@ export class CommanderInputHandler implements IInputHandler {
   private getFileExtension(filePath: string): string {
     const lastDot = filePath.lastIndexOf('.');
     const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
-    
+
     if (lastDot > lastSlash && lastDot > 0) {
       return filePath.substring(lastDot).toLowerCase();
     }
-    
+
     return '';
   }
 
@@ -445,23 +444,23 @@ export class CommanderInputHandler implements IInputHandler {
   private showFileList(files: string[], selectedIndex: number, partial: string = '') {
     // Clear any existing file list
     this.hideFileList();
-    
+
     if (files.length === 0) {
       process.stdout.write('\n  (no matching files)');
       return;
     }
-    
+
     // Show up to 10 files
     const displayFiles = files.slice(0, 10);
-    
+
     for (let i = 0; i < displayFiles.length; i++) {
       const file = displayFiles[i];
       const isSelected = i === selectedIndex;
       const prefix = isSelected ? '> ' : '  ';
-      
+
       // Highlight fuzzy matches
       const highlightedFile = this.highlightFuzzyMatches(file, partial, isSelected);
-      
+
       process.stdout.write(`\n${prefix}${highlightedFile}`);
     }
   }
@@ -475,15 +474,15 @@ export class CommanderInputHandler implements IInputHandler {
       const reset = '\x1b[0m';
       return `${color}${text}${reset}`;
     }
-    
+
     const matchIndices = this.fuzzyMatchIndices(text, pattern);
     const baseColor = isSelected ? '\x1b[36m' : '\x1b[90m'; // Cyan for selected, gray for others
     const highlightColor = isSelected ? '\x1b[1;93m' : '\x1b[1;33m'; // Bright yellow for matches
     const reset = '\x1b[0m';
-    
+
     let result = baseColor;
     let lastIndex = 0;
-    
+
     for (const matchIndex of matchIndices) {
       // Add text before match
       result += text.substring(lastIndex, matchIndex);
@@ -491,10 +490,10 @@ export class CommanderInputHandler implements IInputHandler {
       result += highlightColor + text[matchIndex] + baseColor;
       lastIndex = matchIndex + 1;
     }
-    
+
     // Add remaining text
     result += text.substring(lastIndex) + reset;
-    
+
     return result;
   }
 
@@ -515,7 +514,7 @@ export class CommanderInputHandler implements IInputHandler {
   private redrawInput(input: string) {
     // Clear current line and redraw
     process.stdout.write('\r\x1b[2K');
-    process.stdout.write('You (@ for files, q to quit): ' + input);
+    process.stdout.write('You (@ for files, /q to quit): ' + input);
   }
 
   /**
@@ -524,7 +523,7 @@ export class CommanderInputHandler implements IInputHandler {
   private isRelevantFile(match: GlobMatch): boolean {
     // Skip hidden files and irrelevant extensions
     if (match.hidden) return false;
-    
+
     // Common code file extensions
     const codeExtensions = [
       '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h',
@@ -532,15 +531,15 @@ export class CommanderInputHandler implements IInputHandler {
       '.rb', '.go', '.rs', '.swift', '.kt', '.scala', '.cs', '.vb',
       '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg'
     ];
-    
+
     // Common document extensions
     const docExtensions = [
       '.md', '.txt', '.rst', '.pdf', '.doc', '.docx'
     ];
-    
+
     // Always include directories
     if (match.type === 'directory') return true;
-    
+
     // Include files with relevant extensions
     const ext = path.extname(match.name).toLowerCase();
     return codeExtensions.includes(ext) || docExtensions.includes(ext) || ext === '';

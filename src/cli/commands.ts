@@ -225,8 +225,8 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
     // Enhanced welcome message with better visual structure
     const welcomeContent = `• Type your questions about code or project
 • Use @ for fuzzy file search, type to filter, Enter/Tab to select
-• Use "help" for suggestions
-• Use "exit" or "quit" to leave
+• Use "/help" for suggestions
+• Use "/exit" or "/quit" to leave
 • Use Ctrl+C to exit anytime`;
     console.log(BoxRenderer.createInfoBox('💬 Welcome to Interactive Chat Mode', welcomeContent));
     console.log();
@@ -267,15 +267,22 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
  */
 export async function processUserInput(trimmedMessage: string, agent: Agent, options: any, shouldStream: boolean): Promise<boolean> {
   // Handle exit commands
-  if (trimmedMessage.toLowerCase() === 'exit' ||
-      trimmedMessage.toLowerCase() === 'quit' ||
-      trimmedMessage.toLowerCase() === 'q') {
+  if (trimmedMessage.toLowerCase() === '/exit' ||
+      trimmedMessage.toLowerCase() === '/quit' ||
+      trimmedMessage.toLowerCase() === '/q') {
     return false; // Signal to exit
   }
 
   // Handle help command
-  if (trimmedMessage.toLowerCase() === 'help') {
+  if (trimmedMessage.toLowerCase() === '/help') {
     displayChatHelp();
+    return true; // Continue processing
+  }
+
+  // Handle clear command
+  if (trimmedMessage.toLowerCase() === '/clear') {
+    agent.clearHistory();
+    console.log(chalk.green('✨ Chat history cleared. Context has been reset to initial state.'));
     return true; // Continue processing
   }
 
@@ -367,7 +374,7 @@ export async function processUserInput(trimmedMessage: string, agent: Agent, opt
     console.log(); // Clear the status line
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.log(BoxRenderer.createInfoBox('❌ Error', errorMessage));
-    console.log(chalk.gray('💡 Try rephrasing your question or type "help" for suggestions.'));
+    console.log(chalk.gray('💡 Try rephrasing your question or type "/help" for suggestions.'));
     console.log();
   }
 
@@ -378,9 +385,10 @@ export async function processUserInput(trimmedMessage: string, agent: Agent, opt
  * Display chat help information
  */
 export function displayChatHelp() {
-  const helpContent = `Available Commands:
-    help               - Show this help
-    exit, quit, q      - Exit interactive mode
+  const helpContent = `Available Commands: (press TAB for auto-completion)
+    /help              - Show this help
+    /exit, /quit, /q   - Exit interactive mode
+    /clear             - Clear chat history and reset context
 
 File Completion (Fuzzy Search):
     @                  - Shows live file list, fuzzy search as you type

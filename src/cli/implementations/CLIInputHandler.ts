@@ -21,7 +21,7 @@ export class CLIInputHandler implements IInputHandler {
       allowedExtensions: [],
       blockedPaths: ['node_modules', '.git', 'dist', 'build', '.next', 'coverage']
     };
-    
+
     this.globTool = new GlobTool(this.toolContext);
 
     this.rl = readline.createInterface({
@@ -35,12 +35,13 @@ export class CLIInputHandler implements IInputHandler {
 
   async readInput(prompt?: string): Promise<string> {
     return new Promise((resolve) => {
-      this.rl.question(prompt || 'You (@ + TAB for files, q to quit): ', (answer) => {
+      this.rl.question(prompt || 'You (TAB for commands, @ + TAB for files, /q to quit): ', (answer) => {
         const trimmedAnswer = answer.trim();
 
         // Handle quit commands
-        if (trimmedAnswer.toLowerCase() === 'q' || 
-            trimmedAnswer.toLowerCase() === 'quit') {
+        if (trimmedAnswer.toLowerCase() === '/q' || 
+            trimmedAnswer.toLowerCase() === '/quit' ||
+            trimmedAnswer.toLowerCase() === '/exit') {
           console.log('Exiting...');
           this.close();
           process.exit(0);
@@ -81,10 +82,9 @@ export class CLIInputHandler implements IInputHandler {
 
   private isExitCommand(input: string): boolean {
     const normalized = input.toLowerCase().trim();
-    return normalized === 'exit' || 
-           normalized === 'quit' || 
-           normalized === 'q' || 
-           normalized === ':q';
+    return normalized === '/exit' || 
+           normalized === '/quit' || 
+           normalized === '/q';
   }
 
   close() {
@@ -124,11 +124,26 @@ export class CLIInputHandler implements IInputHandler {
   }
 
   /**
-   * Tab completion handler for file references with @
+   * Tab completion handler for commands and file references with @
    */
   private async completer(line: string): Promise<[string[], string]> {
     try {
-      // Only provide completions after @ symbol
+      // Command auto-completion
+      const availableCommands = ['/help', '/exit', '/quit', '/q', '/clear'];
+      const trimmedLine = line.trim();
+
+      // If line doesn't start with @ and doesn't contain spaces, it might be a command
+      if (!trimmedLine.includes(' ') && !trimmedLine.includes('@')) {
+        const matchingCommands = availableCommands.filter(cmd => 
+          cmd.startsWith(trimmedLine) && cmd !== trimmedLine
+        );
+
+        if (matchingCommands.length > 0) {
+          return [matchingCommands, trimmedLine];
+        }
+      }
+
+      // File completion after @ symbol
       const lastAtIndex = line.lastIndexOf('@');
       if (lastAtIndex === -1) {
         return [[], line];
@@ -141,7 +156,7 @@ export class CLIInputHandler implements IInputHandler {
 
       // Get file completions
       const completions = await this.getFileCompletions(partialPath);
-      
+
       // Return completions with the full line context
       const hits = completions.map(completion => beforeAt + completion);
       return [hits, line];
@@ -206,12 +221,12 @@ export class CLIInputHandler implements IInputHandler {
       return matches.map((match: GlobMatch) => {
         const relativePath = path.relative(this.toolContext.workingDirectory, match.path);
         const formattedPath = relativePath || match.name;
-        
+
         // Add trailing slash for directories
         if (match.type === 'directory') {
           return formattedPath + '/';
         }
-        
+
         return formattedPath;
       });
 
@@ -226,7 +241,7 @@ export class CLIInputHandler implements IInputHandler {
   private isRelevantFile(match: GlobMatch): boolean {
     // Skip hidden files and irrelevant extensions
     if (match.hidden) return false;
-    
+
     // Common code file extensions
     const codeExtensions = [
       '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h',
@@ -234,15 +249,15 @@ export class CLIInputHandler implements IInputHandler {
       '.rb', '.go', '.rs', '.swift', '.kt', '.scala', '.cs', '.vb',
       '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg'
     ];
-    
+
     // Common document extensions
     const docExtensions = [
       '.md', '.txt', '.rst', '.pdf', '.doc', '.docx'
     ];
-    
+
     // Always include directories
     if (match.type === 'directory') return true;
-    
+
     // Include files with relevant extensions
     const ext = path.extname(match.name).toLowerCase();
     return codeExtensions.includes(ext) || docExtensions.includes(ext) || ext === '';
