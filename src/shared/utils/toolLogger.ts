@@ -13,6 +13,66 @@ import { logger } from './logger';
  */
 export class ToolLogger {
   /**
+   * Format arguments for human-readable display
+   */
+  private static formatArgsForDisplay(toolName: string, args: any): string {
+    if (!args || typeof args !== 'object') {
+      return String(args);
+    }
+
+    const toolLower = toolName.toLowerCase();
+    const parts: string[] = [];
+
+    // Tool-specific formatting
+    if (toolLower.includes('read')) {
+      if (args.path) parts.push(`path: ${args.path}`);
+      if (args.startLine) parts.push(`lines: ${args.startLine}-${args.endLine || 'end'}`);
+      if (args.maxLines) parts.push(`maxLines: ${args.maxLines}`);
+      if (args.encoding && args.encoding !== 'utf8') parts.push(`encoding: ${args.encoding}`);
+    } else if (toolLower.includes('write')) {
+      if (args.path) parts.push(`path: ${args.path}`);
+      if (args.content) {
+        const lines = args.content.split('\n').length;
+        const chars = args.content.length;
+        parts.push(`content: ${lines} lines, ${chars} chars`);
+      }
+      if (args.diff) parts.push(`diff: ${args.diff.split('\n').length} lines`);
+      if (args.encoding && args.encoding !== 'utf8') parts.push(`encoding: ${args.encoding}`);
+      if (args.backup === false) parts.push('backup: false');
+    } else if (toolLower.includes('ls')) {
+      if (args.path) parts.push(`path: ${args.path}`);
+      if (args.recursive) parts.push('recursive: true');
+      if (args.includeHidden) parts.push('includeHidden: true');
+    } else if (toolLower.includes('glob')) {
+      if (args.pattern) parts.push(`pattern: ${args.pattern}`);
+      if (args.cwd) parts.push(`cwd: ${args.cwd}`);
+    } else if (toolLower.includes('grep') || toolLower.includes('search')) {
+      if (args.pattern) parts.push(`pattern: ${args.pattern}`);
+      if (args.path) parts.push(`path: ${args.path}`);
+      if (args.filePattern) parts.push(`files: ${args.filePattern}`);
+    } else if (toolLower.includes('bash')) {
+      if (args.command) {
+        const cmd = args.command.length > 50 ? args.command.substring(0, 50) + '...' : args.command;
+        parts.push(`command: ${cmd}`);
+      }
+      if (args.cwd) parts.push(`cwd: ${args.cwd}`);
+    } else {
+      // Generic formatting for other tools
+      for (const [key, value] of Object.entries(args)) {
+        if (typeof value === 'string' && value.length > 100) {
+          parts.push(`${key}: [${value.length} chars]`);
+        } else if (typeof value === 'object') {
+          parts.push(`${key}: [object]`);
+        } else {
+          parts.push(`${key}: ${value}`);
+        }
+      }
+    }
+
+    return parts.length > 0 ? parts.join(', ') : JSON.stringify(this.filterLongParams(args));
+  }
+
+  /**
    * Filter out long parameters that shouldn't be displayed in console
    */
   private static filterLongParams(args: any): any {
@@ -56,8 +116,8 @@ export class ToolLogger {
     if (logger.isToolConsoleEnabled()) {
       console.log(chalk.blue('🔧 Tool Usage:'), chalk.cyan(toolName));
       if (args && Object.keys(args).length > 0) {
-        const filteredArgs = this.filterLongParams(args);
-        console.log(chalk.gray('   Arguments:'), JSON.stringify(filteredArgs, null, 2));
+        const humanReadableArgs = this.formatArgsForDisplay(toolName, args);
+        console.log(chalk.gray('   Arguments:'), humanReadableArgs);
       }
     }
 
@@ -148,6 +208,35 @@ export class ToolLogger {
         }
       }
       return `✏️ File edited`;
+    }
+
+    // Bash tool - show command execution results
+    if (toolLower.includes('bash')) {
+      // Handle BashResult object
+      if (typeof result === 'object' && result !== null && 'exitCode' in result) {
+        const exitCode = result.exitCode;
+        const executionTime = result.executionTime || 0;
+        const stdout = result.stdout || '';
+        const stderr = result.stderr || '';
+        
+        const status = exitCode === 0 ? 'success' : 'failed';
+        const outputLines = stdout ? stdout.split('\n').length : 0;
+        const errorLines = stderr ? stderr.split('\n').length : 0;
+        
+        let details = `exit ${exitCode}`;
+        if (outputLines > 0) details += `, ${outputLines} lines output`;
+        if (errorLines > 0) details += `, ${errorLines} lines stderr`;
+        if (executionTime > 0) details += `, ${executionTime}ms`;
+        
+        return `⚡ Command ${status}: ${details}`;
+      }
+      
+      // Fallback for string results
+      if (typeof result === 'string') {
+        const lines = result.split('\n').length;
+        return `⚡ Command output: ${lines} lines`;
+      }
+      return `⚡ Command executed`;
     }
 
     // Handle object results from read tool specifically
