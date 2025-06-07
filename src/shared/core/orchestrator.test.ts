@@ -1,131 +1,186 @@
 import { ToolOrchestrator } from './orchestrator';
 import { LLMService } from '../services/llm';
-import { GeminiProvider } from '../services/geminiProvider';
+import { BaseTool } from '../tools/base';
 
 describe('ToolOrchestrator', () => {
   let orchestrator: ToolOrchestrator;
   let mockLLMService: jest.Mocked<LLMService>;
-  let mockGeminiProvider: jest.Mocked<GeminiProvider>;
+  let mockTool: jest.Mocked<BaseTool>;
 
   beforeEach(() => {
-    mockGeminiProvider = {
-      sendMessageWithTools: jest.fn(),
-      streamMessageWithTools: jest.fn(),
-      sendMessage: jest.fn(),
-      streamMessage: jest.fn(),
-      initialize: jest.fn(),
-      isReady: jest.fn()
+    mockTool = {
+      name: 'test-tool',
+      description: 'A test tool',
+      schema: {
+        type: 'object',
+        properties: {
+          input: { type: 'string' }
+        },
+        required: ['input']
+      },
+      execute: jest.fn(),
+      getFunctionCallSchema: jest.fn().mockReturnValue({
+        name: 'test-tool',
+        description: 'A test tool',
+        parameters: {
+          type: 'object',
+          properties: {
+            input: { type: 'string' }
+          },
+          required: ['input']
+        }
+      })
     } as any;
 
     mockLLMService = {
-      provider: 'gemini',
+      provider: 'openai',
       sendMessageWithTools: jest.fn(),
       streamMessageWithTools: jest.fn(),
       sendMessage: jest.fn(),
       streamMessage: jest.fn(),
       initialize: jest.fn(),
-      isReady: jest.fn(),
-      getCurrentProvider: jest.fn().mockReturnValue('gemini') // Add missing method
+      isReady: jest.fn().mockReturnValue(true),
+      getProviderName: jest.fn().mockReturnValue('openai')
     } as any;
 
-    orchestrator = new ToolOrchestrator(mockLLMService);
+    orchestrator = new ToolOrchestrator(mockLLMService, [mockTool]);
   });
 
-  describe('processWithEnhancedNativeCalling', () => {
-    it('should route to Gemini chat loop when provider is gemini', async () => {
+  describe('processMessage', () => {
+    it('should process messages without tool calls', async () => {
       const userInput = 'test message';
-      const mockResult = 'test response';
+      const mockResult = { 
+        content: 'test response', 
+        tool_calls: undefined, 
+        finishReason: 'stop' 
+      };
 
-      // Mock the internal processGeminiChatLoop method
-      const processGeminiChatLoopSpy = jest.spyOn(orchestrator as any, 'processGeminiChatLoop')
-        .mockResolvedValue(mockResult);
+      mockLLMService.streamMessageWithTools.mockResolvedValue(mockResult);
+
+      const result = await orchestrator.processMessage(userInput);
+
+      expect(result).toBe('test response');
+      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalled();
+    });
+
+    it('should handle tool calls in messages', async () => {
+      const userInput = 'test message';
+      const toolCallResponse = {
+        content: 'I need to use a tool',
+        tool_calls: [{
+          id: 'call-1',
+          type: 'function' as const,
+          function: {
+            name: 'test-tool',
+            arguments: JSON.stringify({ input: 'test' })
+          }
+        }],
+        finishReason: 'tool_calls'
+      };
+      const finalResponse = { 
+        content: 'final response', 
+        tool_calls: undefined, 
+        finishReason: 'stop' 
+      };
+
+      mockTool.execute.mockResolvedValue({
+        success: true,
+        output: 'tool result'
+      });
+
+      mockLLMService.streamMessageWithTools
+        .mockResolvedValueOnce(toolCallResponse)
+        .mockResolvedValueOnce(finalResponse);
+
+      const result = await orchestrator.processMessage(userInput);
+
+      expect(result).toBe('final response');
+      expect(mockTool.execute).toHaveBeenCalledWith({ input: 'test' });
+      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('tool registration', () => {
+    it('should register new tools', () => {
+      const newTool = {
+        name: 'new-tool',
+        description: 'A new tool',
+        execute: jest.fn(),
+        getFunctionCallSchema: jest.fn()
+      } as any;
+
+      orchestrator.registerTool(newTool);
+      const tools = orchestrator.getRegisteredTools();
+      
+      expect(tools).toHaveLength(2); // original + new
+      expect(tools.some(t => t.name === 'new-tool')).toBe(true);
+    });
+  });
+
+  describe('conversation management', () => {
+    it('should clear conversation history', () => {
+      orchestrator.clearHistory();
+      const history = orchestrator.getHistory();
+      expect(history).toHaveLength(0);
+    });
+
+    it('should provide conversation summary', () => {
+      const summary = orchestrator.getConversationSummary();
+      expect(typeof summary).toBe('string');
+    });
+  });
+
+  describe('tool schema handling', () => {
+    it('should get tool schemas for different providers', () => {
+      const schemas = orchestrator.getToolSchemas();
+      expect(Array.isArray(schemas)).toBe(true);
+      expect(schemas.length).toBeGreaterThan(0);
+    });
+
+    it('should handle provider-specific schema transformations', () => {
+      mockLLMService.getProviderName.mockReturnValue('anthropic');
+      const schemas = orchestrator.getToolSchemas();
+      
+      expect(Array.isArray(schemas)).toBe(true);
+      if (schemas.length > 0) {
+        expect(schemas[0]).toHaveProperty('name');
+        expect(schemas[0]).toHaveProperty('description');
+        expect(schemas[0]).toHaveProperty('input_schema');
+      }
+    });
+  });
+
+  describe('legacy methods', () => {
+    it('should delegate processWithEnhancedNativeCalling to processMessage', async () => {
+      const userInput = 'test message';
+      const mockResult = { 
+        content: 'test response', 
+        tool_calls: undefined, 
+        finishReason: 'stop' 
+      };
+
+      mockLLMService.streamMessageWithTools.mockResolvedValue(mockResult);
 
       const result = await orchestrator.processWithEnhancedNativeCalling(userInput);
 
-      expect(result).toBe(mockResult);
-      expect(processGeminiChatLoopSpy).toHaveBeenCalledWith(
-        userInput,
-        expect.any(Array), // function declarations
-        undefined, // onChunk
-        undefined  // verbose
-      );
+      expect(result).toBe('test response');
+      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalled();
     });
 
-    it('should fallback to standard processing for non-gemini providers', async () => {
-      // Create a new mock LLMService for this test with openai provider
-      const openaiMockLLMService = {
-        provider: 'openai',
-        sendMessageWithTools: jest.fn(),
-        streamMessageWithTools: jest.fn(),
-        sendMessage: jest.fn(),
-        streamMessage: jest.fn(),
-        initialize: jest.fn(),
-        isReady: jest.fn(),
-        getCurrentProvider: jest.fn().mockReturnValue('openai') // Add missing method
-      } as any;
-
-      const openaiOrchestrator = new ToolOrchestrator(openaiMockLLMService);
+    it('should delegate processWithNativeToolLoop to processMessage', async () => {
       const userInput = 'test message';
-      const mockResult = 'test response';
+      const mockResult = { 
+        content: 'test response', 
+        tool_calls: undefined, 
+        finishReason: 'stop' 
+      };
 
-      // Mock the internal processMessage method
-      const processMessageSpy = jest.spyOn(openaiOrchestrator as any, 'processMessage')
-        .mockResolvedValue(mockResult);
+      mockLLMService.streamMessageWithTools.mockResolvedValue(mockResult);
 
-      const result = await openaiOrchestrator.processWithEnhancedNativeCalling(userInput);
+      const result = await orchestrator.processWithNativeToolLoop(userInput);
 
-      expect(result).toBe(mockResult);
-      expect(processMessageSpy).toHaveBeenCalledWith(
-        userInput,
-        undefined, // onChunk
-        undefined  // verbose
-      );
-    });
-  });
-
-  describe('convertToGeminiFunctionDeclarations', () => {
-    it('should convert tools to Gemini function declarations format', () => {
-      const orchestratorInstance = orchestrator as any;
-      const tools = [
-        {
-          function: {
-            name: 'test_tool',
-            description: 'A test tool',
-            parameters: { type: 'object' }
-          }
-        }
-      ];
-
-      const result = orchestratorInstance.convertToGeminiFunctionDeclarations(tools);
-
-      expect(result).toEqual([
-        {
-          name: 'test_tool',
-          description: 'A test tool',
-          parameters: { type: 'object' }
-        }
-      ]);
-    });
-
-    it('should handle tools with direct name and description properties', () => {
-      const orchestratorInstance = orchestrator as any;
-      const tools = [
-        {
-          name: 'direct_tool',
-          description: 'A directly structured tool',
-          parameters: { type: 'object', properties: {} }
-        }
-      ];
-
-      const result = orchestratorInstance.convertToGeminiFunctionDeclarations(tools);
-
-      expect(result).toEqual([
-        {
-          name: 'direct_tool',
-          description: 'A directly structured tool',
-          parameters: { type: 'object', properties: {} }
-        }
-      ]);
+      expect(result).toBe('test response');
+      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalled();
     });
   });
 });

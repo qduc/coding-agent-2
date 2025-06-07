@@ -220,8 +220,8 @@ export class ToolLogger {
         const stderr = result.stderr || '';
         
         const status = exitCode === 0 ? 'success' : 'failed';
-        const outputLines = stdout ? stdout.split('\n').filter(line => line.trim()).length : 0;
-        const errorLines = stderr ? stderr.split('\n').filter(line => line.trim()).length : 0;
+        const outputLines = stdout ? stdout.split('\n').filter((line: string) => line.trim()).length : 0;
+        const errorLines = stderr ? stderr.split('\n').filter((line: string) => line.trim()).length : 0;
         
         let details = `exit ${exitCode}`;
         if (outputLines > 0) details += `, ${outputLines} lines output`;
