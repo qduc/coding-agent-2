@@ -71,6 +71,7 @@ async function main() {
 
         // Create CLI implementations
         const toolContext = new CLIToolExecutionContext();
+        const inputHandler = new CLIInputHandler(toolContext);
 
         // Create and initialize agent with CLI implementations
         const agent = new Agent({
@@ -88,7 +89,7 @@ async function main() {
           await handleDirectCommand(command, agent, options, shouldStream);
         } else {
           // Interactive chat mode
-          await startInteractiveMode(agent, options, shouldStream);
+          await startInteractiveMode(agent, options, shouldStream, inputHandler);
         }
       });
 
@@ -195,7 +196,7 @@ async function handleDirectCommand(command: string, agent: Agent, options: any, 
 /**
  * Start interactive chat mode
  */
-async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false) {
+async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false, inputHandler?: CLIInputHandler) {
   if (options.verbose) {
     console.log(chalk.blue('Starting interactive chat mode...'));
   }
@@ -217,6 +218,7 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
 
     // Enhanced welcome message with better visual structure
     const welcomeContent = `• Type your questions about code or project
+• Use @ and press TAB for file completion
 • Use "help" for suggestions
 • Use "exit" or "quit" to leave
 • Use Ctrl+C to exit anytime`;
@@ -230,136 +232,44 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
     };
     process.on('SIGINT', handleExit);
 
-    // Start chat loop
-    while (true) {
-      try {
-        const { message } = await inquirer.default.prompt([
-          {
-            type: 'input',
-            name: 'message',
-            message: chalk.green('You:'),
-            validate: (input: string) => {
-              if (!input.trim()) {
-                return 'Please enter a message or type "exit" to quit.';
-              }
-              return true;
-            }
-          }
-        ]);
-
-        const trimmedMessage = message.trim();
-
-        // Handle exit commands
-        if (trimmedMessage.toLowerCase() === 'exit' ||
-            trimmedMessage.toLowerCase() === 'quit' ||
-            trimmedMessage.toLowerCase() === 'q') {
+    // Start chat loop using our enhanced input handler if available
+    if (inputHandler) {
+      await inputHandler.handleInteractiveMode(
+        async (input: string) => {
+          await processUserInput(input, agent, options, shouldStream);
+        },
+        () => {
           console.log(chalk.yellow('👋 Goodbye! Thanks for using Coding Agent.'));
-          break;
         }
-
-        // Handle help command
-        if (trimmedMessage.toLowerCase() === 'help') {
-          displayChatHelp();
-          continue;
-        }
-
-        // Process the message with the AI
+      );
+    } else {
+      // Fallback to inquirer for direct mode
+      while (true) {
         try {
-          console.log(chalk.cyan('🤖 Agent:'), chalk.gray('🔍 Analyzing your message...'));
-
-          let accumulatedResponse = '';
-          let hasStartedStreaming = false;
-          let currentLine = '';
-
-          if (shouldStream) {
-            // Streaming mode
-            const response = await agent.processMessage(
-              trimmedMessage,
-              (chunk: string) => {
-                // Clear status and start streaming on first chunk
-                if (!hasStartedStreaming) {
-                  process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
-                  process.stdout.write(chalk.cyan('🤖 Agent: ') + chalk.gray('⚡ '));
-                  hasStartedStreaming = true;
+          const { message } = await inquirer.default.prompt([
+            {
+              type: 'input',
+              name: 'message',
+              message: chalk.green('You:'),
+              validate: (input: string) => {
+                if (!input.trim()) {
+                  return 'Please enter a message or type "exit" to quit.';
                 }
-
-                // Accumulate content for final rendering
-                accumulatedResponse += chunk;
-
-                // Stream raw text in real-time for immediate feedback
-                process.stdout.write(chunk);
-                currentLine += chunk;
-
-                // Track current line for proper cursor positioning
-                if (chunk.includes('\n')) {
-                  currentLine = '';
-                }
-              },
-              options.verbose
-            );
-
-            // Replace raw streaming output with formatted version
-            if (hasStartedStreaming && accumulatedResponse.trim()) {
-              const terminalWidth = process.stdout.columns || 80;
-              const agentPrefix = '🤖 Agent: ⚡ ';
-
-              // Calculate and execute the clearing sequence
-              const clearSequence = calculateStreamingClearSequence(
-                accumulatedResponse,
-                terminalWidth,
-                agentPrefix
-              );
-              process.stdout.write(clearSequence);
-
-              // Show enhanced formatted response
-              console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-              console.log();
-              console.log(renderResponse(accumulatedResponse));
-              console.log();
-              console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
-            } else if (!hasStartedStreaming) {
-              // No streaming occurred (tools only), show complete response
-              process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
-              console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-              console.log();
-              console.log(renderResponse(response));
-              console.log();
-              console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
+                return true;
+              }
             }
+          ]);
+
+          const success = await processUserInput(message.trim(), agent, options, shouldStream);
+          if (!success) break;
+
+        } catch (promptError: any) {
+          // Handle Ctrl+C or other prompt interruptions
+          if (promptError.name === 'ExitPromptError' || promptError.isTTYError) {
+            handleExit();
           } else {
-            // Non-streaming mode
-            const response = await agent.processMessage(
-              trimmedMessage,
-              undefined,
-              options.verbose
-            );
-
-            // Clear status line and show enhanced response
-            process.stdout.write('\x1b[1A\x1b[2K');
-            console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-            console.log();
-
-            // Show formatted response
-            console.log(renderResponse(response));
-            console.log();
-            console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
+            throw promptError;
           }
-
-          console.log(); // Add spacing for next input
-
-        } catch (error) {
-          console.log(); // Clear the status line
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.log(BoxRenderer.createInfoBox('❌ Error', errorMessage));
-          console.log(chalk.gray('💡 Try rephrasing your question or type "help" for suggestions.'));
-          console.log();
-        }
-      } catch (promptError: any) {
-        // Handle Ctrl+C or other prompt interruptions
-        if (promptError.name === 'ExitPromptError' || promptError.isTTYError) {
-          handleExit();
-        } else {
-          throw promptError;
         }
       }
     }
@@ -371,6 +281,118 @@ async function startInteractiveMode(agent: Agent, options: any, shouldStream: bo
     console.error(chalk.red('Failed to start interactive mode:'), error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }
+}
+
+/**
+ * Process user input message
+ */
+async function processUserInput(trimmedMessage: string, agent: Agent, options: any, shouldStream: boolean): Promise<boolean> {
+  // Handle exit commands
+  if (trimmedMessage.toLowerCase() === 'exit' ||
+      trimmedMessage.toLowerCase() === 'quit' ||
+      trimmedMessage.toLowerCase() === 'q') {
+    return false; // Signal to exit
+  }
+
+  // Handle help command
+  if (trimmedMessage.toLowerCase() === 'help') {
+    displayChatHelp();
+    return true; // Continue processing
+  }
+
+  // Process the message with the AI
+  try {
+    console.log(chalk.cyan('🤖 Agent:'), chalk.gray('🔍 Analyzing your message...'));
+
+    let accumulatedResponse = '';
+    let hasStartedStreaming = false;
+    let currentLine = '';
+
+    if (shouldStream) {
+      // Streaming mode
+      const response = await agent.processMessage(
+        trimmedMessage,
+        (chunk: string) => {
+          // Clear status and start streaming on first chunk
+          if (!hasStartedStreaming) {
+            process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
+            process.stdout.write(chalk.cyan('🤖 Agent: ') + chalk.gray('⚡ '));
+            hasStartedStreaming = true;
+          }
+
+          // Accumulate content for final rendering
+          accumulatedResponse += chunk;
+
+          // Stream raw text in real-time for immediate feedback
+          process.stdout.write(chunk);
+          currentLine += chunk;
+
+          // Track current line for proper cursor positioning
+          if (chunk.includes('\n')) {
+            currentLine = '';
+          }
+        },
+        options.verbose
+      );
+
+      // Replace raw streaming output with formatted version
+      if (hasStartedStreaming && accumulatedResponse.trim()) {
+        const terminalWidth = process.stdout.columns || 80;
+        const agentPrefix = '🤖 Agent: ⚡ ';
+
+        // Calculate and execute the clearing sequence
+        const clearSequence = calculateStreamingClearSequence(
+          accumulatedResponse,
+          terminalWidth,
+          agentPrefix
+        );
+        process.stdout.write(clearSequence);
+
+        // Show enhanced formatted response
+        console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+        console.log();
+        console.log(renderResponse(accumulatedResponse));
+        console.log();
+        console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
+      } else if (!hasStartedStreaming) {
+        // No streaming occurred (tools only), show complete response
+        process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
+        console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+        console.log();
+        console.log(renderResponse(response));
+        console.log();
+        console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
+      }
+    } else {
+      // Non-streaming mode
+      const response = await agent.processMessage(
+        trimmedMessage,
+        undefined,
+        options.verbose
+      );
+
+      // Clear status line and show enhanced response
+      process.stdout.write('\x1b[1A\x1b[2K');
+      console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+      console.log();
+
+      // Show formatted response
+      console.log(renderResponse(response));
+      console.log();
+      console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
+    }
+
+    console.log(); // Add spacing for next input
+
+  } catch (error) {
+    console.log(); // Clear the status line
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.log(BoxRenderer.createInfoBox('❌ Error', errorMessage));
+    console.log(chalk.gray('💡 Try rephrasing your question or type "help" for suggestions.'));
+    console.log();
+  }
+
+  return true; // Continue processing
 }
 
 /**
@@ -417,15 +439,21 @@ function displayChatHelp() {
     help               - Show this help
     exit, quit, q      - Exit interactive mode
 
+File Completion:
+    @filename          - Type @ and press TAB for file suggestions
+    @src/              - Navigate directories with TAB completion
+    @package.json      - Reference specific files
+
 Example Questions:
     "Explain what this project does"
     "List files in the src directory"
-    "Help me understand this error"
+    "Help me understand @src/main.ts"
     "What are the main components?"
     "Show me the test files"
 
 Tips:
     • Be specific about what you want to know
+    • Use @ and TAB for file references
     • Ask about files, directories, or patterns
     • Use natural language - no special syntax`;
 

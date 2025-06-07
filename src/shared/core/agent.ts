@@ -37,11 +37,13 @@ export class Agent {
     this.llmService = new LLMService();
 
     // Create instances of all tools with provided or default context
-    const toolContext = this.toolContext || {
-      workingDirectory: process.cwd(),
-      environment: process.env,
+    const toolContext = {
+      workingDirectory: this.toolContext?.workingDirectory || process.cwd(),
       maxFileSize: 1024 * 1024 * 5, // 5MB
-      timeout: 30000 // 30s
+      timeout: 30000, // 30s
+      allowHidden: false,
+      allowedExtensions: [],
+      blockedPaths: ['node_modules', '.git', 'dist', 'build', 'coverage']
     };
 
     const lsTool = new LSTool(toolContext);
@@ -88,7 +90,14 @@ export class Agent {
     this.orchestrator.setProjectContext(this.discoveryResult);
 
     // Initialize LLM service
-    return await this.llmService.initialize();
+    const initialized = await this.llmService.initialize();
+    
+    if (initialized) {
+      // Initialize the orchestrator's provider strategy now that LLM service is ready
+      this.orchestrator.initializeProviderStrategy();
+    }
+    
+    return initialized;
   }
 
   /**

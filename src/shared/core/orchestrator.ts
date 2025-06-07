@@ -29,11 +29,21 @@ export class ToolOrchestrator {
     this.conversationManager = new ConversationManager();
     this.toolExecutionHandler = new ToolExecutionHandler(tools);
     this.systemPromptBuilder = new SystemPromptBuilder();
-    this.providerStrategy = ProviderStrategyFactory.createStrategy(
-      this.llmService.getProviderName(),
-      this.llmService,
-      this.toolExecutionHandler
-    );
+    // Don't initialize provider strategy yet - will be done in Agent.initialize()
+    this.providerStrategy = {} as ProviderStrategy; // Placeholder
+  }
+
+  /**
+   * Initialize provider strategy after LLM service is ready
+   */
+  initializeProviderStrategy(): void {
+    if (this.llmService.isReady()) {
+      this.providerStrategy = ProviderStrategyFactory.createStrategy(
+        this.llmService.getProviderName(),
+        this.llmService,
+        this.toolExecutionHandler
+      );
+    }
   }
 
   /**
@@ -41,12 +51,14 @@ export class ToolOrchestrator {
    */
   registerTool(tool: BaseTool): void {
     this.toolExecutionHandler.registerTool(tool);
-    // Update provider strategy to reflect new tools
-    this.providerStrategy = ProviderStrategyFactory.createStrategy(
-      this.llmService.getProviderName(),
-      this.llmService,
-      this.toolExecutionHandler
-    );
+    // Update provider strategy to reflect new tools if LLM service is ready
+    if (this.llmService.isReady()) {
+      this.providerStrategy = ProviderStrategyFactory.createStrategy(
+        this.llmService.getProviderName(),
+        this.llmService,
+        this.toolExecutionHandler
+      );
+    }
   }
 
   /**
