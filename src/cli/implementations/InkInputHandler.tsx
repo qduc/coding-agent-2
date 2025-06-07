@@ -412,6 +412,9 @@ export class InkInputHandler implements IInputHandler {
               return;
             }
             
+            // Unmount Ink to allow console output during processing
+            unmount();
+            
             // Resolve the current input promise if waiting
             if (this.inputResolve) {
               this.inputResolve(input);

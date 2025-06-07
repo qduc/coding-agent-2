@@ -3,6 +3,7 @@ import { LLMProvider, Message, StreamingResponse, FunctionCallResponse, Response
 import { configManager } from '../core/config';
 import { logger } from '../utils/logger';
 import { ToolLogger } from '../utils/toolLogger';
+import { SchemaAdapter } from '../services/schemaAdapter';
 
 export class OpenAIProvider implements LLMProvider {
   private openai: OpenAI | null = null;
@@ -38,8 +39,8 @@ export class OpenAIProvider implements LLMProvider {
         } : undefined
       });
 
-      // Skip connection test for now to allow initialization
-      // await this.testConnection(!!isOpenRouter);
+      // Test the connection
+      await this.testConnection(!!isOpenRouter);
       this.initialized = true;
       logger.info(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} provider initialized successfully`, { model: config.model }, 'OpenAIProvider');
       return true;
@@ -240,7 +241,11 @@ export class OpenAIProvider implements LLMProvider {
 
       // Add function calling if functions are provided
       if (functions.length > 0) {
-        requestParams.tools = functions.map(func => ({
+        // Convert tools to OpenAI format using SchemaAdapter
+        const normalizedTools = SchemaAdapter.normalizeAll(functions);
+        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
+        
+        requestParams.tools = openAIFunctions.map(func => ({
           type: 'function',
           function: func
         }));
@@ -308,7 +313,11 @@ export class OpenAIProvider implements LLMProvider {
 
       // Add function calling if functions are provided
       if (functions.length > 0) {
-        requestParams.tools = functions.map(func => ({
+        // Convert tools to OpenAI format using SchemaAdapter
+        const normalizedTools = SchemaAdapter.normalizeAll(functions);
+        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
+        
+        requestParams.tools = openAIFunctions.map(func => ({
           type: 'function',
           function: func
         }));
@@ -443,6 +452,10 @@ export class OpenAIProvider implements LLMProvider {
     onChunk?: (chunk: string) => void,
     verbose: boolean = false
   ): Promise<string> {
+    // This method is deprecated in favor of the orchestrator pattern
+    // For OpenAI, tool execution should be handled by ToolOrchestrator with OpenAIStrategy
+    // This implementation provides basic compatibility for legacy code
+    
     // Initialize conversation with system message and user input
     let messages: Message[] = [
       {
@@ -452,61 +465,37 @@ export class OpenAIProvider implements LLMProvider {
       { role: 'user', content: userInput }
     ];
 
-    const maxIterations = 10; // Prevent infinite loops
-    let iterations = 0;
+    try {
+      // Convert tools to OpenAI format using SchemaAdapter
+      const normalizedTools = SchemaAdapter.normalizeAll(tools);
+      const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
+      
+      // Send to LLM with tool schemas (single pass)
+      const response = await this.streamMessageWithTools(
+        messages,
+        openAIFunctions,
+        onChunk
+      );
 
-    while (iterations < maxIterations) {
-      iterations++;
-
-      if (verbose) {
-        console.log(`🔄 OpenAI tool loop iteration ${iterations}...`);
-      }
-
-      try {
-        // Send to LLM with tool schemas
-        const response = await this.streamMessageWithTools(
-          messages,
-          tools,
-          onChunk
-        );
-
-        // Check if we have tool calls to execute
-        if (response.tool_calls && response.tool_calls.length > 0) {
-          if (verbose) {
-            console.log(`🔧 OpenAI requested ${response.tool_calls.length} tool call(s)`);
-          }
-
-          // Add assistant's response with tool calls to conversation
-          messages.push({
-            role: 'assistant',
-            content: response.content,
-            tool_calls: response.tool_calls
-          });
-
-          // Note: This is a simplified implementation
-          // In practice, tool execution should be handled by the orchestrator
-          // For now, we return the tool call requests for the orchestrator to handle
-          return JSON.stringify({
-            type: 'tool_calls_required',
-            tool_calls: response.tool_calls,
-            messages: messages
-          });
-        } else {
-          // No tool calls - this is the final response
-          const finalResponse = response.content || '';
-
-          if (verbose) {
-            console.log('✅ OpenAI tool loop completed');
-          }
-
-          return finalResponse;
+      // For full tool execution loop, use ToolOrchestrator instead
+      if (response.tool_calls && response.tool_calls.length > 0) {
+        if (verbose) {
+          console.log(`🔧 OpenAI requested ${response.tool_calls.length} tool call(s) - use ToolOrchestrator for full execution`);
         }
-      } catch (error) {
-        throw new Error(`Failed to process OpenAI tool loop in iteration ${iterations}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        
+        // Return indication that tool calls are needed
+        return JSON.stringify({
+          type: 'tool_calls_required',
+          tool_calls: response.tool_calls,
+          content: response.content,
+          message: 'Use ToolOrchestrator.processMessage() for complete tool execution'
+        });
       }
-    }
 
-    throw new Error(`Maximum iterations (${maxIterations}) reached without completion`);
+      return response.content || '';
+    } catch (error) {
+      throw new Error(`Failed to process OpenAI tool loop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   // Helper methods for OpenAI Responses API
