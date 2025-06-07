@@ -212,7 +212,7 @@ export class ToolLogger {
 
     // Bash tool - show command execution results
     if (toolLower.includes('bash')) {
-      // Handle BashResult object
+      // Handle BashResult object (direct result)
       if (typeof result === 'object' && result !== null && 'exitCode' in result) {
         const exitCode = result.exitCode;
         const executionTime = result.executionTime || 0;
@@ -220,8 +220,8 @@ export class ToolLogger {
         const stderr = result.stderr || '';
         
         const status = exitCode === 0 ? 'success' : 'failed';
-        const outputLines = stdout ? stdout.split('\n').length : 0;
-        const errorLines = stderr ? stderr.split('\n').length : 0;
+        const outputLines = stdout ? stdout.split('\n').filter(line => line.trim()).length : 0;
+        const errorLines = stderr ? stderr.split('\n').filter(line => line.trim()).length : 0;
         
         let details = `exit ${exitCode}`;
         if (outputLines > 0) details += `, ${outputLines} lines output`;
@@ -229,6 +229,13 @@ export class ToolLogger {
         if (executionTime > 0) details += `, ${executionTime}ms`;
         
         return `⚡ Command ${status}: ${details}`;
+      }
+      
+      // Handle ToolError case - try to get command from args
+      if (typeof result === 'object' && result !== null && 'name' in result && result.name === 'ToolError') {
+        const command = args?.command || 'unknown';
+        const shortCmd = command.length > 30 ? command.substring(0, 30) + '...' : command;
+        return `⚡ Command failed: ${shortCmd}`;
       }
       
       // Fallback for string results

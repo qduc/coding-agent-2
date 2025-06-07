@@ -238,7 +238,12 @@ export class ToolOrchestrator {
       }
 
       if (logToolUsage) {
-        ToolLogger.logToolResult(func.name, result.success, result.success ? result.output : result.error);
+        // For bash tool, always pass the output (which contains BashResult even on failure)
+        // For other tools, pass output on success, error on failure
+        const logResult = (func.name.toLowerCase() === 'bash' && result.output) 
+          ? result.output 
+          : (result.success ? result.output : result.error);
+        ToolLogger.logToolResult(func.name, result.success, logResult, args);
       }
 
       // Add tool result to conversation
@@ -624,7 +629,12 @@ Use these tools when you need to access files or gather information about the pr
       // Log tool usage if enabled
       const { logToolUsage } = configManager.getConfig();
       if (logToolUsage) {
-        ToolLogger.logToolResult(func.name, result.success, result.success ? result.output : result.error);
+        // For bash tool, always pass the output (which contains BashResult even on failure)
+        // For other tools, pass output on success, error on failure
+        const logResult = (func.name.toLowerCase() === 'bash' && result.output) 
+          ? result.output 
+          : (result.success ? result.output : result.error);
+        ToolLogger.logToolResult(func.name, result.success, logResult, args);
       }
 
       if (verbose) {
