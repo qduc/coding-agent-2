@@ -224,7 +224,7 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
 
     // Enhanced welcome message with better visual structure
     const welcomeContent = `• Type your questions about code or project
-• Use @ and press TAB for file completion
+• Use @ for fuzzy file search, type to filter, Enter/Tab to select
 • Use "help" for suggestions
 • Use "exit" or "quit" to leave
 • Use Ctrl+C to exit anytime`;
@@ -382,10 +382,10 @@ export function displayChatHelp() {
     help               - Show this help
     exit, quit, q      - Exit interactive mode
 
-File Completion:
-    @filename          - Type @ and press TAB for file suggestions
-    @src/              - Navigate directories with TAB completion
-    @package.json      - Reference specific files
+File Completion (Fuzzy Search):
+    @                  - Shows live file list, fuzzy search as you type
+    @srcmp             - Matches "src/components" fuzzy style
+    @pjs               - Matches "package.json" by initials
 
 Example Questions:
     "Explain what this project does"
@@ -396,8 +396,8 @@ Example Questions:
 
 Tips:
     • Be specific about what you want to know
-    • Use @ and TAB for file references
-    • Ask about files, directories, or patterns
+    • Use @ for fuzzy file search (like fzf)
+    • Ask about files, directories, or patterns  
     • Use natural language - no special syntax`;
 
   console.log();
