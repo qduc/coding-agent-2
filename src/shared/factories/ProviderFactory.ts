@@ -1,5 +1,3 @@
-import { AnthropicProvider } from '../providers/AnthropicProvider';
-import { GeminiProvider } from '../providers/GeminiProvider';
 import { logger } from '../utils/logger';
 
 export async function createProvider(provider: string) {
@@ -9,9 +7,11 @@ export async function createProvider(provider: string) {
       providerInstance = new (await import('../providers/OpenAIProvider')).OpenAIProvider();
       break;
     case 'anthropic':
+      const { AnthropicProvider } = await import('../services/anthropicProvider');
       providerInstance = new AnthropicProvider();
       break;
     case 'gemini':
+      const { GeminiProvider } = await import('../services/geminiProvider');
       providerInstance = new GeminiProvider();
       break;
     default:

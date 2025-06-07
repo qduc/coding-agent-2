@@ -62,8 +62,8 @@ process.on('unhandledRejection', (reason) => {
 // Run the CLI
 // Check if this script is being executed directly (handles npm link symlinks)
 const scriptPath = process.argv[1];
-const isMainModule = scriptPath?.endsWith('index.js') || 
-                    scriptPath?.endsWith('cli/index.js') || 
+const isMainModule = scriptPath?.endsWith('index.js') ||
+                    scriptPath?.endsWith('cli/index.js') ||
                     scriptPath?.endsWith('coding-agent');
 
 if (isMainModule) {

@@ -138,4 +138,80 @@ export class BoxRenderer {
            contentLines.join('\n') + '\n' +
            bottomBorder + '\n';
   }
+
+  /**
+   * Create an interactive input box for multi-line text input
+   */
+  static createInputBox(
+    title: string, 
+    content: string, 
+    cursorPosition: number,
+    options: { 
+      maxWidth?: number;
+      minHeight?: number;
+      placeholder?: string;
+      showCursor?: boolean;
+    } = {}
+  ): string {
+    const terminalWidth = process.stdout.columns || 80;
+    const boxWidth = Math.min(options.maxWidth || 60, terminalWidth - 4);
+    const minHeight = options.minHeight || 3;
+    const showCursor = options.showCursor !== false;
+    
+    // Title with proper padding
+    const titleWidth = this.getDisplayWidth(title);
+    const headerPadding = Math.max(0, boxWidth - titleWidth - 4);
+    const topBorder = chalk.cyan('┌─' + title + '─'.repeat(headerPadding) + '┐');
+    
+    // Process content with cursor positioning
+    const contentWithCursor = showCursor ? this.insertCursor(content, cursorPosition) : content;
+    const lines = contentWithCursor.split('\n');
+    
+    // Create content lines with proper wrapping and padding
+    const contentLines: string[] = [];
+    const contentWidth = boxWidth - 4; // Account for "│ " and " │"
+    
+    lines.forEach((line, lineIndex) => {
+      if (line.length <= contentWidth) {
+        // Line fits in one row
+        contentLines.push(chalk.gray('│ ') + line.padEnd(contentWidth) + chalk.gray(' │'));
+      } else {
+        // Line needs wrapping
+        let remaining = line;
+        while (remaining.length > 0) {
+          const chunk = remaining.substring(0, contentWidth);
+          contentLines.push(chalk.gray('│ ') + chunk.padEnd(contentWidth) + chalk.gray(' │'));
+          remaining = remaining.substring(contentWidth);
+        }
+      }
+    });
+    
+    // Add placeholder text if content is empty
+    if (contentLines.length === 0 && options.placeholder) {
+      const placeholderText = chalk.gray.dim(options.placeholder);
+      contentLines.push(chalk.gray('│ ') + placeholderText.padEnd(contentWidth) + chalk.gray(' │'));
+    }
+    
+    // Ensure minimum height
+    while (contentLines.length < minHeight) {
+      contentLines.push(chalk.gray('│ ') + ''.padEnd(contentWidth) + chalk.gray(' │'));
+    }
+    
+    const bottomBorder = chalk.cyan('└' + '─'.repeat(boxWidth - 2) + '┘');
+    
+    return topBorder + '\n' +
+           contentLines.join('\n') + '\n' +
+           bottomBorder;
+  }
+
+  /**
+   * Insert cursor character at the specified position in text
+   */
+  private static insertCursor(text: string, position: number): string {
+    const cursor = chalk.bgWhite.black('▌');
+    if (position >= text.length) {
+      return text + cursor;
+    }
+    return text.substring(0, position) + cursor + text.substring(position);
+  }
 }

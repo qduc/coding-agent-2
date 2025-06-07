@@ -46,30 +46,99 @@ export class GeminiProvider implements LLMProvider {
    * Convert messages to Gemini parts format, allowing passthrough for Gemini-native messages
    */
   private convertMessagesToParts(messages: any[]): Content[] {
-    return messages.map(msg => {
+    const convertedMessages: Content[] = [];
+    
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      
+      // Handle Gemini-native format
       if (msg.parts) {
-        // Already Gemini-native format - ensure parts is not empty
         if (!msg.parts || msg.parts.length === 0) {
-          throw new Error('Gemini message parts cannot be empty');
+          continue; // Skip empty parts rather than throwing
         }
-        return msg;
+        convertedMessages.push(msg);
+        continue;
       }
+      
+      // Handle tool results (role: 'tool')
+      if (msg.role === 'tool' && msg.tool_call_id) {
+        // Find the corresponding tool call in previous messages to get the function name
+        let functionName = 'unknown_function';
+        for (let j = i - 1; j >= 0; j--) {
+          const prevMsg = messages[j];
+          if (prevMsg.role === 'assistant' && prevMsg.tool_calls) {
+            const toolCall = prevMsg.tool_calls.find((tc: any) => tc.id === msg.tool_call_id);
+            if (toolCall) {
+              functionName = toolCall.function.name;
+              break;
+            }
+          }
+        }
+        
+        // Convert tool result to Gemini function response format
+        convertedMessages.push({
+          role: 'user',
+          parts: [{
+            functionResponse: {
+              name: functionName,
+              response: { result: msg.content || '' }
+            }
+          }]
+        });
+        continue;
+      }
+      
+      // Handle assistant messages with tool calls
+      if (msg.role === 'assistant' && msg.tool_calls) {
+        const parts: Part[] = [];
+        
+        // Add text content if present
+        if (msg.content) {
+          parts.push({ text: msg.content });
+        }
+        
+        // Add tool calls as function calls
+        for (const toolCall of msg.tool_calls) {
+          try {
+            const args = typeof toolCall.function.arguments === 'string' 
+              ? JSON.parse(toolCall.function.arguments) 
+              : toolCall.function.arguments;
+            
+            parts.push({
+              functionCall: {
+                name: toolCall.function.name,
+                args
+              }
+            });
+          } catch (error) {
+            console.warn(`Failed to parse tool call arguments for ${toolCall.function.name}:`, error);
+          }
+        }
+        
+        if (parts.length > 0) {
+          convertedMessages.push({
+            role: 'model',
+            parts
+          });
+        }
+        continue;
+      }
+      
+      // Handle regular messages
       const parts: Part[] = [];
       if (msg.content) {
         parts.push({ text: msg.content });
       }
-
-      // Ensure we don't create messages with empty parts
-      if (parts.length === 0) {
-        // Skip messages with no content rather than creating empty parts
-        return null;
+      
+      if (parts.length > 0) {
+        convertedMessages.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts
+        });
       }
-
-      return {
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts
-      };
-    }).filter(Boolean); // Remove null entries
+    }
+    
+    return convertedMessages;
   }
 
   /**
@@ -190,7 +259,7 @@ export class GeminiProvider implements LLMProvider {
     }
 
     return {
-      content: response.text(),
+      content: toolCalls.length > 0 ? null : response.text(),
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
       finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop'
     };

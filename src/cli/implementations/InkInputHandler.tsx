@@ -4,13 +4,15 @@ import { IInputHandler } from '../../shared/interfaces/IInputHandler';
 import { GlobTool, GlobMatch } from '../../shared/tools/glob';
 import { IToolExecutionContext } from '../../shared/interfaces/IToolExecutionContext';
 import { ToolContext } from '../../shared/tools/types';
+import { BoxRenderer } from '../../shared/utils/boxRenderer';
 import * as path from 'path';
 import chalk from 'chalk';
+import { execSync } from 'child_process';
 
 // Component for handling user input
 const InputComponent = ({ 
   onSubmit, 
-  prompt = 'You (@ for files, / for commands, q to quit): ',
+  prompt = 'Enter your message (Ctrl+Enter to send, Esc to cancel):',
   initialInput = '',
   onExit,
   getFileCompletions,
@@ -29,7 +31,62 @@ const InputComponent = ({
   const [selectedCompletion, setSelectedCompletion] = useState(0);
   const [showCompletions, setShowCompletions] = useState(false);
   const [completionType, setCompletionType] = useState<'file' | 'command' | null>(null);
+  const [isMultilineMode, setIsMultilineMode] = useState(false);
+  const [pasteIndicator, setPasteIndicator] = useState(false);
   const { exit } = useApp();
+
+  // Function to get clipboard content
+  const getClipboardContent = useCallback((): string => {
+    try {
+      // Try different clipboard commands based on platform
+      let clipboardContent = '';
+      
+      if (process.platform === 'darwin') {
+        // macOS
+        clipboardContent = execSync('pbpaste', { encoding: 'utf8' });
+      } else if (process.platform === 'linux') {
+        // Linux - try xclip first, then xsel
+        try {
+          clipboardContent = execSync('xclip -selection clipboard -o', { encoding: 'utf8' });
+        } catch {
+          try {
+            clipboardContent = execSync('xsel --clipboard --output', { encoding: 'utf8' });
+          } catch {
+            // Fallback: try wl-paste for Wayland
+            clipboardContent = execSync('wl-paste', { encoding: 'utf8' });
+          }
+        }
+      } else if (process.platform === 'win32') {
+        // Windows
+        clipboardContent = execSync('powershell.exe -Command "Get-Clipboard"', { encoding: 'utf8' });
+      }
+      
+      return clipboardContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    } catch (error) {
+      // Clipboard access failed - could show a warning
+      return '';
+    }
+  }, []);
+
+  // Handle paste operation
+  const handlePaste = useCallback(() => {
+    const clipboardContent = getClipboardContent();
+    if (clipboardContent) {
+      // Insert clipboard content at cursor position
+      const newInput = input.substring(0, cursorPosition) + clipboardContent + input.substring(cursorPosition);
+      setInput(newInput);
+      setCursorPosition(cursorPosition + clipboardContent.length);
+      
+      // Show paste indicator briefly
+      setPasteIndicator(true);
+      setTimeout(() => setPasteIndicator(false), 1000);
+      
+      // If pasted content has newlines, switch to multiline mode
+      if (clipboardContent.includes('\n')) {
+        setIsMultilineMode(true);
+      }
+    }
+  }, [input, cursorPosition, getClipboardContent]);
 
   // Update completions based on current input
   const updateCompletions = useCallback(async (currentInput: string) => {
@@ -76,6 +133,16 @@ const InputComponent = ({
 
   useInput((inputChar: string, key: any) => {
     if (key.return) {
+      if (key.ctrl) {
+        // Ctrl+Enter: Submit message
+        onSubmit(input);
+        setInput('');
+        setCursorPosition(0);
+        setShowCompletions(false);
+        setIsMultilineMode(false);
+        return;
+      }
+      
       if (showCompletions && completions.length > 0) {
         // Insert selected completion
         const selectedItem = completions[selectedCompletion];
@@ -100,11 +167,21 @@ const InputComponent = ({
         return;
       }
       
-      // Submit on Enter
-      onSubmit(input);
-      setInput('');
-      setCursorPosition(0);
-      setShowCompletions(false);
+      // If we have input and not in multiline mode, send it
+      if (input.trim() && !isMultilineMode) {
+        onSubmit(input);
+        setInput('');
+        setCursorPosition(0);
+        setShowCompletions(false);
+        setIsMultilineMode(false);
+        return;
+      }
+      
+      // Regular Enter: Add newline for multi-line input
+      const newInput = input.substring(0, cursorPosition) + '\n' + input.substring(cursorPosition);
+      setInput(newInput);
+      setCursorPosition(cursorPosition + 1);
+      setIsMultilineMode(true);
       return;
     }
 
@@ -112,6 +189,12 @@ const InputComponent = ({
       // Exit on Escape or Ctrl+C
       onExit();
       exit();
+      return;
+    }
+
+    if (key.ctrl && inputChar === 'v') {
+      // Handle paste operation
+      handlePaste();
       return;
     }
 
@@ -182,29 +265,58 @@ const InputComponent = ({
     }
   });
 
+  // Create the input box display
+  const inputBoxTitle = pasteIndicator 
+    ? '📋 Pasted! (Enter or Ctrl+Enter to send)'
+    : isMultilineMode 
+      ? '💬 Multi-line Message (Ctrl+Enter to send)' 
+      : '💬 Your Message (Enter to send, Enter again for multi-line)';
+  
+  const inputBox = BoxRenderer.createInputBox(
+    inputBoxTitle,
+    input,
+    cursorPosition,
+    {
+      maxWidth: Math.min(80, (process.stdout.columns || 80) - 4),
+      minHeight: isMultilineMode ? 5 : 3,
+      placeholder: input === '' ? 'Type your message here... (@ for files, / for commands, Ctrl+V to paste)' : undefined,
+      showCursor: true
+    }
+  );
+
+  const helpText = chalk.gray.dim(
+    pasteIndicator
+      ? '📋 Content pasted successfully! • Enter to send • Esc to cancel'
+      : isMultilineMode 
+        ? '💡 Tip: Use @ for files, / for commands • Ctrl+V to paste • Ctrl+Enter to send • Esc to cancel'
+        : '💡 Tip: Use @ for files, / for commands • Ctrl+V to paste • Enter to send (Enter again for multi-line) • Esc to cancel'
+  );
+
   return (
     <>
-      <Box>
-        <Text color="green">{prompt}</Text>
-        <Text>{input}</Text>
+      <Box flexDirection="column">
+        <Text>{inputBox}</Text>
+        <Text>{helpText}</Text>
       </Box>
       {showCompletions && completions.length > 0 && (
-        <Box flexDirection="column" marginLeft={2}>
-          <Text color="gray">
-            {completionType === 'file' ? '📁 Files:' : '⚡ Commands:'}
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="cyan" bold>
+            {completionType === 'file' ? '📁 File Completions:' : '⚡ Command Completions:'}
           </Text>
-          {completions.slice(0, 8).map((completion, index) => (
-            <Text 
-              key={index} 
-              color={index === selectedCompletion ? "cyan" : "blue"}
-              backgroundColor={index === selectedCompletion ? "blue" : undefined}
-            >
-              {index === selectedCompletion ? '> ' : '  '}{completion}
-            </Text>
-          ))}
-          {completions.length > 8 && (
-            <Text color="gray">  ... and {completions.length - 8} more</Text>
-          )}
+          <Box flexDirection="column" marginLeft={2}>
+            {completions.slice(0, 8).map((completion, index) => (
+              <Text 
+                key={index} 
+                color={index === selectedCompletion ? "black" : "blue"}
+                backgroundColor={index === selectedCompletion ? "cyan" : undefined}
+              >
+                {index === selectedCompletion ? '▶ ' : '  '}{completion}
+              </Text>
+            ))}
+            {completions.length > 8 && (
+              <Text color="gray">  ... and {completions.length - 8} more (↑/↓ to navigate)</Text>
+            )}
+          </Box>
         </Box>
       )}
     </>
@@ -216,7 +328,9 @@ export class InkInputHandler implements IInputHandler {
   private toolContext: ToolContext;
   private inputPromise: Promise<string> | null = null;
   private inputResolve: ((value: string) => void) | null = null;
-
+  private unmountFunction: (() => void) | null = null;
+  private isInteractiveMode: boolean = false;
+  
   constructor(execContext?: IToolExecutionContext) {
     // Convert IToolExecutionContext to ToolContext for the glob tool
     this.toolContext = {
@@ -236,25 +350,27 @@ export class InkInputHandler implements IInputHandler {
       this.inputResolve = resolve;
     });
 
-    // Render the Ink component
-    const { unmount } = render(
-      <InputComponent 
-        onSubmit={(input) => {
-          if (this.inputResolve) {
-            this.inputResolve(input);
-            this.inputResolve = null;
-          }
-          unmount();
-        }}
-        prompt={prompt || 'You (@ for files, / for commands, q to quit): '}
-        onExit={() => {
-          console.log('Exiting...');
-          process.exit(0);
-        }}
-        getFileCompletions={this.getFileCompletions.bind(this)}
-        getCommandCompletions={this.getCommandCompletions.bind(this)}
-      />
-    );
+    // Only render if not in interactive mode (for single-use inputs)
+    if (!this.isInteractiveMode) {
+      const { unmount } = render(
+        <InputComponent 
+          onSubmit={(input) => {
+            if (this.inputResolve) {
+              this.inputResolve(input);
+              this.inputResolve = null;
+            }
+            unmount();
+          }}
+          prompt={prompt || 'Enter your message (Enter to send, Esc to cancel):'}
+          onExit={() => {
+            console.log('Exiting...');
+            process.exit(0);
+          }}
+          getFileCompletions={this.getFileCompletions.bind(this)}
+          getCommandCompletions={this.getCommandCompletions.bind(this)}
+        />
+      );
+    }
 
     const result = await this.inputPromise;
     this.inputPromise = null;
@@ -269,6 +385,7 @@ export class InkInputHandler implements IInputHandler {
     return result;
   }
 
+
   async readCommand(): Promise<{command: string; args: string[]}> {
     const input = await this.readInput();
     const parts = input.trim().split(/\s+/);
@@ -282,7 +399,38 @@ export class InkInputHandler implements IInputHandler {
     onInput: (input: string) => Promise<void>,
     onEnd: () => void
   ): Promise<void> {
+    this.isInteractiveMode = true;
+    
     try {
+      // Render the persistent input component once
+      const { unmount } = render(
+        <InputComponent 
+          onSubmit={async (input) => {
+            if (this.isExitCommand(input)) {
+              onEnd();
+              unmount();
+              return;
+            }
+            
+            // Resolve the current input promise if waiting
+            if (this.inputResolve) {
+              this.inputResolve(input);
+              this.inputResolve = null;
+            }
+          }}
+          prompt='💬 Your Message (Enter to send, Enter again for multi-line):'
+          onExit={() => {
+            onEnd();
+            unmount();
+          }}
+          getFileCompletions={this.getFileCompletions.bind(this)}
+          getCommandCompletions={this.getCommandCompletions.bind(this)}
+        />
+      );
+      
+      this.unmountFunction = unmount;
+
+      // Handle the interactive loop
       while (true) {
         const input = await this.readInput();
         if (this.isExitCommand(input)) {
@@ -293,6 +441,12 @@ export class InkInputHandler implements IInputHandler {
       }
     } catch (error) {
       console.error('Error in interactive mode:', error);
+    } finally {
+      this.isInteractiveMode = false;
+      if (this.unmountFunction) {
+        this.unmountFunction();
+        this.unmountFunction = null;
+      }
     }
   }
 
@@ -305,6 +459,11 @@ export class InkInputHandler implements IInputHandler {
 
   close() {
     // Clean up any resources
+    if (this.unmountFunction) {
+      this.unmountFunction();
+      this.unmountFunction = null;
+    }
+    this.isInteractiveMode = false;
     process.removeAllListeners('SIGINT');
   }
 

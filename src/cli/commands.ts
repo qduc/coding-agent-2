@@ -223,11 +223,11 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
     }
 
     // Enhanced welcome message with better visual structure
-    const welcomeContent = `• Type your questions about code or project
+    const welcomeContent = `• Type your questions about code or project in the input box
+• Press Enter for new lines, Ctrl+V to paste, Ctrl+Enter to send message  
 • Use @ for fuzzy file search, type to filter, Enter/Tab to select
-• Use "/help" for suggestions
-• Use "/exit" or "/quit" to leave
-• Use Ctrl+C to exit anytime`;
+• Use "/help" for suggestions, "/exit" or "/quit" to leave
+• Use Esc or Ctrl+C to exit anytime`;
     console.log(BoxRenderer.createInfoBox('💬 Welcome to Interactive Chat Mode', welcomeContent));
     console.log();
 
@@ -285,6 +285,11 @@ export async function processUserInput(trimmedMessage: string, agent: Agent, opt
     console.log(chalk.green('✨ Chat history cleared. Context has been reset to initial state.'));
     return true; // Continue processing
   }
+
+  // Display the user's message first
+  console.log(chalk.blue('👤 You:'), chalk.white(trimmedMessage));
+  console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
+  console.log();
 
   // Process the message with the AI
   try {
@@ -385,7 +390,14 @@ export async function processUserInput(trimmedMessage: string, agent: Agent, opt
  * Display chat help information
  */
 export function displayChatHelp() {
-  const helpContent = `Available Commands: (press TAB for auto-completion)
+  const helpContent = `Multi-line Input Controls:
+    Enter              - Add new line to your message
+    Ctrl+V             - Paste from clipboard (cross-platform)
+    Ctrl+Enter         - Send the complete message
+    Esc                - Cancel and clear input
+    ↑/↓                - Navigate file/command completions
+
+Available Commands: (press TAB for auto-completion)
     /help              - Show this help
     /exit, /quit, /q   - Exit interactive mode
     /clear             - Clear chat history and reset context
@@ -395,6 +407,11 @@ File Completion (Fuzzy Search):
     @srcmp             - Matches "src/components" fuzzy style
     @pjs               - Matches "package.json" by initials
 
+Paste Support:
+    • Paste code snippets, logs, or error messages directly
+    • Multi-line content automatically switches to multi-line mode
+    • Works on macOS (pbpaste), Linux (xclip/xsel), Windows (PowerShell)
+
 Example Questions:
     "Explain what this project does"
     "List files in the src directory"
@@ -403,7 +420,8 @@ Example Questions:
     "Show me the test files"
 
 Tips:
-    • Be specific about what you want to know
+    • Write multi-line questions for complex requests
+    • Paste code or logs for better context
     • Use @ for fuzzy file search (like fzf)
     • Ask about files, directories, or patterns  
     • Use natural language - no special syntax`;
