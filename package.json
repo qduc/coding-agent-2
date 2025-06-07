@@ -15,11 +15,12 @@
     }
   },
   "scripts": {
-    "build": "tsc && node scripts/fix-esm-imports.js",
-    "dev": "tsc --watch",
+    "build": "vite build",
+    "build:tsc": "tsc",
+    "dev": "vite build --watch",
     "start": "node dist/cli/index.js",
     "start:web": "node dist/web/start.js",
-    "dev:web": "tsc --watch & npm run start:web",
+    "dev:web": "vite build --watch & npm run start:web",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build:all",
     "test": "jest --passWithNoTests --no-watch",
@@ -27,8 +28,9 @@
     "build:frontend": "cd frontend && npm run build",
     "preview:frontend": "cd frontend && npm run preview",
     "dev:fullstack": "concurrently \"npm run dev:web\" \"npm run dev:frontend\"",
-    "build:all": "npm run build && npm run build:frontend",
-    "start:fullstack": "concurrently \"npm run start:web\" \"npm run preview:frontend\""
+    "build:all": "vite build && npm run build:frontend",
+    "start:fullstack": "concurrently \"npm run start:web\" \"npm run preview:frontend\"",
+    "postbuild": "chmod +x dist/cli/index.js"
   },
   "keywords": [
     "ai",
@@ -96,7 +98,8 @@
     "ts-jest": "^29.3.4",
     "tsx": "^4.19.4",
     "typescript": "^5.0.0",
-    "typescript-transform-paths": "^3.5.5"
+    "typescript-transform-paths": "^3.5.5",
+    "vite": "6.3.5"
   },
   "engines": {
     "node": ">=18.0.0"
