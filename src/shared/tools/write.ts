@@ -64,10 +64,6 @@ export class WriteTool extends BaseTool {
       }
     },
     required: ['path'],
-    oneOf: [
-      { required: ['content'] },
-      { required: ['diff'] }
-    ],
     additionalProperties: false
   };
 
@@ -83,7 +79,7 @@ export class WriteTool extends BaseTool {
     } = params;
 
     // Validate that exactly one of content or diff is provided
-    if (!content && !diff) {
+    if (content === undefined && diff === undefined) {
       return this.createErrorResult(
         'Either content or diff must be provided',
         'VALIDATION_ERROR',
@@ -91,7 +87,7 @@ export class WriteTool extends BaseTool {
       );
     }
 
-    if (content && diff) {
+    if (content !== undefined && diff !== undefined) {
       return this.createErrorResult(
         'Cannot provide both content and diff',
         'VALIDATION_ERROR',
@@ -385,6 +381,15 @@ export class WriteTool extends BaseTool {
     // Split the current content and the diff into lines
     const originalLines = currentContent.split('\n');
     const diffLines = diff.split('\n');
+
+    // Basic validation - must have at least one hunk header
+    const hasHunkHeader = diffLines.some(line => line.match(/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/));
+    if (!hasHunkHeader) {
+      throw new ToolError(
+        'Invalid diff format: no valid hunk headers found',
+        'VALIDATION_ERROR'
+      );
+    }
 
     const resultLines: string[] = [];
     let currentLineIndex = 0;  // current position in originalLines

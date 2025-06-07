@@ -68,7 +68,7 @@ export class ToolLogger {
   /**
    * Log the result of a tool execution
    */
-  static logToolResult(toolName: string, success: boolean, result?: any): void {
+  static logToolResult(toolName: string, success: boolean, result?: any, args?: any): void {
     // Only show tool messages in console if tool console logging is enabled
     if (logger.isToolConsoleEnabled()) {
       const status = success ? chalk.green('✅') : chalk.red('❌');
@@ -85,7 +85,7 @@ export class ToolLogger {
 
     // Only show result metrics in console if tool console logging is enabled
     if (result && logger.isToolConsoleEnabled()) {
-      const metrics = this.getResultMetrics(toolName, result);
+      const metrics = this.getResultMetrics(toolName, result, args);
       if (metrics) {
         console.log(chalk.gray('   Result:'), metrics);
       }
@@ -95,9 +95,69 @@ export class ToolLogger {
   /**
    * Extract meaningful metrics from tool results
    */
-  private static getResultMetrics(toolName: string, result: any): string | null {
+  private static getResultMetrics(toolName: string, result: any, args?: any): string | null {
     if (result instanceof Error) {
       return chalk.red(result.message);
+    }
+
+    // Handle file operation tools specifically
+    const toolLower = toolName.toLowerCase();
+    
+    // Write tool - show bytes written and lines
+    if (toolLower.includes('write')) {
+      // Handle WriteResult object
+      if (typeof result === 'object' && result !== null && 'bytesWritten' in result) {
+        const bytes = result.bytesWritten || 0;
+        const created = result.created ? 'created' : 'modified';
+        const mode = result.mode || 'write';
+        const lines = args?.content ? args.content.split('\n').length : 0;
+        
+        if (lines > 0) {
+          return `✏️ File ${created}: ${lines} lines, ${bytes} bytes (${mode})`;
+        } else {
+          return `✏️ File ${created}: ${bytes} bytes (${mode})`;
+        }
+      }
+      
+      // Fallback for string results
+      if (typeof result === 'string' && result.includes('successfully')) {
+        const content = args?.content || '';
+        const lines = content.split('\n').length;
+        return `✏️ File written: ${lines} lines`;
+      }
+      return `✏️ File written`;
+    }
+
+    // Edit tool - show lines affected
+    if (toolLower.includes('edit')) {
+      if (typeof result === 'string') {
+        // Try to extract lines affected from edit result
+        const linesMatch = result.match(/(\d+)\s+lines?\s+(changed|modified|affected)/i);
+        if (linesMatch) {
+          return `✏️ File edited: ${linesMatch[1]} lines affected`;
+        }
+        // Check for specific edit operations
+        if (result.includes('replaced') || result.includes('modified')) {
+          const oldString = args?.old_string || args?.oldString || '';
+          const newString = args?.new_string || args?.newString || '';
+          const oldLines = oldString.split('\n').length;
+          const newLines = newString.split('\n').length;
+          const delta = newLines - oldLines;
+          const deltaStr = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : '±0';
+          return `✏️ File edited: ${Math.max(oldLines, newLines)} lines affected (${deltaStr})`;
+        }
+      }
+      return `✏️ File edited`;
+    }
+
+    // Handle object results from read tool specifically
+    if (typeof result === 'object' && result !== null && toolLower.includes('read')) {
+      // Check if it's a ReadResult object with lineCount
+      if ('lineCount' in result && typeof result.lineCount === 'number') {
+        const chars = result.content ? result.content.length : 0;
+        const partialInfo = result.partialRead ? ' (partial)' : '';
+        return `📄 File loaded: ${result.lineCount} lines, ${chars} characters${partialInfo}`;
+      }
     }
 
     // Handle string results (file content, command output, etc.)
@@ -105,15 +165,15 @@ export class ToolLogger {
       const lines = result.split('\n');
       const chars = result.length;
 
-      if (toolName.toLowerCase().includes('read')) {
+      if (toolLower.includes('read')) {
         return `📄 File loaded: ${lines.length} lines, ${chars} characters`;
-      } else if (toolName.toLowerCase().includes('ls') || toolName.toLowerCase().includes('list')) {
+      } else if (toolLower.includes('ls') || toolLower.includes('list')) {
         // Try to count files and directories from ls-style output
         const items = lines.filter(line => line.trim().length > 0);
         const dirs = items.filter(line => line.includes('/') || line.endsWith('/')).length;
         const files = items.length - dirs;
         return `📁 Listed: ${files} files, ${dirs} directories`;
-      } else if (toolName.toLowerCase().includes('grep') || toolName.toLowerCase().includes('search')) {
+      } else if (toolLower.includes('grep') || toolLower.includes('search')) {
         const matches = lines.filter(line => line.trim().length > 0).length;
         return `🔍 Found: ${matches} matches`;
       } else {

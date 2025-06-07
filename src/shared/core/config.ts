@@ -15,13 +15,14 @@ export interface Config {
   model?: string;
   logToolUsage?: boolean;
   streaming?: boolean;
+  useResponsesApi?: boolean; // Use OpenAI Responses API for reasoning models
   // Logging configuration
   logLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
   enableFileLogging?: boolean;
   enableConsoleLogging?: boolean;
   enableToolConsoleLogging?: boolean; // Separate setting for tool messages
   // Optional global defaults for tool execution, can be overridden at other levels
-  maxFileSize?: number; 
+  maxFileSize?: number;
   timeout?: number;
 }
 
@@ -48,6 +49,7 @@ export class ConfigManager {
       verbose: false,
       logToolUsage: true,
       streaming: false,
+      useResponsesApi: false, // Enable automatically for reasoning models, or set to true to force
       // Default logging configuration
       logLevel: 'info',
       enableFileLogging: true,

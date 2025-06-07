@@ -98,7 +98,7 @@ export class ToolOrchestrator {
       try {
         // Check if we're using Anthropic and have tools available
         const schemas = this.getFunctionSchemas();
-        const isAnthropicWithTools = this.llmService.getCurrentProvider() === 'anthropic' && schemas.length > 0;
+        const isAnthropicWithTools = this.llmService.getProviderName() === 'anthropic' && schemas.length > 0;
 
         let response;
         if (isAnthropicWithTools) {
@@ -217,7 +217,14 @@ export class ToolOrchestrator {
       const result = await tool.execute(args);
       const executionTime = Date.now() - startTime;
 
-      logger.logToolExecution(func.name, args, result, undefined, executionTime);
+      // Log tool execution using available logger methods
+      const toolContext = {
+        toolName: func.name,
+        args,
+        result,
+        executionTimeMs: executionTime
+      };
+      logger.debug(`Tool executed: ${func.name}`, toolContext, 'TOOL');
 
       if (verbose) {
         if (result.success) {
@@ -245,7 +252,13 @@ export class ToolOrchestrator {
       const errorObj = error instanceof Error ? error : new Error('Unknown error');
       const errorMessage = `Tool execution failed: ${errorObj.message}`;
 
-      logger.logToolExecution(func.name, {}, undefined, errorObj, executionTime);
+      // Log tool execution error using available logger methods
+      const toolErrorContext = {
+        toolName: func.name,
+        args: {},
+        executionTimeMs: executionTime
+      };
+      logger.error(`Tool execution failed: ${func.name}`, errorObj, toolErrorContext, 'TOOL');
 
       if (verbose) {
         console.error(chalk.red(`❌ ${errorMessage}`));
@@ -377,7 +390,7 @@ Use these tools when you need to access files or gather information about the pr
    * Uses SchemaAdapter to transform schemas based on provider requirements
    */
   private getFunctionSchemas(): any[] {
-    const provider = this.llmService.getCurrentProvider();
+    const provider = this.llmService.getProviderName();
     const toolSchemas = Array.from(this.tools.values()).map(tool => tool.getFunctionCallSchema());
 
     // Convert to normalized format first
@@ -435,7 +448,7 @@ Use these tools when you need to access files or gather information about the pr
    * Uses SchemaAdapter to ensure compatibility with different providers
    */
   getToolSchemas(): any[] {
-    const provider = this.llmService.getCurrentProvider();
+    const provider = this.llmService.getProviderName();
     const toolSchemas = Array.from(this.tools.values()).map(tool => ({
       name: tool.name,
       description: tool.description,
@@ -500,7 +513,7 @@ Use these tools when you need to access files or gather information about the pr
       try {
         // Check if we're using Anthropic and have tools available
         const schemas = this.getFunctionSchemas();
-        const isAnthropicWithTools = this.llmService.getCurrentProvider() === 'anthropic' && schemas.length > 0;
+        const isAnthropicWithTools = this.llmService.getProviderName() === 'anthropic' && schemas.length > 0;
 
         let response;
         if (isAnthropicWithTools) {
@@ -686,13 +699,13 @@ Use these tools when you need to access files or gather information about the pr
   ): Promise<string> {
     if (verbose) {
       console.log('🚀 Starting enhanced native tool calling process');
-      console.log(`🔧 Provider: ${this.llmService.provider}`);
+      console.log(`🔧 Provider: ${this.llmService.getProviderName()}`);
     }
 
     const tools = await this.getToolSchemas();
 
     // Use provider-specific native calling
-    if (this.llmService.provider === 'gemini') {
+    if (this.llmService.getProviderName() === 'gemini') {
       // Convert tools to Gemini function declarations format
       const functionDeclarations = this.convertToGeminiFunctionDeclarations(tools);
 
@@ -712,10 +725,8 @@ Use these tools when you need to access files or gather information about the pr
   }
 
   /**
-   * Gemini-specific chat loop with integrated tool execution
-   */
-  /**
    * Gemini-specific chat loop using Gemini's official function calling message format
+   * Provides integrated tool execution
    */
   private async processGeminiChatLoop(
     userInput: string,

@@ -12,6 +12,10 @@ export class GeminiProvider implements LLMProvider {
   private genAI: GoogleGenerativeAI | null = null;
   private initialized = false;
 
+  getProviderName(): string {
+    return 'gemini';
+  }
+
   /**
    * Initialize Gemini client
    */

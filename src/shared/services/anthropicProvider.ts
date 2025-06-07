@@ -10,6 +10,10 @@ export class AnthropicProvider implements LLMProvider {
   private anthropic: Anthropic | null = null;
   private initialized = false;
 
+  getProviderName(): string {
+    return 'anthropic';
+  }
+
   /**
    * Initialize Anthropic client
    */
