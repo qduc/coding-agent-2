@@ -14,7 +14,7 @@
  * - Edge cases and boundary conditions
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 import { BashTool, BashParams, BashResult } from './bash';

@@ -9,7 +9,7 @@
  * - Security checks to exclude sensitive paths and file types
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError } from './types';

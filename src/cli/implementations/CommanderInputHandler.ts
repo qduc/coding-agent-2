@@ -1,7 +1,7 @@
 // Using dynamic import for inquirer since it's an ESM module
 let inquirer: any = null;
 import * as readline from 'readline';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import { IInputHandler } from '../../shared/interfaces/IInputHandler';
 import { GlobTool, GlobMatch } from '../../shared/tools/glob';

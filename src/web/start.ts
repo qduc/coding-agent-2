@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { fileURLToPath } from 'url';
 import { webServer } from './server';
 
 /**
@@ -78,6 +79,6 @@ async function startServer() {
 }
 
 // Start if this file is run directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   startServer();
 }

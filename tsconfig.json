@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
+    "module": "ESNext",
     "lib": ["ES2022", "DOM"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -20,7 +20,8 @@
     "noImplicitThis": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "noEmit": false,
     "baseUrl": "./",
     "paths": {
       "@/*": ["src/*"]
@@ -29,8 +30,8 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
-    "jsx": "react",
-    "types": ["node", "react"]
+    "types": ["jest", "node", "react"],
+    "jsx": "react"
   },
   "include": [
     "src/**/*"

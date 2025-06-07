@@ -8,7 +8,7 @@
  * - Security validation to prevent writing to sensitive paths
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError, ToolContext } from './types';

@@ -2,9 +2,14 @@
 
 import { program } from 'commander';
 import chalk from 'chalk';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { configureCommands } from './commands';
+
+// ESM equivalents for __dirname and __filename
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Read version from package.json
 const packageJsonPath = path.join(__dirname, '../../package.json');
@@ -55,7 +60,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Run the CLI
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
     console.error(chalk.red('Fatal error:'), error.message);
     process.exit(1);

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { CodeAnalyzer } from './codeAnalyzer';
 import { TreeSitterParser } from './treeSitterParser';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 

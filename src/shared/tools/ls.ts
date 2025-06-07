@@ -9,7 +9,7 @@
  * - Security filtering to exclude sensitive directories
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { BaseTool } from './base';

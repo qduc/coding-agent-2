@@ -11,7 +11,7 @@
  * - Security filtering to exclude sensitive directories
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import { execSync, spawn } from 'child_process';
 import { BaseTool } from './base';
