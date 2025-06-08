@@ -19,9 +19,6 @@ export interface WriteParams {
   content?: string;   // For full writes
   diff?: string;      // For patching existing files
   encoding?: 'utf8' | 'binary' | 'base64';
-  backup?: boolean;
-  createDirs?: boolean;
-  atomic?: boolean;
 }
 
 export interface WriteResult {
@@ -46,21 +43,6 @@ export class WriteTool extends BaseTool {
         description: 'File encoding',
         enum: ['utf8', 'binary', 'base64'],
         default: 'utf8'
-      },
-      backup: {
-        type: 'boolean',
-        description: 'Create backup before modifying existing file',
-        default: true
-      },
-      createDirs: {
-        type: 'boolean',
-        description: 'Create parent directories if they don\'t exist',
-        default: true
-      },
-      atomic: {
-        type: 'boolean',
-        description: 'Use atomic write operation (write to temp file then move)',
-        default: true
       }
     },
     required: ['path'],
@@ -72,10 +54,7 @@ export class WriteTool extends BaseTool {
       path: filePath,
       content,
       diff,
-      encoding = 'utf8',
-      backup = true,
-      createDirs = true,
-      atomic = true
+      encoding = 'utf8'
     } = params;
 
     // Validate that exactly one of content or diff is provided
@@ -138,8 +117,8 @@ export class WriteTool extends BaseTool {
         );
       }
 
-      // Consolidated directory handling
-      await this.ensureParentDirectory(parentDir, createDirs);
+      // Ensure parent directory exists
+      await this.ensureParentDirectory(parentDir);
 
       const fileExists = await fs.pathExists(absolutePath);
 
@@ -199,8 +178,9 @@ export class WriteTool extends BaseTool {
         }
       }
 
-      const shouldBackup = backup && fileExists && !atomic; // Backup only for existing files and non-atomic writes
-      return await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, atomic, fileExists, contentSize);
+      // We always use atomic writes, so no backup is needed
+      const shouldBackup = false;
+      return await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, fileExists, contentSize);
     } catch (error) {
       if (error instanceof ToolError) throw error;
       throw new ToolError(
@@ -230,20 +210,12 @@ export class WriteTool extends BaseTool {
   }
 
   /**
-   * Consolidated parent directory handling
+   * Ensure parent directory exists and create it if needed
    */
-  private async ensureParentDirectory(parentDir: string, createDirs: boolean): Promise<void> {
+  private async ensureParentDirectory(parentDir: string): Promise<void> {
     const parentExists = await fs.pathExists(parentDir);
 
-    if (!parentExists && !createDirs) {
-      throw new ToolError(
-        `Parent directory does not exist: ${parentDir}`,
-        'INVALID_PATH',
-        ['Set createDirs: true to create parent directories']
-      );
-    }
-
-    if (!parentExists && createDirs) {
+    if (!parentExists) {
       try {
         await fs.ensureDir(parentDir);
       } catch (error) {
@@ -285,7 +257,6 @@ export class WriteTool extends BaseTool {
     encoding: BufferEncoding,
     mode: 'create' | 'patch',
     shouldBackup: boolean,
-    atomic: boolean,
     fileExists: boolean,
     contentSize: number
   ): Promise<ToolResult> {
@@ -306,18 +277,12 @@ export class WriteTool extends BaseTool {
       let bytesWritten = 0;
       const created = !fileExists;
 
-      if (atomic) {
-        // Use atomic write
-        tempPath = `${absolutePath}.tmp.${Date.now()}.${process.pid}`;
-        await fs.writeFile(tempPath, content, encoding);
-        await fs.move(tempPath, absolutePath, { overwrite: true });
-        bytesWritten = contentSize;
-        tempPath = undefined; // Successfully moved, no cleanup needed
-      } else {
-        // Direct write (non-atomic)
-        await fs.writeFile(absolutePath, content, encoding);
-        bytesWritten = contentSize;
-      }
+      // Always use atomic write for safety
+      tempPath = `${absolutePath}.tmp.${Date.now()}.${process.pid}`;
+      await fs.writeFile(tempPath, content, encoding);
+      await fs.move(tempPath, absolutePath, { overwrite: true });
+      bytesWritten = contentSize;
+      tempPath = undefined; // Successfully moved, no cleanup needed
 
       // Clean up backup if everything succeeded and it was temporary
       if (backupPath && !shouldBackup) {
@@ -339,8 +304,7 @@ export class WriteTool extends BaseTool {
       return this.createSuccessResult(result, {
         operation: mode,
         fileSize: bytesWritten,
-        encoding,
-        atomic
+        encoding
       });
 
     } catch (error) {
