@@ -7,6 +7,7 @@ import { ReadTool } from '../tools/read';
 import { RipgrepTool } from '../tools/ripgrep';
 import { WriteTool } from '../tools/write';
 import { BashTool } from '../tools/bash';
+import { SubAgentTool } from '../tools/subAgent';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 
@@ -18,7 +19,7 @@ import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscov
  */
 import { IInputHandler, IToolExecutionContext } from '../interfaces';
 
-interface AgentOptions {
+export interface AgentOptions {
   inputHandler?: IInputHandler;
   toolContext?: IToolExecutionContext;
 }
@@ -51,13 +52,14 @@ export class Agent {
     const readTool = new ReadTool(toolContext);
     const writeTool = new WriteTool(toolContext);
     const bashTool = new BashTool(toolContext);
+    const subAgentTool = new SubAgentTool();
 
     // Create ripgrep tool and check if ripgrep is available
     const ripgrepTool = new RipgrepTool();
     const ripgrepAvailable = ripgrepTool.isRipgrepAvailable();
 
     // Create the list of tools - only add ripgrep if available
-    const tools: BaseTool[] = [lsTool, globTool, readTool, writeTool, bashTool];
+    const tools: BaseTool[] = [lsTool, globTool, readTool, writeTool, bashTool, subAgentTool];
 
     if (ripgrepAvailable) {
       tools.push(ripgrepTool);

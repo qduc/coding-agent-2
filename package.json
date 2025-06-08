@@ -47,7 +47,7 @@
     "@google/generative-ai": "^0.24.1",
     "@monaco-editor/react": "^4.5.0",
     "@types/react": "^19.1.6",
-    "@types/uuid": "^10.0.0",
+    "@types/uuid": "10.0.0",
     "axios": "^1.9.0",
     "body-parser": "^2.2.0",
     "chalk": "^5.3.0",
@@ -80,7 +80,7 @@
     "tree-sitter-python": "^0.23.6",
     "tree-sitter-rust": "^0.24.0",
     "tree-sitter-typescript": "^0.23.2",
-    "uuid": "^11.1.0",
+    "uuid": "11.1.0",
     "web-tree-sitter": "^0.25.5",
     "zod": "^3.25.46"
   },

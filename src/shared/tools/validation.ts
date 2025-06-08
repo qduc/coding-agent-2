@@ -49,6 +49,11 @@ function validateProperty(name: string, value: any, schema: PropertySchema): voi
     }
   }
 
+  // Enum validation (applies to all types)
+  if (schema.enum && !schema.enum.includes(value)) {
+    throw new ToolError(`Parameter '${name}' must be one of: ${schema.enum.join(', ')}`, 'VALIDATION_ERROR');
+  }
+
   // String validations
   if (schema.type === 'string' && typeof value === 'string') {
     if (schema.minLength !== undefined && value.length < schema.minLength) {

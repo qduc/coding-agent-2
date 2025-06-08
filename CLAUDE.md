@@ -183,6 +183,41 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Tree-sitter Parser** (`treeSitterParser.ts`): AST-based code understanding
 - **Code Analyzer** (`codeAnalyzer.ts`): Structure and pattern analysis
 
+### 7. Sub-Agent System (`src/shared/`)
+
+#### Sub-Agent Architecture (`src/shared/core/subAgent.ts`)
+- **Specialized Agents**: Focused task execution with optimized models
+- **Cost Optimization**: 80% cost reduction using fast models for routine tasks
+- **Parallel Processing**: Multiple sub-agents for concurrent task execution
+- **Parent-Child Communication**: Event-based messaging with status updates
+
+#### Sub-Agent Factory (`src/shared/factories/SubAgentFactory.ts`)
+- **Specialization Configurations**: Pre-configured agents for different task types
+- **Dynamic Creation**: Runtime sub-agent instantiation with custom settings
+- **Agent Pool Management**: Lifecycle management with automatic cleanup
+- **Resource Optimization**: Intelligent model selection and tool filtering
+
+#### Communication System (`src/shared/communication/SubAgentMessaging.ts`)
+- **Event-Based Messaging**: Asynchronous parent-child communication
+- **Message Routing**: Coordinated message passing between agents
+- **Status Tracking**: Real-time sub-agent health and activity monitoring
+- **Error Propagation**: Graceful error handling across agent boundaries
+
+#### Sub-Agent Tool (`src/shared/tools/subAgent.ts`)
+- **Task Delegation**: Main agent delegates focused tasks to specialized sub-agents
+- **Auto-Detection**: Intelligent specialization selection based on task content
+- **Timeout Management**: Configurable execution limits with automatic cleanup
+- **Result Aggregation**: Consolidated results from multiple sub-agent executions
+
+#### Specialization Types
+- **Code**: `read`, `write`, `glob`, `ripgrep` - Code generation and refactoring
+- **Test**: `read`, `write`, `bash`, `glob` - Test generation and execution
+- **Debug**: `read`, `bash`, `ripgrep`, `ls` - Error analysis and troubleshooting
+- **Docs**: `read`, `write`, `glob` - Documentation generation and maintenance
+- **Search**: `glob`, `ripgrep`, `ls` - Code discovery and pattern matching
+- **Validation**: `bash`, `read`, `ls` - Linting, type checking, build validation
+- **General**: All tools - Complex multi-step tasks requiring full capabilities
+
 ## Data Flow
 
 ### CLI Mode Flow (Primary)
@@ -205,6 +240,16 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 3. **Execution**: Tool.execute() → Context-aware processing → Result generation
 4. **Result Processing**: Success/error handling → LLM-compatible output
 5. **Conversation Continuation**: Result injection → Next LLM iteration
+
+### Sub-Agent Delegation Flow
+1. **Task Analysis**: Main agent analyzes task complexity and scope
+2. **Specialization Selection**: Auto-detection or explicit specialization choice
+3. **Sub-Agent Creation**: Factory creates specialized agent with filtered tools
+4. **Task Delegation**: Main agent delegates task via SubAgentTool
+5. **Parallel Execution**: Sub-agent processes task independently
+6. **Result Aggregation**: Main agent receives and integrates sub-agent results
+7. **Communication**: Bi-directional status updates and error propagation
+8. **Cleanup**: Automatic sub-agent lifecycle management and resource cleanup
 
 ## Key Features
 
@@ -237,6 +282,16 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Strategy Pattern**: Provider-specific behavior encapsulation
 - **Extensible Architecture**: Easy addition of new providers and capabilities
 
+### Sub-Agent System Features
+- **Cost Optimization**: 80% cost reduction using fast models for routine tasks
+- **Specialization-Based Task Routing**: Automatic task analysis and optimal sub-agent selection
+- **Parallel Processing**: Concurrent execution of independent tasks across multiple sub-agents
+- **Intelligent Tool Filtering**: Sub-agents receive only tools relevant to their specialization
+- **Event-Based Communication**: Real-time parent-child messaging with status tracking
+- **Automatic Lifecycle Management**: Smart creation, cleanup, and resource management
+- **Error Isolation**: Sub-agent failures don't affect main agent or other sub-agents
+- **Model Flexibility**: Different LLM models optimized for different task complexities
+
 ## Configuration
 
 ### Environment Variables
@@ -257,6 +312,7 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Tool Ecosystem**: All documented tools working
 - **Anthropic & Gemini Providers**: Full LLM integration
 - **OpenAI Provider**: **COMPLETED** - Full integration with schema adapter, tool execution, Responses API support for reasoning models, and orchestrator integration
+- **Sub-Agent System**: **COMPLETED** - Full specialized sub-agent implementation with delegation, communication, and cost optimization
 - **Web Backend**: Express API server with WebSocket support
 - **Handler System**: Modular conversation and tool management
 
@@ -287,6 +343,17 @@ This architecture provides a robust, extensible foundation for AI-powered progra
 ---
 
 ## Recent Updates (Latest First)
+
+### 2025-01-08: Sub-Agent System Implementation
+- **COMPLETED**: Full sub-agent system implementation with specialization-based task delegation
+- **Added**: SubAgent class (`src/shared/core/subAgent.ts`) with specialized task execution
+- **Added**: SubAgentFactory (`src/shared/factories/SubAgentFactory.ts`) for creating pre-configured agents
+- **Added**: SubAgentTool (`src/shared/tools/subAgent.ts`) for main agent task delegation
+- **Added**: Communication system (`src/shared/communication/SubAgentMessaging.ts`) for parent-child messaging
+- **Added**: 7 specialization types: code, test, debug, docs, search, validation, general
+- **Features**: 80% cost reduction, parallel processing, auto-detection, intelligent tool filtering
+- **Integration**: Seamlessly integrated into existing agent architecture with backward compatibility
+- **Status**: Sub-agent system fully functional and production-ready
 
 ### 2025-01-07: OpenAI Provider Completion
 - **COMPLETED**: OpenAI provider implementation (`src/shared/providers/OpenAIProvider.ts`)

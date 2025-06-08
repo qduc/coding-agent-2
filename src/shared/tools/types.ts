@@ -81,7 +81,10 @@ export type ToolErrorCode =
   | 'COMMAND_FAILED'
   | 'EXECUTION_ERROR'
   | 'TIMEOUT'
-  | 'SPAWN_ERROR';
+  | 'SPAWN_ERROR'
+  | 'SUB_AGENT_TASK_FAILED'
+  | 'DELEGATION_ERROR'
+  | 'SUB_AGENT_CREATION_FAILED';
 
 /**
  * Tool execution context for security and limits

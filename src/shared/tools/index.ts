@@ -18,6 +18,8 @@ export * from './read';
 export * from './write';
 export * from './ripgrep';
 export * from './bash';
+export * from './todo';
+export * from './subAgent';
 
 // Tool registry for dynamic tool loading
 import { BaseTool } from './base';
@@ -27,6 +29,8 @@ import { ReadTool } from './read';
 import { WriteTool } from './write';
 import { RipgrepTool } from './ripgrep';
 import { BashTool } from './bash';
+import { TodoTool } from './todo';
+import { SubAgentTool } from './subAgent';
 
 /**
  * Registry of all available tools
@@ -37,7 +41,9 @@ export const tools: Record<string, new (...args: any[]) => BaseTool> = {
   read: ReadTool,
   write: WriteTool,
   ripgrep: RipgrepTool,
-  bash: BashTool
+  bash: BashTool,
+  todo: TodoTool,
+  sub_agent: SubAgentTool
 };
 
 // Default tools array - can be used to create orchestrator with common tools
