@@ -54,8 +54,8 @@ export class ToolLogger {
       if (args.filePattern) parts.push(`files: ${args.filePattern}`);
     } else if (toolLower.includes('bash')) {
       if (args.command) {
-        const cmd = args.command.length > 50 ? args.command.substring(0, 50) + '...' : args.command;
-        parts.push(`command: ${cmd}`);
+        // Don't truncate bash commands - they are important for debugging
+        parts.push(`command: ${args.command}`);
       }
       if (args.cwd) parts.push(`cwd: ${args.cwd}`);
     } else {
@@ -143,21 +143,21 @@ export class ToolLogger {
   static formatToolCallForUI(toolName: string, args: any): string {
     const config = configManager.getConfig();
     const displayMode = config.toolDisplayMode || 'condensed';
-    
+
     switch (displayMode) {
       case 'off':
         return ''; // Don't show tool calls at all
-      
+
       case 'minimal':
         return toolName; // Just tool name
-      
+
       case 'condensed':
         return this.formatToolOperationCondensed(toolName, args); // New streamlined format
-      
+
       case 'standard':
         const humanReadableArgs = this.formatArgsForDisplay(toolName, args);
         return `🔧 ${toolName}${humanReadableArgs ? ` - ${humanReadableArgs}` : ''}`;
-      
+
       case 'verbose':
       default:
         const verboseArgs = this.formatArgsForDisplay(toolName, args);
@@ -171,34 +171,34 @@ export class ToolLogger {
   static formatToolResultForUI(toolName: string, success: boolean, result?: any, args?: any): string {
     const config = configManager.getConfig();
     const displayMode = config.toolDisplayMode || 'condensed';
-    
+
     switch (displayMode) {
       case 'off':
         return ''; // Don't show tool results at all
-      
+
       case 'minimal':
         return success ? '✓' : '✗'; // Just status symbol
-      
+
       case 'condensed':
         return this.formatToolOperationCondensed(toolName, args, success, result); // Complete operation in one line
-      
+
       case 'standard':
         const status = success ? '✅' : '❌';
         const statusText = success ? 'completed' : 'failed';
         const metrics = result ? this.getResultMetrics(toolName, result, args) : null;
-        
+
         let message = `${status} ${toolName} ${statusText}`;
         if (metrics) {
           message += ` - ${metrics}`;
         }
         return message;
-      
+
       case 'verbose':
       default:
         const verboseStatus = success ? '✅' : '❌';
         const verboseStatusText = success ? 'completed' : 'failed';
         const verboseMetrics = result ? this.getResultMetrics(toolName, result, args) : null;
-        
+
         let verboseMessage = `${verboseStatus} ${toolName} ${verboseStatusText}`;
         if (verboseMetrics) {
           verboseMessage += ` - ${verboseMetrics}`;
@@ -213,7 +213,7 @@ export class ToolLogger {
   static formatToolOperationCondensed(toolName: string, args: any, success?: boolean, result?: any): string {
     const essentialContext = this.getEssentialContext(toolName, args);
     const outcome = success !== undefined ? this.getCondensedOutcome(toolName, success, result, args) : '';
-    
+
     if (success === undefined) {
       // Tool call only
       return `${toolName}${essentialContext}`;
@@ -233,31 +233,35 @@ export class ToolLogger {
     }
 
     const toolLower = toolName.toLowerCase();
-    
+
     // Show only the most essential parameter for each tool type
     if (toolLower.includes('read') && args.path) {
       return ` ${args.path}`;
     } else if (toolLower.includes('write') && args.path) {
       return ` ${args.path}`;
     } else if (toolLower.includes('bash') && args.command) {
-      const cmd = args.command.length > 30 ? args.command.substring(0, 30) + '…' : args.command;
-      return ` "${cmd}"`;
+      // Don't truncate bash commands - they are important for debugging
+      return ` "${args.command}"`;
     } else if ((toolLower.includes('glob') || toolLower.includes('grep')) && args.pattern) {
       return ` "${args.pattern}"`;
     } else if (toolLower.includes('ls') && args.path) {
       return ` ${args.path}`;
     }
-    
+
     // For other tools, try to find the most important parameter
     const importantKeys = ['path', 'file', 'command', 'pattern', 'query', 'name'];
     for (const key of importantKeys) {
       if (args[key]) {
         const value = typeof args[key] === 'string' ? args[key] : String(args[key]);
+        // Don't truncate bash commands
+        if (key === 'command' && toolLower.includes('bash')) {
+          return ` ${value}`;
+        }
         const truncated = value.length > 30 ? value.substring(0, 30) + '…' : value;
         return ` ${truncated}`;
       }
     }
-    
+
     return '';
   }
 
@@ -270,7 +274,7 @@ export class ToolLogger {
     }
 
     const toolLower = toolName.toLowerCase();
-    
+
     // Return meaningful outcome without emoji clutter
     if (toolLower.includes('write')) {
       if (typeof result === 'object' && result?.linesChanged) {
@@ -299,7 +303,7 @@ export class ToolLogger {
         return ` (${matches} matches)`;
       }
     }
-    
+
     return '';
   }
 
@@ -313,7 +317,7 @@ export class ToolLogger {
 
     // Handle file operation tools specifically
     const toolLower = toolName.toLowerCase();
-    
+
     // Write tool - show lines changed
     if (toolLower.includes('write')) {
       // Handle WriteResult object
@@ -321,10 +325,10 @@ export class ToolLogger {
         const linesChanged = result.linesChanged || 0;
         const created = result.created ? 'created' : 'modified';
         const mode = result.mode || 'write';
-        
+
         return `✏️ File ${created}: ${linesChanged} lines changed (${mode})`;
       }
-      
+
       // Fallback for string results
       if (typeof result === 'string' && result.includes('successfully')) {
         const content = args?.content || '';
@@ -364,26 +368,26 @@ export class ToolLogger {
         const executionTime = result.executionTime || 0;
         const stdout = result.stdout || '';
         const stderr = result.stderr || '';
-        
+
         const status = exitCode === 0 ? 'success' : 'failed';
         const outputLines = stdout ? stdout.split('\n').filter((line: string) => line.trim()).length : 0;
         const errorLines = stderr ? stderr.split('\n').filter((line: string) => line.trim()).length : 0;
-        
+
         let details = `exit ${exitCode}`;
         if (outputLines > 0) details += `, ${outputLines} lines output`;
         if (errorLines > 0) details += `, ${errorLines} lines stderr`;
         if (executionTime > 0) details += `, ${executionTime}ms`;
-        
+
         return `⚡ Command ${status}: ${details}`;
       }
-      
+
       // Handle ToolError case - try to get command from args
       if (typeof result === 'object' && result !== null && 'name' in result && result.name === 'ToolError') {
         const command = args?.command || 'unknown';
-        const shortCmd = command.length > 30 ? command.substring(0, 30) + '...' : command;
-        return `⚡ Command failed: ${shortCmd}`;
+        // Don't truncate bash commands in error messages
+        return `⚡ Command failed: ${command}`;
       }
-      
+
       // Fallback for string results
       if (typeof result === 'string') {
         const lines = result.split('\n').length;

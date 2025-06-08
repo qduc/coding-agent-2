@@ -1,5 +1,5 @@
-import { IToolExecutionContext } from '../../../shared/interfaces/IToolExecutionContext';
-import { ToolContext } from '../../../shared/tools/types';
+import { IToolExecutionContext } from '../../../../shared/interfaces/IToolExecutionContext';
+import { ToolContext } from '../../../../shared/tools/types';
 import { CompletionManager } from './completion/CompletionManager';
 import { FileCompletionProvider } from './completion/FileCompletionProvider';
 import { CommandCompletionProvider } from './completion/CommandCompletionProvider';
