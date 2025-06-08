@@ -31,13 +31,13 @@ export interface WriteResult {
 
 export class WriteTool extends BaseTool {
   readonly name = 'write';
-  readonly description = 'Write content to files with safety features and backup support. Use either content (for full writes) or diff (for patching existing files)';
+  readonly description = 'Write content to files with safety features and backup support. Use either content (for full writes) or diff (for patching existing files). Diff format example:\n@@ -1,3 +1,3 @@\n context line\n-old line to remove\n+new line to add\n another context line';
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
-      diff: { type: 'string', description: 'Unified diff to apply to an existing file (only for modifying existing files)' },
+      diff: { type: 'string', description: 'Unified diff to apply to an existing file (only for modifying existing files). Format: @@ -startLine,lineCount +startLine,lineCount @@\\n context line\\n-line to remove\\n+line to add' },
       encoding: {
         type: 'string',
         description: 'File encoding',
@@ -168,7 +168,15 @@ export class WriteTool extends BaseTool {
           if (error instanceof ToolError) throw error;
           throw new ToolError(
             `Failed to apply diff: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            'VALIDATION_ERROR'
+            'VALIDATION_ERROR',
+            [
+              'Ensure diff format is correct. Example:',
+              '@@ -1,3 +1,3 @@',
+              ' unchanged line',
+              '-line to remove',
+              '+line to add',
+              ' another unchanged line'
+            ]
           );
         }
 
@@ -345,6 +353,26 @@ export class WriteTool extends BaseTool {
    * Apply unified diff to existing content
    */
   private applyDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
+    // Validate input types
+    if (typeof currentContent !== 'string' || typeof diff !== 'string') {
+      throw new ToolError(
+        'Invalid input: currentContent and diff must be strings',
+        'VALIDATION_ERROR'
+      );
+    }
+
+    // Check if the file appears to be binary
+    if (this.isBinaryContent(currentContent)) {
+      throw new ToolError(
+        'Cannot apply diff to binary content',
+        'VALIDATION_ERROR',
+        ['Binary files must be modified using full content replacement, not diffs']
+      );
+    }
+
+    // Validate diff format more strictly
+    this.validateDiffFormat(diff);
+
     // Split the current content and the diff into lines
     const originalLines = currentContent.split('\n');
     const diffLines = diff.split('\n');
@@ -354,7 +382,15 @@ export class WriteTool extends BaseTool {
     if (!hasHunkHeader) {
       throw new ToolError(
         'Invalid diff format: no valid hunk headers found',
-        'VALIDATION_ERROR'
+        'VALIDATION_ERROR',
+        [
+          'Diff must contain at least one hunk header like: @@ -1,3 +1,3 @@',
+          'Example valid diff:',
+          '@@ -1,2 +1,2 @@',
+          ' context line',
+          '-old line',
+          '+new line'
+        ]
       );
     }
 
@@ -381,6 +417,21 @@ export class WriteTool extends BaseTool {
         // const patchedStart = parseInt(hunkHeaderMatch[3], 10);
         // const patchedCount = parseInt(hunkHeaderMatch[4] || '1', 10);
 
+        // Validate hunk header values
+        if (isNaN(origStart) || origStart < 1 || (origCount !== 0 && isNaN(origCount)) || origCount < 0) {
+          throw new ToolError(
+            `Invalid hunk header: ${line}`,
+            'VALIDATION_ERROR',
+            [
+              'Hunk header must be in format: @@ -oldStart,oldCount +newStart,newCount @@',
+              'Examples:',
+              '@@ -1,1 +1,1 @@ (replace 1 line)',
+              '@@ -5,3 +5,2 @@ (remove 1 line from 3)',
+              '@@ -10,0 +10,2 @@ (add 2 lines)'
+            ]
+          );
+        }
+
         // Copy lines from currentLineIndex to origStart-1 (0-based index: origStart-1)
         while (currentLineIndex < origStart - 1) {
           if (currentLineIndex >= originalLines.length) {
@@ -403,10 +454,35 @@ export class WriteTool extends BaseTool {
         const hunkLines = diffLines.slice(i, j);
         i = j;  // move outer index to next hunk
 
+        // Validate hunk content - must have at least one line
+        if (hunkLines.length === 0) {
+          throw new ToolError(
+            `Empty hunk at line ${i}`,
+            'VALIDATION_ERROR'
+          );
+        }
+
+        let hasNoNewlineMarker = false;
+
         for (const hunkLine of hunkLines) {
           if (hunkLine === '\\ No newline at end of file') {
-            // Ignore this marker
+            hasNoNewlineMarker = true;
             continue;
+          }
+
+          // Validate line format - must start with ' ', '+', or '-'
+          if (![' ', '+', '-'].includes(hunkLine[0])) {
+            throw new ToolError(
+              `Invalid diff line format: ${hunkLine}`,
+              'VALIDATION_ERROR',
+              [
+                'Each line in a hunk must start with a space, plus, or minus',
+                'Examples:',
+                ' context line (unchanged)',
+                '-line to remove',
+                '+line to add'
+              ]
+            );
           }
 
           if (hunkLine.startsWith(' ')) {
@@ -464,8 +540,16 @@ export class WriteTool extends BaseTool {
             'VALIDATION_ERROR'
           );
         }
-      } else {
-        // Skip lines that are not part of a hunk (like index lines)
+      } else if (line.trim() !== '') {
+        // Skip empty lines, but validate non-empty lines that aren't hunk headers
+        // Only allow certain metadata lines outside of hunks
+        if (!line.startsWith('index ') && !line.startsWith('diff ') && !line.startsWith('new ') && 
+            !line.startsWith('deleted ') && !line.startsWith('old mode ') && !line.startsWith('new mode ')) {
+          throw new ToolError(
+            `Invalid line outside of hunk: ${line}`,
+            'VALIDATION_ERROR'
+          );
+        }
       }
     }
 
@@ -475,10 +559,149 @@ export class WriteTool extends BaseTool {
       currentLineIndex++;
     }
 
+    // Validate the final content
+    const finalContent = resultLines.join('\n');
+
+    // Check for empty content
+    if (finalContent.trim() === '') {
+      throw new ToolError(
+        'Patch would result in empty file content',
+        'VALIDATION_ERROR',
+        ['Patches should not completely empty a file']
+      );
+    }
+
     const linesChanged = linesAdded + linesRemoved;
     return {
-      content: resultLines.join('\n'),
+      content: finalContent,
       linesChanged
     };
+  }
+
+  /**
+   * Get comprehensive diff format examples for error messages
+   */
+  private getDiffExamples(): string[] {
+    return [
+      'Unified diff format examples:',
+      '',
+      'Simple replacement:',
+      '@@ -1,1 +1,1 @@',
+      '-old line',
+      '+new line',
+      '',
+      'Multi-line change with context:',
+      '@@ -1,5 +1,5 @@',
+      ' context line 1',
+      ' context line 2',
+      '-old line to change',
+      '+new line replacement',
+      ' context line 4',
+      ' context line 5',
+      '',
+      'Key rules:',
+      '- Lines starting with " " are context (unchanged)',
+      '- Lines starting with "-" are removed',
+      '- Lines starting with "+" are added',
+      '- Hunk header format: @@ -oldStart,oldCount +newStart,newCount @@'
+    ];
+  }
+
+  /**
+   * Check if content appears to be binary
+   */
+  private isBinaryContent(content: string): boolean {
+    // Simple heuristic: check for null bytes or high ratio of non-printable characters
+    if (content.includes('\0')) {
+      return true;
+    }
+
+    // Check first 1000 characters for high ratio of non-printable characters
+    const sampleSize = Math.min(1000, content.length);
+    const sample = content.substring(0, sampleSize);
+    const nonPrintableCount = sample.split('').filter(char => {
+      const code = char.charCodeAt(0);
+      return (code < 32 && code !== 9 && code !== 10 && code !== 13) || code > 126;
+    }).length;
+
+    // If more than 30% are non-printable, consider it binary
+    return nonPrintableCount / sampleSize > 0.3;
+  }
+
+  /**
+   * Validate diff format more strictly
+   */
+  private validateDiffFormat(diff: string): void {
+    if (diff.trim() === '') {
+      throw new ToolError(
+        'Empty diff provided',
+        'VALIDATION_ERROR',
+        [
+          'Provide a valid unified diff with at least one change',
+          'Example:',
+          '@@ -1,1 +1,1 @@',
+          '-old content',
+          '+new content'
+        ]
+      );
+    }
+
+    const lines = diff.split('\n');
+
+    // Check for balanced hunks
+    let inHunk = false;
+    let currentHunkLines = 0;
+    let currentHunkOrigCount = 0;
+    let currentHunkNewCount = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Check for hunk header
+      const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+
+      if (hunkMatch) {
+        // If we were already in a hunk, validate the previous hunk's counts
+        if (inHunk) {
+          if (currentHunkOrigCount !== currentHunkNewCount) {
+            throw new ToolError(
+              `Unbalanced hunk: original and new line counts don't match`,
+              'VALIDATION_ERROR'
+            );
+          }
+        }
+
+        // Start a new hunk
+        inHunk = true;
+        currentHunkLines = 0;
+        currentHunkOrigCount = 0;
+        currentHunkNewCount = 0;
+      } else if (inHunk) {
+        // Skip "No newline at end of file" markers
+        if (line === '\\ No newline at end of file') {
+          continue;
+        }
+
+        // Count lines in the current hunk
+        if (line.startsWith(' ')) {
+          currentHunkOrigCount++;
+          currentHunkNewCount++;
+        } else if (line.startsWith('-')) {
+          currentHunkOrigCount++;
+        } else if (line.startsWith('+')) {
+          currentHunkNewCount++;
+        }
+
+        currentHunkLines++;
+      }
+    }
+
+    // Check the last hunk if we ended in one
+    if (inHunk && currentHunkLines === 0) {
+      throw new ToolError(
+        'Empty hunk found',
+        'VALIDATION_ERROR'
+      );
+    }
   }
 }
