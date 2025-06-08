@@ -43,6 +43,7 @@ export interface InputOptions {
   minHeight?: number;
   placeholder?: string;
   showCursor?: boolean;
+  disabled?: boolean;
 }
 
 export interface SessionConfig {

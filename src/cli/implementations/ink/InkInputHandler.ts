@@ -46,7 +46,6 @@ export class InkInputHandler implements IInputHandler {
         }
       },
       onExit: () => {
-        console.log('Exiting...');
         process.exit(0);
       }
     };
@@ -73,7 +72,6 @@ export class InkInputHandler implements IInputHandler {
 
     // Handle quit commands
     if (this.isQuitCommand(result)) {
-      console.log('Exiting...');
       process.exit(0);
     }
 
@@ -97,70 +95,50 @@ export class InkInputHandler implements IInputHandler {
     this.interactiveSession.setCallbacks({ onInput, onEnd });
 
     try {
-      const callbacks: InputCallbacks = {
-        onSubmit: async (input: string) => {
-          try {
-            await this.interactiveSession.handleInput(input);
-
-            // Re-render for next input if session is still active
-            if (this.interactiveSession.isSessionActive()) {
-              await this.renderInteractiveInput();
-            }
-          } catch (error) {
-            console.error('Error in interactive mode:', error);
-            this.interactiveSession.endSession();
-          }
-        },
-        onExit: () => {
-          this.interactiveSession.endSession();
-        }
-      };
-
-      await this.renderInteractiveInput(callbacks);
-
+      // Keep the session running until explicitly ended
+      while (this.interactiveSession.isSessionActive()) {
+        await this.renderInteractiveInput();
+      }
     } catch (error) {
-      console.error('Error in interactive mode:', error);
+      // Error handling - could be logged to file or handled differently
     } finally {
       this.cleanup();
     }
   }
 
-  private async renderInteractiveInput(callbacks?: InputCallbacks): Promise<void> {
-    if (!callbacks) {
-      // Default callbacks for re-rendering
-      callbacks = {
-        onSubmit: async (input: string) => {
-          await this.interactiveSession.handleInput(input);
-          if (this.interactiveSession.isSessionActive()) {
-            await this.renderInteractiveInput();
-          }
-        },
-        onExit: () => {
-          this.interactiveSession.endSession();
-        }
-      };
-    }
-
+  private async renderInteractiveInput(): Promise<void> {
     return new Promise<void>((resolve) => {
       const options: InputOptions = {
         prompt: '💬 Your Message (Enter to send, Enter again for multi-line):',
       };
 
+      const callbacks: InputCallbacks = {
+        onSubmit: async (input: string) => {
+          if (this.unmountFunction) {
+            this.unmountFunction();
+            this.unmountFunction = null;
+          }
+          try {
+            await this.interactiveSession.handleInput(input);
+          } catch (error) {
+            // Error handling - could be logged to file or handled differently
+            this.interactiveSession.endSession();
+          }
+          resolve();
+        },
+        onExit: () => {
+          if (this.unmountFunction) {
+            this.unmountFunction();
+            this.unmountFunction = null;
+          }
+          this.interactiveSession.endSession();
+          resolve();
+        }
+      };
+
       const { unmount } = render(
         React.createElement(InputComponent, {
-          callbacks: {
-            ...callbacks,
-            onSubmit: (input: string) => {
-              unmount();
-              callbacks!.onSubmit(input);
-              resolve();
-            },
-            onExit: () => {
-              unmount();
-              callbacks!.onExit();
-              resolve();
-            }
-          },
+          callbacks,
           options,
           completionManager: this.completionManager,
           clipboardManager: this.clipboardManager,

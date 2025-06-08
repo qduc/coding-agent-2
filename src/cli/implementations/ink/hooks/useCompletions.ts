@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CompletionState } from '../types';
 import { CompletionItem, CompletionProvider } from '../services/completion/CompletionProvider';
 
@@ -88,14 +88,14 @@ export function useCompletions(providers: CompletionProvider[]): UseCompletionsR
     }
   }, [providers, hide]);
 
-  const actions: CompletionActions = {
+  const actions: CompletionActions = useMemo(() => ({
     selectNext,
     selectPrevious,
     selectFirst,
     getSelectedItem,
     hide,
     refresh,
-  };
+  }), [selectNext, selectPrevious, selectFirst, getSelectedItem, hide, refresh]);
 
   return { state, actions };
 }

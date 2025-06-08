@@ -15,10 +15,15 @@ export const InputBox: React.FC<InputBoxProps> = ({ state, options = {} }) => {
     placeholder = state.value === '' ?
       'Type your message here... (@ for files, / for commands, Ctrl+V to paste)' :
       undefined,
-    showCursor = true,
+    showCursor = !options.disabled,
+    disabled = false,
   } = options;
 
   const getTitle = () => {
+    if (disabled) {
+      return options.prompt || '🤖 Processing...';
+    }
+
     if (state.pasteIndicator) {
       return '📋 Pasted! (Enter or Ctrl+Enter to send)';
     }
@@ -27,7 +32,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ state, options = {} }) => {
       return '💬 Multi-line Message (Ctrl+Enter to send)';
     }
 
-    return '💬 Your Message (Enter to send, Enter again for multi-line)';
+    return options.prompt || '💬 Your Message (Enter to send, Enter again for multi-line)';
   };
 
   const inputBox = BoxRenderer.createInputBox(

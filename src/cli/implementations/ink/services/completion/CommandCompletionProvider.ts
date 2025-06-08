@@ -33,7 +33,17 @@ export class CommandCompletionProvider implements CompletionProvider {
   }
 
   canHandle(input: string, cursorPosition: number): boolean {
-    return input.startsWith('/') && cursorPosition > 0;
+    if (!input.startsWith('/') || cursorPosition === 0) {
+      return false;
+    }
+    
+    // Don't show completions if input is already a complete command
+    const command = input.substring(1).toLowerCase();
+    const isCompleteCommand = this.availableCommands.some(cmd => 
+      cmd.name.toLowerCase() === command
+    );
+    
+    return !isCompleteCommand;
   }
 
   getType(): CompletionType {

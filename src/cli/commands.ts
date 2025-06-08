@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { Agent } from '../shared/core/agent';
 import { InkInputHandler } from './implementations';
+import { InkChatHandler } from './implementations/ink/InkChatHandler';
 import { CLIToolExecutionContext } from './implementations';
 import { configManager } from '../shared/core/config';
 import chalk from 'chalk';
@@ -60,7 +61,6 @@ export function configureCommands(program: Command, version: string): void {
 
       // Create CLI implementations
       const toolContext = new CLIToolExecutionContext();
-      const inputHandler = new InkInputHandler(toolContext);
 
       // Create and initialize agent with CLI implementations
       const agent = new Agent({
@@ -77,8 +77,8 @@ export function configureCommands(program: Command, version: string): void {
         // Direct command mode
         await handleDirectCommand(command, agent, options, shouldStream);
       } else {
-        // Interactive chat mode
-        await startInteractiveMode(agent, options, shouldStream, inputHandler);
+        // Interactive chat mode - use full Ink control
+        await startInteractiveMode(agent, options, shouldStream, toolContext);
       }
     });
 }
@@ -203,33 +203,16 @@ export async function handleDirectCommand(command: string, agent: Agent, options
 }
 
 /**
- * Start interactive chat mode
+ * Start interactive chat mode with full Ink control
  */
-export async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false, inputHandler?: InkInputHandler) {
+export async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false, toolContext: CLIToolExecutionContext) {
   if (options.verbose) {
     console.log(chalk.blue('Starting interactive chat mode...'));
   }
 
-  // Enhanced welcome with better visual hierarchy
-  console.log();
-  console.log(BoxRenderer.createInfoBox('🤖 Coding Agent - Interactive Mode', ''));
-  console.log(chalk.cyan('🚀 Starting conversation session...'));
-  console.log();
-
   try {
-    if (options.verbose) {
-      console.log(chalk.blue('🛠️  Registered tools:'), agent.getRegisteredTools().map(t => t.name).join(', '));
-      console.log();
-    }
-
-    // Enhanced welcome message with better visual structure
-    const welcomeContent = `• Type your questions about code or project in the input box
-• Press Enter for new lines, Ctrl+V to paste, Ctrl+Enter to send message  
-• Use @ for fuzzy file search, type to filter, Enter/Tab to select
-• Use "/help" for suggestions, "/exit" or "/quit" to leave
-• Use Esc or Ctrl+C to exit anytime`;
-    console.log(BoxRenderer.createInfoBox('💬 Welcome to Interactive Chat Mode', welcomeContent));
-    console.log();
+    // Create the Ink chat handler
+    const chatHandler = new InkChatHandler(toolContext);
 
     // Set up graceful exit handler for Ctrl+C
     const handleExit = () => {
@@ -238,23 +221,17 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
     };
     process.on('SIGINT', handleExit);
 
-    // Start chat loop using our enhanced input handler
-    if (inputHandler) {
-      await inputHandler.handleInteractiveMode(
-        async (input: string) => {
-          await processUserInput(input, agent, options, shouldStream);
-        },
-        () => {
-          console.log(chalk.yellow('👋 Goodbye! Thanks for using Coding Agent.'));
-        }
-      );
-    } else {
-      console.error(chalk.red('Error: Input handler not available'));
-      process.exit(1);
-    }
+    // Start the full Ink interactive mode
+    await chatHandler.handleInteractiveMode(agent, {
+      verbose: options.verbose,
+      streaming: shouldStream,
+    });
 
     // Clean up signal handler
     process.removeListener('SIGINT', handleExit);
+
+    // Exit message
+    console.log(chalk.yellow('👋 Goodbye! Thanks for using Coding Agent.'));
 
   } catch (error) {
     console.error(chalk.red('Failed to start interactive mode:'), error instanceof Error ? error.message : 'Unknown error');
@@ -262,174 +239,9 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
   }
 }
 
-/**
- * Process user input message
- */
-export async function processUserInput(trimmedMessage: string, agent: Agent, options: any, shouldStream: boolean): Promise<boolean> {
-  // Handle exit commands
-  if (trimmedMessage.toLowerCase() === '/exit' ||
-      trimmedMessage.toLowerCase() === '/quit' ||
-      trimmedMessage.toLowerCase() === '/q') {
-    return false; // Signal to exit
-  }
+// processUserInput function removed - now handled entirely within ChatApp component
 
-  // Handle help command
-  if (trimmedMessage.toLowerCase() === '/help') {
-    displayChatHelp();
-    return true; // Continue processing
-  }
-
-  // Handle clear command
-  if (trimmedMessage.toLowerCase() === '/clear') {
-    agent.clearHistory();
-    console.log(chalk.green('✨ Chat history cleared. Context has been reset to initial state.'));
-    return true; // Continue processing
-  }
-
-  // Display the user's message first
-  console.log(chalk.blue('👤 You:'), chalk.white(trimmedMessage));
-  console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
-  console.log();
-
-  // Process the message with the AI
-  try {
-    console.log(chalk.cyan('🤖 Agent:'), chalk.gray('🔍 Analyzing your message...'));
-
-    let accumulatedResponse = '';
-    let hasStartedStreaming = false;
-    let currentLine = '';
-
-    if (shouldStream) {
-      // Streaming mode
-      const response = await agent.processMessage(
-        trimmedMessage,
-        (chunk: string) => {
-          // Clear status and start streaming on first chunk
-          if (!hasStartedStreaming) {
-            process.stdout.write('\x1b[1A\x1b[2K'); // Move up one line and clear it
-            process.stdout.write(chalk.cyan('🤖 Agent: ') + chalk.gray('⚡ '));
-            hasStartedStreaming = true;
-          }
-
-          // Accumulate content for final rendering
-          accumulatedResponse += chunk;
-
-          // Stream raw text in real-time for immediate feedback
-          process.stdout.write(chunk);
-          currentLine += chunk;
-
-          // Track current line for proper cursor positioning
-          if (chunk.includes('\n')) {
-            currentLine = '';
-          }
-        },
-        options.verbose
-      );
-
-      // Replace raw streaming output with formatted version
-      if (hasStartedStreaming && accumulatedResponse.trim()) {
-        const terminalWidth = process.stdout.columns || 80;
-        const agentPrefix = '🤖 Agent: ⚡ ';
-
-        // Calculate and execute the clearing sequence
-        const clearSequence = calculateStreamingClearSequence(
-          accumulatedResponse,
-          terminalWidth,
-          agentPrefix
-        );
-        process.stdout.write(clearSequence);
-
-        // Show enhanced formatted response
-        console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-        console.log();
-        console.log(renderResponse(accumulatedResponse));
-        console.log();
-        console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
-      } else if (!hasStartedStreaming) {
-        // No streaming occurred (tools only), show complete response
-        process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
-        console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-        console.log();
-        console.log(renderResponse(response));
-        console.log();
-        console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
-      }
-    } else {
-      // Non-streaming mode
-      const response = await agent.processMessage(
-        trimmedMessage,
-        undefined,
-        options.verbose
-      );
-
-      // Clear status line and show enhanced response
-      process.stdout.write('\x1b[1A\x1b[2K');
-      console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-      console.log();
-
-      // Show formatted response
-      console.log(renderResponse(response));
-      console.log();
-      console.log(chalk.gray('─'.repeat(Math.min(50, process.stdout.columns || 50))));
-    }
-
-    console.log(); // Add spacing for next input
-
-  } catch (error) {
-    console.log(); // Clear the status line
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log(BoxRenderer.createInfoBox('❌ Error', errorMessage));
-    console.log(chalk.gray('💡 Try rephrasing your question or type "/help" for suggestions.'));
-    console.log();
-  }
-
-  return true; // Continue processing
-}
-
-/**
- * Display chat help information
- */
-export function displayChatHelp() {
-  const helpContent = `Multi-line Input Controls:
-    Enter              - Add new line to your message
-    Ctrl+V             - Paste from clipboard (cross-platform)
-    Ctrl+Enter         - Send the complete message
-    Esc                - Cancel and clear input
-    ↑/↓                - Navigate file/command completions
-
-Available Commands: (press TAB for auto-completion)
-    /help              - Show this help
-    /exit, /quit, /q   - Exit interactive mode
-    /clear             - Clear chat history and reset context
-
-File Completion (Fuzzy Search):
-    @                  - Shows live file list, fuzzy search as you type
-    @srcmp             - Matches "src/components" fuzzy style
-    @pjs               - Matches "package.json" by initials
-
-Paste Support:
-    • Paste code snippets, logs, or error messages directly
-    • Multi-line content automatically switches to multi-line mode
-    • Works on macOS (pbpaste), Linux (xclip/xsel), Windows (PowerShell)
-
-Example Questions:
-    "Explain what this project does"
-    "List files in the src directory"
-    "Help me understand @src/main.ts"
-    "What are the main components?"
-    "Show me the test files"
-
-Tips:
-    • Write multi-line questions for complex requests
-    • Paste code or logs for better context
-    • Use @ for fuzzy file search (like fzf)
-    • Ask about files, directories, or patterns  
-    • Use natural language - no special syntax`;
-
-  console.log();
-  console.log(BoxRenderer.createInfoBox('💡 Coding Agent Help', helpContent));
-  console.log();
-}
+// displayChatHelp function removed - now handled within ChatApp component
 
 /**
  * Helper function to detect if content contains markdown and render it appropriately

@@ -13,6 +13,7 @@ export interface UseKeyboardHandlerOptions {
   hasCompletions: boolean;
   inputValue: string;
   cursorPosition: number;
+  disabled?: boolean;
 }
 
 export function useKeyboardHandler({
@@ -23,6 +24,7 @@ export function useKeyboardHandler({
   hasCompletions,
   inputValue,
   cursorPosition,
+  disabled = false,
 }: UseKeyboardHandlerOptions): void {
   const { exit } = useApp();
 
@@ -34,7 +36,7 @@ export function useKeyboardHandler({
         inputActions.showPasteIndicator();
       }
     } catch (error) {
-      console.error('Failed to paste:', error);
+      // Failed to paste - could be logged to file or handled differently
     }
   }, [inputActions, clipboardProvider]);
 
@@ -53,9 +55,10 @@ export function useKeyboardHandler({
         const spaceIndex = afterAt.indexOf(' ');
         const afterPartial = spaceIndex === -1 ? '' : afterAt.substring(spaceIndex);
         
-        const newValue = beforeAt + selectedItem.value + afterPartial;
+        // Add space after file path for continued typing
+        const newValue = beforeAt + selectedItem.value + ' ' + afterPartial;
         inputActions.setValue(newValue);
-        inputActions.setCursorPosition(beforeAt.length + selectedItem.value.length);
+        inputActions.setCursorPosition(beforeAt.length + selectedItem.value.length + 1);
       }
     } else if (selectedItem.type === 'command') {
       inputActions.setValue('/' + selectedItem.value);
@@ -78,6 +81,14 @@ export function useKeyboardHandler({
   }, [callbacks, exit]);
 
   useInput((inputChar: string, key: any) => {
+    // Ignore all input when disabled, except exit commands
+    if (disabled) {
+      if (key.escape || (key.ctrl && inputChar === 'c')) {
+        handleExit();
+      }
+      return;
+    }
+
     const keyEvent: KeyboardEvent = { inputChar, key };
 
     // Handle Ctrl+Enter: Submit message
@@ -86,14 +97,15 @@ export function useKeyboardHandler({
       return;
     }
 
-    // Handle Enter with completions
+    // Handle Enter with completions - use completion if available
     if (key.return && hasCompletions) {
-      if (handleCompletionSelection()) return;
+      handleCompletionSelection();
+      return; // Always return here to prevent submission
     }
 
     // Handle Enter: Submit or add newline
     if (key.return) {
-      if (inputValue.trim() && !inputActions) {
+      if (inputValue.trim()) {
         handleSubmit();
         return;
       }

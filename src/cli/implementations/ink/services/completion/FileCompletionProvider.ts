@@ -39,9 +39,18 @@ export class FileCompletionProvider implements CompletionProvider {
     const lastSlashIndex = input.lastIndexOf('/');
 
     // Check for file completion after @
-    return lastAtIndex !== -1 &&
-           (lastSlashIndex === -1 || lastAtIndex > lastSlashIndex) &&
-           lastAtIndex < cursorPosition;
+    if (lastAtIndex === -1 || lastAtIndex >= cursorPosition) {
+      return false;
+    }
+    
+    // Only show completions if we're actively typing after @
+    // (not just positioned after a completed file path)
+    const afterAt = input.substring(lastAtIndex + 1, cursorPosition);
+    const spaceIndex = afterAt.indexOf(' ');
+    
+    // If there's a space in the file path portion, don't show completions
+    // (this means we're past the file path)
+    return spaceIndex === -1 && (lastSlashIndex === -1 || lastAtIndex > lastSlashIndex);
   }
 
   getType(): CompletionType {
