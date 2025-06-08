@@ -34,6 +34,7 @@ export interface KeyboardEvent {
 export interface InputCallbacks {
   onSubmit: (input: string) => void;
   onExit: () => void;
+  onInterrupt?: () => void;
 }
 
 export interface InputOptions {

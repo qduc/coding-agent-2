@@ -126,7 +126,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 
   const handleUserInput = useCallback(async (input: string) => {
     const trimmedInput = input.trim();
-    
+
     // Handle exit commands
     if (['exit', 'quit', 'q'].some(cmd => trimmedInput.toLowerCase() === `/${cmd}`)) {
       handleExit();
@@ -141,7 +141,8 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     Enter              - Add new line to your message
     Ctrl+V             - Paste from clipboard (cross-platform)
     Ctrl+Enter         - Send the complete message
-    Esc                - Cancel and clear input
+    Esc                - Interrupt/cancel current operation or clear input
+    Ctrl+C             - Exit the app (works anytime, even during processing)
     ↑/↓                - Navigate file/command completions
 
 Available Commands: (press TAB for auto-completion)
@@ -223,9 +224,24 @@ Example Questions:
     }
   }, [agent, addMessage, handleExit, options, showWelcome]);
 
+  const handleInterrupt = useCallback(() => {
+    if (isProcessing) {
+      // Cancel the current operation
+      setStreamingMessage(undefined);
+      setIsProcessing(false);
+
+      // Add a message to indicate interruption
+      addMessage({
+        type: 'system',
+        content: '⚠️ Operation interrupted. What would you like to do next?',
+      });
+    }
+  }, [isProcessing, addMessage]);
+
   const inputCallbacks: InputCallbacks = {
     onSubmit: handleUserInput,
     onExit: handleExit,
+    onInterrupt: handleInterrupt,
   };
 
   const inputOptions: InputOptions = {

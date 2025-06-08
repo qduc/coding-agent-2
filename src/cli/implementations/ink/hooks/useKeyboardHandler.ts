@@ -44,7 +44,7 @@ export function useKeyboardHandler({
     const selectedItem = useFirst ? 
       (completionActions.selectFirst(), completionActions.getSelectedItem()) :
       completionActions.getSelectedItem();
-    
+
     if (!selectedItem) return false;
 
     if (selectedItem.type === 'file') {
@@ -54,7 +54,7 @@ export function useKeyboardHandler({
         const afterAt = inputValue.substring(lastAtIndex + 1);
         const spaceIndex = afterAt.indexOf(' ');
         const afterPartial = spaceIndex === -1 ? '' : afterAt.substring(spaceIndex);
-        
+
         // Add space after file path for continued typing
         const newValue = beforeAt + selectedItem.value + ' ' + afterPartial;
         inputActions.setValue(newValue);
@@ -80,11 +80,23 @@ export function useKeyboardHandler({
     exit();
   }, [callbacks, exit]);
 
+  const handleInterrupt = useCallback(() => {
+    if (callbacks.onInterrupt) {
+      callbacks.onInterrupt();
+    }
+  }, [callbacks]);
+
   useInput((inputChar: string, key: any) => {
-    // Ignore all input when disabled, except exit commands
+    // Always exit on Ctrl+C, no matter what's happening
+    if (key.ctrl && inputChar === 'c') {
+      handleExit();
+      return;
+    }
+
+    // Ignore all input when disabled, except interrupt commands
     if (disabled) {
-      if (key.escape || (key.ctrl && inputChar === 'c')) {
-        handleExit();
+      if (key.escape) {
+        handleInterrupt();
       }
       return;
     }
@@ -109,14 +121,14 @@ export function useKeyboardHandler({
         handleSubmit();
         return;
       }
-      
+
       // Add newline for multi-line input
       inputActions.insertAtCursor('\n');
       return;
     }
 
-    // Handle Escape or Ctrl+C: Exit
-    if (key.escape || (key.ctrl && inputChar === 'c')) {
+    // Handle Escape: Exit (when not processing)
+    if (key.escape) {
       handleExit();
       return;
     }
