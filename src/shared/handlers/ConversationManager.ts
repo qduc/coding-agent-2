@@ -7,6 +7,9 @@ export interface ConversationMessage {
   content: string | null;
   tool_calls?: any[];
   tool_call_id?: string;
+  timestamp?: number;
+  tokens?: number;
+  error?: Error;
 }
 
 export class ConversationManager {
@@ -25,7 +28,8 @@ export class ConversationManager {
   addUserMessage(content: string): void {
     this.addMessage({
       role: 'user',
-      content
+      content,
+      timestamp: Date.now()
     });
   }
 
@@ -36,7 +40,8 @@ export class ConversationManager {
     this.addMessage({
       role: 'assistant',
       content,
-      tool_calls: toolCalls
+      tool_calls: toolCalls,
+      timestamp: Date.now()
     });
   }
 
@@ -47,7 +52,8 @@ export class ConversationManager {
     this.addMessage({
       role: 'tool',
       content,
-      tool_call_id: toolCallId
+      tool_call_id: toolCallId,
+      timestamp: Date.now()
     });
   }
 

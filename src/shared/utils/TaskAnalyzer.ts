@@ -4,6 +4,7 @@
 
 import { LLMService } from '../services/llm';
 import { TaskContext } from './SystemPromptBuilder';
+import { configManager } from '../core/config';
 
 export interface TaskAnalysisResult {
   type: TaskContext['type'];
@@ -100,15 +101,92 @@ Complexity Guidelines:
 Be precise and consider the user's actual intent, not just keywords.`;
 
     try {
-      // Use a fast, lightweight model for classification
-      const response = await llmService.sendMessage([{
-        role: 'user',
-        content: analysisPrompt
-      }]);
-
+      // Use fast model optimized for task analysis (4.1-mini, 2.5-flash, 3.5-haiku)
+      const response = await this.sendWithFastModel(llmService, analysisPrompt);
       return this.parseAIResponse(response);
     } catch (error) {
       throw new Error(`AI analysis failed: ${error}`);
+    }
+  }
+
+  /**
+   * Send message using fast model optimized for task analysis
+   */
+  private async sendWithFastModel(llmService: LLMService, prompt: string): Promise<string> {
+    const provider = llmService.getCurrentProvider();
+    if (!provider) {
+      throw new Error('No provider available');
+    }
+
+    const providerName = provider.getProviderName();
+    const fastModel = this.getFastModelForProvider(providerName);
+    
+    // Use provider directly with fast model instead of changing global config
+    if (providerName === 'openai') {
+      const openaiProvider = provider as any;
+      // Temporarily override model for this call
+      const originalConfig = configManager.getConfig();
+      const tempConfig = { ...originalConfig, model: fastModel };
+      
+      // Create messages for this specific call
+      const response = await this.callProviderWithModel(openaiProvider, prompt, fastModel);
+      return response;
+    } else if (providerName === 'anthropic') {
+      const anthropicProvider = provider as any;
+      const response = await this.callProviderWithModel(anthropicProvider, prompt, fastModel);
+      return response;
+    } else if (providerName === 'gemini') {
+      const geminiProvider = provider as any;
+      const response = await this.callProviderWithModel(geminiProvider, prompt, fastModel);
+      return response;
+    }
+    
+    // Fallback to regular sendMessage if provider not recognized
+    return await llmService.sendMessage([{
+      role: 'user',
+      content: prompt
+    }]);
+  }
+
+  /**
+   * Call provider with specific model
+   */
+  private async callProviderWithModel(provider: any, prompt: string, model: string): Promise<string> {
+    // Temporarily store and override model in config
+    const originalConfig = configManager.getConfig();
+    const savedModel = originalConfig.model;
+    
+    try {
+      // Set fast model temporarily (in memory only, don't save to file)
+      (configManager as any).config = { ...originalConfig, model };
+      
+      // Call provider sendMessage
+      const response = await provider.sendMessage([{
+        role: 'user',
+        content: prompt
+      }]);
+      
+      return response;
+    } finally {
+      // Restore original model
+      (configManager as any).config = { ...originalConfig, model: savedModel };
+    }
+  }
+
+  /**
+   * Get fast model name for each provider
+   */
+  private getFastModelForProvider(providerName: string): string {
+    switch (providerName) {
+      case 'openai':
+        return 'gpt-4.1-mini'; // Fast OpenAI model
+      case 'gemini':
+        return 'gemini-2.5-flash-preview-05-20'; // Fast Gemini model
+      case 'anthropic':
+        return 'claude-3-5-haiku-20241022'; // Fast Claude model
+      default:
+        // Fallback to current model if provider unknown
+        return configManager.getConfig().model || 'gpt-4.1-mini';
     }
   }
 

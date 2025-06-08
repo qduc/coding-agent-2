@@ -10,6 +10,10 @@ export class AnthropicProvider implements LLMProvider {
     return 'anthropic';
   }
 
+  getModelName(): string {
+    return this.config.model || 'claude-3-opus-20240229';
+  }
+
   async initialize(): Promise<boolean> {
     try {
       const config = configManager.getConfig();

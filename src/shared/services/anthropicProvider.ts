@@ -14,6 +14,11 @@ export class AnthropicProvider implements LLMProvider {
     return 'anthropic';
   }
 
+  getModelName(): string {
+    const config = configManager.getConfig();
+    return config.model || 'claude-3-5-sonnet-20241022';
+  }
+
   /**
    * Initialize Anthropic client
    */

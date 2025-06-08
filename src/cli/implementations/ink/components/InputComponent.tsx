@@ -57,7 +57,26 @@ export const InputComponent: React.FC<InputComponentProps> = ({
       isVisible: false,
       type: null,
     }),
-  }), [completionState]);
+    refresh: async () => {
+      const items = await completionManager.getCompletions(
+        inputState.value,
+        inputState.cursorPosition
+      );
+      
+      const activeProvider = completionManager.getActiveProvider(
+        inputState.value,
+        inputState.cursorPosition
+      );
+      
+      setCompletionState(prev => ({
+        ...prev,
+        items,
+        selectedIndex: 0,
+        isVisible: items.length > 0,
+        type: activeProvider?.getType() || null,
+      }));
+    },
+  }), [completionState, completionManager, inputState]);
 
   // Update completions using only CompletionManager
   useEffect(() => {

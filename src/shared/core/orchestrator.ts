@@ -2,6 +2,17 @@
  * Tool Orchestrator - Coordinates between LLM and tools
  *
  * Refactored to use separate handler classes for better maintainability.
+ * 
+ * Infinite loop detection:
+ * Instead of using a fixed maximum iteration count, this implementation uses multiple
+ * approaches to detect infinite loops:
+ * 1. Time-based limits: Stops execution after 5 minutes
+ * 2. Pattern detection: Identifies repetitive sequences of tool calls
+ * 3. Excessive calls: Detects when the same tool is called many times in succession
+ * 4. Total call limit: Stops after 30 total tool calls without resolution
+ * 
+ * This approach is more flexible than a fixed iteration count and provides better
+ * feedback about why the process was stopped.
  */
 
 import { BaseTool } from '../tools';
@@ -115,10 +126,14 @@ export class ToolOrchestrator {
     // Add user message to conversation
     this.conversationManager.addUserMessage(userInput);
 
-    let maxIterations = 20; // Prevent infinite loops
+    // Instead of a fixed iteration count, use a combination of approaches to detect infinite loops
+    const startTime = Date.now();
+    const MAX_EXECUTION_TIME = 5 * 60 * 1000; // 5 minutes max execution time
+    const toolCallHistory: { name: string, args: string }[] = [];
     let fullResponse = '';
 
-    while (maxIterations > 0) {
+    // Loop until we get a final response or detect an infinite loop
+    while (true) {
       if (verbose) {
         console.log(chalk.blue('🔄 Processing with LLM...'));
       }
@@ -148,13 +163,36 @@ export class ToolOrchestrator {
           // Add assistant's tool call message
           this.conversationManager.addAssistantMessage(response.content, response.tool_calls);
 
-          // Execute each tool call
+          // Check for time limit
+          const executionTime = Date.now() - startTime;
+          if (executionTime > MAX_EXECUTION_TIME) {
+            if (verbose) {
+              console.log(chalk.red(`⏱️ Time limit exceeded: ${Math.round(executionTime / 1000)} seconds (limit: ${MAX_EXECUTION_TIME / 1000} seconds)`));
+            }
+            throw new Error(`Maximum execution time reached (${Math.round(executionTime / 1000)} seconds)`);
+          }
+
+          // Execute each tool call and track in history
           for (const toolCall of response.tool_calls) {
+            // Track tool call for pattern detection
+            const toolName = toolCall.function.name;
+            const toolArgs = toolCall.function.arguments;
+            toolCallHistory.push({ name: toolName, args: toolArgs });
+
+            // Execute the tool
             const result = await this.toolExecutionHandler.executeToolCall(toolCall, verbose);
             this.conversationManager.addToolResult(result.content, result.toolCallId);
           }
 
-          maxIterations--;
+          // Check for repetitive patterns that might indicate an infinite loop
+          const loopDetected = this.detectRepetitivePattern(toolCallHistory);
+          if (loopDetected.detected) {
+            if (verbose) {
+              console.log(chalk.red(`🔄 Infinite loop detected: ${loopDetected.reason}`));
+            }
+            throw new Error(`Detected repetitive tool call pattern: ${loopDetected.reason}`);
+          }
+
           continue; // Continue the conversation loop
         } else {
           // No tool calls, this is the final response
@@ -170,11 +208,151 @@ export class ToolOrchestrator {
       }
     }
 
-    if (maxIterations === 0) {
-      throw new Error('Maximum tool call iterations reached');
+    return fullResponse;
+  }
+
+  /**
+   * Detect repetitive patterns in tool calls that might indicate an infinite loop
+   * @param toolCallHistory Array of tool calls with name and arguments
+   * @returns Object with detected flag and reason for detection
+   */
+  private detectRepetitivePattern(toolCallHistory: { name: string, args: string }[]): { detected: boolean, reason: string } {
+    // Need at least a few calls to detect a pattern
+    if (toolCallHistory.length < 6) {
+      return { detected: false, reason: '' };
     }
 
-    return fullResponse;
+    // Check for the same tool being called repeatedly with similar arguments
+    const recentCalls = toolCallHistory.slice(-10); // Look at the last 10 calls
+
+    // Check for exact repetition (same sequence repeating)
+    for (let patternLength = 2; patternLength <= 5; patternLength++) {
+      // Get the most recent pattern of length patternLength
+      const pattern = recentCalls.slice(-patternLength);
+
+      // Check if this pattern repeats in the history
+      const previousPattern = recentCalls.slice(-2 * patternLength, -patternLength);
+
+      if (pattern.length === patternLength && previousPattern.length === patternLength) {
+        // Compare the patterns
+        let isRepeating = true;
+        let similaritySum = 0;
+
+        for (let i = 0; i < patternLength; i++) {
+          if (pattern[i].name !== previousPattern[i].name) {
+            isRepeating = false;
+            break;
+          }
+
+          // For arguments, we do a similarity check rather than exact match
+          // as arguments might have small variations but still be in a loop
+          const similarity = this.calculateArgumentSimilarity(
+            pattern[i].args,
+            previousPattern[i].args
+          );
+
+          similaritySum += similarity;
+
+          if (similarity < 0.8) { // 80% similarity threshold
+            isRepeating = false;
+            break;
+          }
+        }
+
+        if (isRepeating) {
+          const toolNames = pattern.map(p => p.name).join(', ');
+          const avgSimilarity = (similaritySum / patternLength * 100).toFixed(1);
+          return { 
+            detected: true, 
+            reason: `Repeating pattern of ${patternLength} tools (${toolNames}) with ${avgSimilarity}% argument similarity`
+          };
+        }
+      }
+    }
+
+    // Check for the same tool being called many times in a row
+    const lastTool = recentCalls[recentCalls.length - 1]?.name;
+    if (lastTool) {
+      const sameToolCount = recentCalls.filter(call => call.name === lastTool).length;
+      if (sameToolCount >= 5) { // If the same tool is called 5+ times recently
+        return { 
+          detected: true, 
+          reason: `Same tool '${lastTool}' called ${sameToolCount} times in the last ${recentCalls.length} calls`
+        };
+      }
+    }
+
+    // Check for excessive total calls
+    if (toolCallHistory.length > 30) {
+      return {
+        detected: true,
+        reason: `Excessive number of tool calls (${toolCallHistory.length}) without resolution`
+      };
+    }
+
+    return { detected: false, reason: '' };
+  }
+
+  /**
+   * Calculate similarity between two JSON argument strings
+   * @param args1 First JSON argument string
+   * @param args2 Second JSON argument string
+   * @returns Similarity score between 0 and 1
+   */
+  private calculateArgumentSimilarity(args1: string, args2: string): number {
+    try {
+      // Parse JSON arguments
+      const obj1 = JSON.parse(args1);
+      const obj2 = JSON.parse(args2);
+
+      // Get all keys from both objects
+      const allKeys = new Set([...Object.keys(obj1), ...Object.keys(obj2)]);
+
+      let matchingKeys = 0;
+      let totalKeys = 0;
+
+      // Compare values for each key
+      for (const key of allKeys) {
+        totalKeys++;
+
+        // If both objects have the key and values are similar
+        if (key in obj1 && key in obj2) {
+          const val1 = obj1[key];
+          const val2 = obj2[key];
+
+          // For strings, check if they're very similar
+          if (typeof val1 === 'string' && typeof val2 === 'string') {
+            if (val1 === val2 || 
+                (val1.length > 10 && val2.includes(val1.substring(0, 10))) || 
+                (val2.length > 10 && val1.includes(val2.substring(0, 10)))) {
+              matchingKeys++;
+            }
+          } 
+          // For other types, check for equality
+          else if (val1 === val2) {
+            matchingKeys++;
+          }
+        }
+      }
+
+      return matchingKeys / totalKeys;
+    } catch (e) {
+      // If we can't parse the JSON, compare as strings
+      const minLength = Math.min(args1.length, args2.length);
+      const maxLength = Math.max(args1.length, args2.length);
+
+      if (minLength === 0) return maxLength === 0 ? 1 : 0;
+
+      // Count matching characters
+      let matchingChars = 0;
+      for (let i = 0; i < minLength; i++) {
+        if (args1[i] === args2[i]) {
+          matchingChars++;
+        }
+      }
+
+      return matchingChars / maxLength;
+    }
   }
 
   /**

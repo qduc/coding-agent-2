@@ -31,6 +31,7 @@ export interface LLMProvider {
   initialize(): Promise<boolean>;
   isReady(): boolean;
   getProviderName(): string;
+  getModelName(): string;
   streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,

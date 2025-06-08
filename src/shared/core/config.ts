@@ -565,7 +565,7 @@ export class ConfigManager {
     } else if (provider === 'gemini') {
       const modelChoices = [
         { name: 'Gemini 2.5 Flash (Latest, Fast)', value: 'gemini-2.5-flash-preview-05-20' },
-        { name: 'Gemini 2.5 Pro (Latest, Most Capable)', value: 'gemini-2.5-pro-preview-05-06' },
+        { name: 'Gemini 2.5 Pro (Latest, Most Capable)', value: 'gemini-2.5-pro-preview-06-05' },
         { name: 'Gemini 2.0 Flash (Multimodal)', value: 'gemini-2.0-flash' },
         { name: 'Gemini 1.5 Pro (Stable)', value: 'gemini-1.5-pro-002' },
         { name: 'Gemini 1.5 Flash (Fast)', value: 'gemini-1.5-flash-002' }

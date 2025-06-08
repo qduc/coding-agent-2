@@ -4,7 +4,8 @@ export async function createProvider(provider: string) {
   let providerInstance;
   switch (provider) {
     case 'openai':
-      providerInstance = new (await import('../providers/OpenAIProvider')).OpenAIProvider();
+      const { OpenAIProvider } = await import('../providers/OpenAIProvider');
+      providerInstance = new OpenAIProvider();
       break;
     case 'anthropic':
       const { AnthropicProvider } = await import('../services/anthropicProvider');

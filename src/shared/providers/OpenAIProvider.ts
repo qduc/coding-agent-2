@@ -14,6 +14,10 @@ export class OpenAIProvider implements LLMProvider {
     return 'openai';
   }
 
+  getModelName(): string {
+    return this.config.model || 'gpt-4';
+  }
+
   async initialize(): Promise<boolean> {
     try {
       const config = configManager.getConfig();

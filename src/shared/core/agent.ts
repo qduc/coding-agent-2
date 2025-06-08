@@ -95,6 +95,16 @@ export class Agent {
     const initialized = await this.llmService.initialize();
     
     if (initialized) {
+      // Output the current provider and model being used
+      const providerName = this.llmService.getProviderName();
+      let modelName = 'unknown';
+      try {
+        modelName = this.llmService.getModelName();
+      } catch (error) {
+        console.warn('Could not get model name, showing provider only');
+      }
+      console.log(`Initialized with provider: ${providerName}${modelName !== 'unknown' ? `, model: ${modelName}` : ''}`);
+
       // Initialize the orchestrator's provider strategy now that LLM service is ready
       this.orchestrator.initializeProviderStrategy();
     }
@@ -160,5 +170,15 @@ export class Agent {
    */
   registerTool(tool: any): void {
     this.orchestrator.registerTool(tool);
+  }
+
+  /**
+   * Get current model information
+   */
+  getCurrentModel(): string {
+    if (!this.isReady()) {
+      throw new Error('Agent not initialized. Call initialize() first.');
+    }
+    return this.llmService.getModelName();
   }
 }

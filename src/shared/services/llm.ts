@@ -53,6 +53,22 @@ export class LLMService implements LLMProvider {
   }
 
   /**
+   * Get the model name
+   */
+  getModelName(): string {
+    if (!this.provider) {
+      throw new Error('LLM service not initialized');
+    }
+    if (!this.provider.getModelName) {
+      // Fallback if provider doesn't implement getModelName
+      const config = configManager.getConfig();
+      const providerName = this.getProviderName();
+      return config[providerName]?.model || `${providerName}-default`;
+    }
+    return this.provider.getModelName();
+  }
+
+  /**
    * Stream a message and call onChunk for each chunk
    */
   async streamMessage(

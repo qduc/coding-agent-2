@@ -5,9 +5,18 @@ import { logger } from '../utils/logger';
 export class GeminiProvider implements LLMProvider {
   private client: any = null;
   private isInitialized = false;
+  private config: any;
+
+  constructor() {
+    this.config = configManager.getConfig() || {};
+  }
 
   getProviderName(): string {
     return 'gemini';
+  }
+
+  getModelName(): string {
+    return this.config.model || 'gemini-1.5-pro';
   }
 
   async initialize(): Promise<boolean> {

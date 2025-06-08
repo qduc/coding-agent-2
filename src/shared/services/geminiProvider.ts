@@ -16,6 +16,11 @@ export class GeminiProvider implements LLMProvider {
     return 'gemini';
   }
 
+  getModelName(): string {
+    const config = configManager.getConfig();
+    return config.model || 'gemini-2.5-flash-preview-05-20';
+  }
+
   /**
    * Initialize Gemini client
    */
