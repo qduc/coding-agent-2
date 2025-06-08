@@ -6,6 +6,8 @@ import { CompletionManager } from '../services/completion/CompletionManager';
 import { ClipboardManager } from '../services/clipboard/ClipboardManager';
 import { InputCallbacks, InputOptions } from '../types';
 import { Agent } from '../../../../shared/core/agent';
+import { toolEventEmitter, ToolEvent } from '../../../../shared/utils/toolEvents';
+import { ToolLogger } from '../../../../shared/utils/toolLogger';
 
 export interface ChatAppProps {
   agent: Agent;
@@ -33,6 +35,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   } | undefined>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [showToolLogs, setShowToolLogs] = useState(true);
 
   const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
     setMessages(prev => [...prev, {
@@ -41,6 +44,30 @@ export const ChatApp: React.FC<ChatAppProps> = ({
       timestamp: new Date(),
     }]);
   }, []);
+
+  // Handle tool events
+  const handleToolEvent = useCallback((event: ToolEvent) => {
+    if (!showToolLogs) return;
+
+    if (event.type === 'tool_call') {
+      const content = ToolLogger.formatToolCallForUI(event.toolName, event.args);
+      addMessage({
+        type: 'tool',
+        content,
+      });
+    } else if (event.type === 'tool_result') {
+      const content = ToolLogger.formatToolResultForUI(
+        event.toolName, 
+        event.success, 
+        event.result, 
+        event.args
+      );
+      addMessage({
+        type: 'tool',
+        content,
+      });
+    }
+  }, [addMessage, showToolLogs]);
 
   const handleExit = useCallback(() => {
     if (onExit) {
@@ -160,6 +187,14 @@ Example Questions:
       : '💬 Your Message (Enter to send, Enter again for multi-line):',
     disabled: isProcessing,
   };
+
+  // Set up tool event listener
+  useEffect(() => {
+    toolEventEmitter.onToolEvent(handleToolEvent);
+    return () => {
+      toolEventEmitter.offToolEvent(handleToolEvent);
+    };
+  }, [handleToolEvent]);
 
   // Set up global exit handler
   useEffect(() => {

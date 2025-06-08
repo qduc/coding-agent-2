@@ -4,7 +4,7 @@ import { MarkdownRenderer } from '../../../../shared/utils/markdown';
 
 export interface Message {
   id: string;
-  type: 'user' | 'agent' | 'system' | 'error';
+  type: 'user' | 'agent' | 'system' | 'error' | 'tool';
   content: string;
   timestamp: Date;
   streaming?: boolean;
@@ -110,6 +110,7 @@ function getMessagePrefix(type: Message['type']): string {
     case 'agent': return '🤖 Agent:';
     case 'system': return 'ℹ️ System:';
     case 'error': return '❌ Error:';
+    case 'tool': return '🔧 Tool:';
     default: return '💬';
   }
 }
@@ -120,6 +121,7 @@ function getMessageColor(type: Message['type']): string {
     case 'agent': return 'cyan';
     case 'system': return 'yellow';
     case 'error': return 'red';
+    case 'tool': return 'magenta';
     default: return 'white';
   }
 }

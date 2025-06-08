@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { logger } from './logger';
+import { toolEventEmitter } from './toolEvents';
 
 /**
  * Tool Logger - Utility for logging tool usage by the LLM
@@ -112,14 +113,8 @@ export class ToolLogger {
    * Log when a tool is being called by the LLM
    */
   static logToolCall(toolName: string, args: any): void {
-    // Only show tool messages in console if tool console logging is enabled
-    if (logger.isToolConsoleEnabled()) {
-      console.log(chalk.blue('🔧 Tool Usage:'), chalk.cyan(toolName));
-      if (args && Object.keys(args).length > 0) {
-        const humanReadableArgs = this.formatArgsForDisplay(toolName, args);
-        console.log(chalk.gray('   Arguments:'), humanReadableArgs);
-      }
-    }
+    // Emit tool event for UI components (like Ink) to handle
+    toolEventEmitter.emitToolCall(toolName, args);
 
     // Always log to structured logger for debugging (goes to file)
     logger.debug(`Tool called: ${toolName}`, { toolName, args }, 'TOOL');
@@ -129,11 +124,8 @@ export class ToolLogger {
    * Log the result of a tool execution
    */
   static logToolResult(toolName: string, success: boolean, result?: any, args?: any): void {
-    // Only show tool messages in console if tool console logging is enabled
-    if (logger.isToolConsoleEnabled()) {
-      const status = success ? chalk.green('✅') : chalk.red('❌');
-      console.log(status, chalk.cyan(toolName), success ? 'completed' : 'failed');
-    }
+    // Emit tool event for UI components (like Ink) to handle
+    toolEventEmitter.emitToolResult(toolName, success, result, args);
 
     // Always log to structured logger for debugging (goes to file)
     if (success) {
@@ -142,14 +134,30 @@ export class ToolLogger {
       const error = result instanceof Error ? result : undefined;
       logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');
     }
+  }
 
-    // Only show result metrics in console if tool console logging is enabled
-    if (result && logger.isToolConsoleEnabled()) {
-      const metrics = this.getResultMetrics(toolName, result, args);
-      if (metrics) {
-        console.log(chalk.gray('   Result:'), metrics);
-      }
+  /**
+   * Format tool call for UI display
+   */
+  static formatToolCallForUI(toolName: string, args: any): string {
+    const humanReadableArgs = this.formatArgsForDisplay(toolName, args);
+    return `🔧 Tool Usage: ${toolName}${humanReadableArgs ? ` - ${humanReadableArgs}` : ''}`;
+  }
+
+  /**
+   * Format tool result for UI display
+   */
+  static formatToolResultForUI(toolName: string, success: boolean, result?: any, args?: any): string {
+    const status = success ? '✅' : '❌';
+    const statusText = success ? 'completed' : 'failed';
+    const metrics = result ? this.getResultMetrics(toolName, result, args) : null;
+    
+    let message = `${status} ${toolName} ${statusText}`;
+    if (metrics) {
+      message += ` - ${metrics}`;
     }
+    
+    return message;
   }
 
   /**
@@ -157,7 +165,7 @@ export class ToolLogger {
    */
   private static getResultMetrics(toolName: string, result: any, args?: any): string | null {
     if (result instanceof Error) {
-      return chalk.red(result.message);
+      return result.message;
     }
 
     // Handle file operation tools specifically
