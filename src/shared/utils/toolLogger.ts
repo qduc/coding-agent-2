@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { logger } from './logger';
 import { toolEventEmitter } from './toolEvents';
+import { configManager } from '../core/config';
 
 /**
  * Tool Logger - Utility for logging tool usage by the LLM
@@ -137,27 +138,166 @@ export class ToolLogger {
   }
 
   /**
-   * Format tool call for UI display
+   * Format tool call for UI display (respects user's display mode preference)
    */
   static formatToolCallForUI(toolName: string, args: any): string {
-    const humanReadableArgs = this.formatArgsForDisplay(toolName, args);
-    return `🔧 Tool Usage: ${toolName}${humanReadableArgs ? ` - ${humanReadableArgs}` : ''}`;
+    const config = configManager.getConfig();
+    const displayMode = config.toolDisplayMode || 'condensed';
+    
+    switch (displayMode) {
+      case 'off':
+        return ''; // Don't show tool calls at all
+      
+      case 'minimal':
+        return toolName; // Just tool name
+      
+      case 'condensed':
+        return this.formatToolOperationCondensed(toolName, args); // New streamlined format
+      
+      case 'standard':
+        const humanReadableArgs = this.formatArgsForDisplay(toolName, args);
+        return `🔧 ${toolName}${humanReadableArgs ? ` - ${humanReadableArgs}` : ''}`;
+      
+      case 'verbose':
+      default:
+        const verboseArgs = this.formatArgsForDisplay(toolName, args);
+        return `🔧 Tool Usage: ${toolName}${verboseArgs ? ` - ${verboseArgs}` : ''}`;
+    }
   }
 
   /**
-   * Format tool result for UI display
+   * Format tool result for UI display (respects user's display mode preference)
    */
   static formatToolResultForUI(toolName: string, success: boolean, result?: any, args?: any): string {
-    const status = success ? '✅' : '❌';
-    const statusText = success ? 'completed' : 'failed';
-    const metrics = result ? this.getResultMetrics(toolName, result, args) : null;
+    const config = configManager.getConfig();
+    const displayMode = config.toolDisplayMode || 'condensed';
     
-    let message = `${status} ${toolName} ${statusText}`;
-    if (metrics) {
-      message += ` - ${metrics}`;
+    switch (displayMode) {
+      case 'off':
+        return ''; // Don't show tool results at all
+      
+      case 'minimal':
+        return success ? '✓' : '✗'; // Just status symbol
+      
+      case 'condensed':
+        return this.formatToolOperationCondensed(toolName, args, success, result); // Complete operation in one line
+      
+      case 'standard':
+        const status = success ? '✅' : '❌';
+        const statusText = success ? 'completed' : 'failed';
+        const metrics = result ? this.getResultMetrics(toolName, result, args) : null;
+        
+        let message = `${status} ${toolName} ${statusText}`;
+        if (metrics) {
+          message += ` - ${metrics}`;
+        }
+        return message;
+      
+      case 'verbose':
+      default:
+        const verboseStatus = success ? '✅' : '❌';
+        const verboseStatusText = success ? 'completed' : 'failed';
+        const verboseMetrics = result ? this.getResultMetrics(toolName, result, args) : null;
+        
+        let verboseMessage = `${verboseStatus} ${toolName} ${verboseStatusText}`;
+        if (verboseMetrics) {
+          verboseMessage += ` - ${verboseMetrics}`;
+        }
+        return verboseMessage;
+    }
+  }
+
+  /**
+   * Format tool operation as a single condensed line (new streamlined format)
+   */
+  static formatToolOperationCondensed(toolName: string, args: any, success?: boolean, result?: any): string {
+    const essentialContext = this.getEssentialContext(toolName, args);
+    const outcome = success !== undefined ? this.getCondensedOutcome(toolName, success, result, args) : '';
+    
+    if (success === undefined) {
+      // Tool call only
+      return `${toolName}${essentialContext}`;
+    } else {
+      // Complete operation
+      const status = success ? '✓' : '✗';
+      return `${status} ${toolName}${essentialContext}${outcome}`;
+    }
+  }
+
+  /**
+   * Get essential context for a tool call (most important args only)
+   */
+  private static getEssentialContext(toolName: string, args: any): string {
+    if (!args || typeof args !== 'object') {
+      return '';
+    }
+
+    const toolLower = toolName.toLowerCase();
+    
+    // Show only the most essential parameter for each tool type
+    if (toolLower.includes('read') && args.path) {
+      return ` ${args.path}`;
+    } else if (toolLower.includes('write') && args.path) {
+      return ` ${args.path}`;
+    } else if (toolLower.includes('bash') && args.command) {
+      const cmd = args.command.length > 30 ? args.command.substring(0, 30) + '…' : args.command;
+      return ` "${cmd}"`;
+    } else if ((toolLower.includes('glob') || toolLower.includes('grep')) && args.pattern) {
+      return ` "${args.pattern}"`;
+    } else if (toolLower.includes('ls') && args.path) {
+      return ` ${args.path}`;
     }
     
-    return message;
+    // For other tools, try to find the most important parameter
+    const importantKeys = ['path', 'file', 'command', 'pattern', 'query', 'name'];
+    for (const key of importantKeys) {
+      if (args[key]) {
+        const value = typeof args[key] === 'string' ? args[key] : String(args[key]);
+        const truncated = value.length > 30 ? value.substring(0, 30) + '…' : value;
+        return ` ${truncated}`;
+      }
+    }
+    
+    return '';
+  }
+
+  /**
+   * Get condensed outcome for tool result (most important info only)
+   */
+  private static getCondensedOutcome(toolName: string, success: boolean, result?: any, args?: any): string {
+    if (!success) {
+      return ' failed';
+    }
+
+    const toolLower = toolName.toLowerCase();
+    
+    // Return meaningful outcome without emoji clutter
+    if (toolLower.includes('write')) {
+      const lines = args?.content ? args.content.split('\n').length : 0;
+      return lines > 0 ? ` (${lines} lines)` : '';
+    } else if (toolLower.includes('read')) {
+      if (typeof result === 'object' && result?.lineCount) {
+        return ` (${result.lineCount} lines)`;
+      } else if (typeof result === 'string') {
+        const lines = result.split('\n').length;
+        return ` (${lines} lines)`;
+      }
+    } else if (toolLower.includes('bash')) {
+      if (typeof result === 'object' && result?.exitCode !== undefined) {
+        return result.exitCode === 0 ? '' : ` (exit ${result.exitCode})`;
+      }
+    } else if (toolLower.includes('glob') || toolLower.includes('ls')) {
+      if (Array.isArray(result)) {
+        return ` (${result.length} items)`;
+      }
+    } else if (toolLower.includes('grep')) {
+      if (typeof result === 'string') {
+        const matches = result.split('\n').filter(line => line.trim()).length;
+        return ` (${matches} matches)`;
+      }
+    }
+    
+    return '';
   }
 
   /**

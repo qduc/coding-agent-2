@@ -8,6 +8,7 @@ import { InputCallbacks, InputOptions } from '../types';
 import { Agent } from '../../../../shared/core/agent';
 import { toolEventEmitter, ToolEvent } from '../../../../shared/utils/toolEvents';
 import { ToolLogger } from '../../../../shared/utils/toolLogger';
+import { configManager } from '../../../../shared/core/config';
 
 export interface ChatAppProps {
   agent: Agent;
@@ -36,6 +37,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showToolLogs, setShowToolLogs] = useState(true);
+  const [pendingToolCalls, setPendingToolCalls] = useState<Map<string, { toolName: string, args: any }>>(new Map());
 
   const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
     setMessages(prev => [...prev, {
@@ -49,25 +51,70 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const handleToolEvent = useCallback((event: ToolEvent) => {
     if (!showToolLogs) return;
 
+    const config = configManager.getConfig();
+    const displayMode = config.toolDisplayMode || 'condensed';
+
     if (event.type === 'tool_call') {
-      const content = ToolLogger.formatToolCallForUI(event.toolName, event.args);
-      addMessage({
-        type: 'tool',
-        content,
-      });
+      // For condensed mode, store the tool call but don't display it yet
+      if (displayMode === 'condensed') {
+        const toolKey = `${event.toolName}_${Date.now()}`;
+        setPendingToolCalls(prev => new Map(prev).set(toolKey, { 
+          toolName: event.toolName, 
+          args: event.args 
+        }));
+      } else {
+        // For other modes, show tool calls immediately
+        const content = ToolLogger.formatToolCallForUI(event.toolName, event.args);
+        if (content.trim()) {
+          addMessage({
+            type: 'tool',
+            content,
+          });
+        }
+      }
     } else if (event.type === 'tool_result') {
-      const content = ToolLogger.formatToolResultForUI(
-        event.toolName, 
-        event.success, 
-        event.result, 
-        event.args
-      );
-      addMessage({
-        type: 'tool',
-        content,
-      });
+      if (displayMode === 'condensed') {
+        // For condensed mode, show the complete operation in one line
+        const content = ToolLogger.formatToolOperationCondensed(
+          event.toolName, 
+          event.args, 
+          event.success, 
+          event.result
+        );
+        if (content.trim()) {
+          addMessage({
+            type: 'tool',
+            content,
+          });
+        }
+        // Clean up pending tool call (find by tool name, could be improved with better tracking)
+        setPendingToolCalls(prev => {
+          const newMap = new Map(prev);
+          for (const [key, value] of newMap.entries()) {
+            if (value.toolName === event.toolName) {
+              newMap.delete(key);
+              break;
+            }
+          }
+          return newMap;
+        });
+      } else {
+        // For other modes, show tool results normally
+        const content = ToolLogger.formatToolResultForUI(
+          event.toolName, 
+          event.success, 
+          event.result, 
+          event.args
+        );
+        if (content.trim()) {
+          addMessage({
+            type: 'tool',
+            content,
+          });
+        }
+      }
     }
-  }, [addMessage, showToolLogs]);
+  }, [addMessage, showToolLogs, setPendingToolCalls]);
 
   const handleExit = useCallback(() => {
     if (onExit) {

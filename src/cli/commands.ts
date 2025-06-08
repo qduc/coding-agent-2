@@ -21,6 +21,7 @@ export function configureCommands(program: Command, version: string): void {
     .option('-v, --verbose', 'Enable verbose output')
     .option('--no-color', 'Disable colored output')
     .option('--streaming', 'Enable response streaming (real-time output)')
+    .option('--tool-display <mode>', 'Set tool display mode: off, minimal, condensed, standard, verbose')
     .option('--setup', 'Run configuration setup wizard')
     .option('--config', 'Show current configuration')
     .helpOption('-h, --help', 'Display help information')
@@ -40,6 +41,21 @@ export function configureCommands(program: Command, version: string): void {
       if (options.config) {
         configManager.displayConfig();
         return;
+      }
+
+      // Handle tool display mode override
+      if (options.toolDisplay) {
+        const validModes = ['off', 'minimal', 'condensed', 'standard', 'verbose'];
+        if (!validModes.includes(options.toolDisplay)) {
+          console.error(chalk.red('Invalid tool display mode:'), options.toolDisplay);
+          console.log(chalk.yellow('Valid modes:'), validModes.join(', '));
+          process.exit(1);
+        }
+        
+        // Override tool display mode for this session
+        await configManager.saveConfig({ toolDisplayMode: options.toolDisplay });
+        console.log(chalk.blue('Tool display mode set to:'), chalk.white(options.toolDisplay));
+        console.log();
       }
 
       // Validate configuration before proceeding

@@ -16,6 +16,8 @@ export interface Config {
   logToolUsage?: boolean;
   streaming?: boolean;
   useResponsesApi?: boolean; // Use OpenAI Responses API for reasoning models
+  // Tool display configuration
+  toolDisplayMode?: 'off' | 'minimal' | 'condensed' | 'standard' | 'verbose'; // Controls tool call display level
   // Logging configuration
   logLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
   enableFileLogging?: boolean;
@@ -50,6 +52,8 @@ export class ConfigManager {
       logToolUsage: true,
       streaming: false,
       useResponsesApi: false, // Enable automatically for reasoning models, or set to true to force
+      // Tool display configuration
+      toolDisplayMode: 'condensed', // Default to new condensed format
       // Default logging configuration
       logLevel: 'info',
       enableFileLogging: true,
@@ -122,6 +126,12 @@ export class ConfigManager {
     }
     if (process.env.CODING_AGENT_TOOL_CONSOLE_LOGGING) {
       envConfig.enableToolConsoleLogging = process.env.CODING_AGENT_TOOL_CONSOLE_LOGGING === 'true';
+    }
+    if (process.env.CODING_AGENT_TOOL_DISPLAY_MODE) {
+      const mode = process.env.CODING_AGENT_TOOL_DISPLAY_MODE as 'off' | 'minimal' | 'condensed' | 'standard' | 'verbose';
+      if (['off', 'minimal', 'condensed', 'standard', 'verbose'].includes(mode)) {
+        envConfig.toolDisplayMode = mode;
+      }
     }
 
     const finalConfig = { ...defaultConfig, ...fileConfig, ...envConfig };
@@ -308,6 +318,7 @@ export class ConfigManager {
     }
 
     console.log(`Tool Logging: ${config.logToolUsage ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
+    console.log(`Tool Display: ${chalk.white(config.toolDisplayMode || 'condensed')}`);
     console.log(`Streaming: ${config.streaming ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
     console.log(`Config file: ${chalk.gray(this.configPath)}`);
     console.log();
