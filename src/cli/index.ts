@@ -22,9 +22,6 @@ const version = packageJson.version;
  */
 async function main() {
   try {
-    // Display welcome banner
-    displayBanner();
-
     // Configure commander with all available commands
     configureCommands(program, version);
 

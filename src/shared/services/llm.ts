@@ -20,7 +20,6 @@ export class LLMService implements LLMProvider {
       const config = configManager.getConfig();
       const providerName = config.provider || 'openai';
       this.provider = await createProvider(providerName);
-      logger.info('LLM service initialized successfully', {}, 'LLMService');
       return true;
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error('Unknown error');

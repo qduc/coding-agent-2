@@ -25,6 +25,5 @@ export async function createProvider(provider: string) {
     throw new Error(`Failed to initialize ${provider} provider`);
   }
 
-  logger.info(`Successfully created ${provider} provider`, {}, 'ProviderFactory');
   return providerInstance;
 }

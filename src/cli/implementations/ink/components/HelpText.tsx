@@ -10,14 +10,14 @@ export interface HelpTextProps {
 export const HelpText: React.FC<HelpTextProps> = ({ state }) => {
   const getMessage = () => {
     if (state.pasteIndicator) {
-      return '📋 Content pasted successfully! • Enter to send • Esc to cancel';
+      return 'Enter to send • Esc to cancel';
     }
     
     if (state.isMultilineMode) {
-      return '💡 Tip: Use @ for files, / for commands • Ctrl+V to paste • Ctrl+Enter to send • Esc to cancel';
+      return 'Ctrl+Enter to send • Esc to cancel';
     }
     
-    return '💡 Tip: Use @ for files, / for commands • Ctrl+V to paste • Enter to send (Enter again for multi-line) • Esc to cancel';
+    return '@ for files • / for commands • Enter to send';
   };
 
   return (

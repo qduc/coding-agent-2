@@ -165,36 +165,31 @@ export class BoxRenderer {
     
     // Process content with cursor positioning
     const contentWithCursor = showCursor ? this.insertCursor(content, cursorPosition) : content;
-    const lines = contentWithCursor.split('\n');
     
     // Create content lines with proper wrapping and padding
     const contentLines: string[] = [];
-    const contentWidth = boxWidth - 4; // Account for "│ " and " │"
+    const contentWidth = boxWidth - 2; // Account for "│" and "│"
     
-    lines.forEach((line, lineIndex) => {
-      if (line.length <= contentWidth) {
-        // Line fits in one row
-        contentLines.push(chalk.gray('│ ') + line.padEnd(contentWidth) + chalk.gray(' │'));
-      } else {
-        // Line needs wrapping
-        let remaining = line;
-        while (remaining.length > 0) {
-          const chunk = remaining.substring(0, contentWidth);
-          contentLines.push(chalk.gray('│ ') + chunk.padEnd(contentWidth) + chalk.gray(' │'));
-          remaining = remaining.substring(contentWidth);
-        }
-      }
+    // Use ANSI-aware wrapping for text with cursor
+    const wrappedLines = this.wrapTextWithCursor(contentWithCursor, contentWidth);
+    
+    wrappedLines.forEach(line => {
+      // Pad each line to the full content width, being careful with ANSI codes
+      const displayWidth = this.getDisplayWidth(line);
+      const padding = Math.max(0, contentWidth - displayWidth);
+      const paddedLine = line + ' '.repeat(padding);
+      contentLines.push(chalk.gray('│') + paddedLine + chalk.gray('│'));
     });
     
     // Add placeholder text if content is empty
     if (contentLines.length === 0 && options.placeholder) {
       const placeholderText = chalk.gray.dim(options.placeholder);
-      contentLines.push(chalk.gray('│ ') + placeholderText.padEnd(contentWidth) + chalk.gray(' │'));
+      contentLines.push(chalk.gray('│') + placeholderText.padEnd(contentWidth) + chalk.gray('│'));
     }
     
     // Ensure minimum height
     while (contentLines.length < minHeight) {
-      contentLines.push(chalk.gray('│ ') + ''.padEnd(contentWidth) + chalk.gray(' │'));
+      contentLines.push(chalk.gray('│') + ''.padEnd(contentWidth) + chalk.gray('│'));
     }
     
     const bottomBorder = chalk.cyan('└' + '─'.repeat(boxWidth - 2) + '┘');
@@ -208,10 +203,82 @@ export class BoxRenderer {
    * Insert cursor character at the specified position in text
    */
   private static insertCursor(text: string, position: number): string {
-    const cursor = chalk.bgWhite.black('▌');
+    const cursor = chalk.bgWhite(' ');
     if (position >= text.length) {
       return text + cursor;
     }
     return text.substring(0, position) + cursor + text.substring(position);
+  }
+
+  /**
+   * Wrap text considering ANSI escape codes and cursor position
+   */
+  private static wrapTextWithCursor(text: string, maxWidth: number): string[] {
+    const lines = text.split('\n');
+    const wrappedLines: string[] = [];
+    
+    lines.forEach(line => {
+      if (this.getDisplayWidth(line) <= maxWidth) {
+        wrappedLines.push(line);
+      } else {
+        // Split line while preserving ANSI codes and cursor
+        let remaining = line;
+        let currentPos = 0;
+        
+        while (remaining.length > 0) {
+          let chunkEnd = 0;
+          let displayWidth = 0;
+          
+          // Find where to break the line considering display width
+          while (chunkEnd < remaining.length && displayWidth < maxWidth) {
+            const char = remaining[chunkEnd];
+            
+            // Check if we're at the start of an ANSI sequence
+            if (char === '\u001b' && remaining[chunkEnd + 1] === '[') {
+              // Skip the entire ANSI sequence
+              let ansiEnd = chunkEnd + 2;
+              while (ansiEnd < remaining.length && !/[a-zA-Z]/.test(remaining[ansiEnd])) {
+                ansiEnd++;
+              }
+              ansiEnd++; // Include the final character
+              chunkEnd = ansiEnd;
+              continue;
+            }
+            
+            // Calculate display width for this character
+            const code = char.codePointAt(0);
+            const charWidth = (code && (
+              (code >= 0x1F300 && code <= 0x1FAFF) || // Emoji range
+              (code >= 0x1100 && code <= 0x115F) || // Hangul Jamo init. consonants
+              (code >= 0x2E80 && code <= 0xA4CF) || // CJK ... Yi
+              (code >= 0xAC00 && code <= 0xD7A3) || // Hangul Syllables
+              (code >= 0xF900 && code <= 0xFAFF) || // CJK Compatibility Ideographs
+              (code >= 0xFE10 && code <= 0xFE19) || // Vertical forms
+              (code >= 0xFE30 && code <= 0xFE6F) || // CJK Compatibility Forms
+              (code >= 0xFF00 && code <= 0xFF60) || // Fullwidth Forms
+              (code >= 0xFFE0 && code <= 0xFFE6)
+            )) ? 2 : 1;
+            
+            if (displayWidth + charWidth > maxWidth) {
+              break;
+            }
+            
+            displayWidth += charWidth;
+            chunkEnd++;
+          }
+          
+          // If we couldn't fit any characters, take at least one
+          if (chunkEnd === 0) {
+            chunkEnd = 1;
+          }
+          
+          const chunk = remaining.substring(0, chunkEnd);
+          wrappedLines.push(chunk);
+          remaining = remaining.substring(chunkEnd);
+        }
+      }
+    });
+    
+    return wrappedLines;
   }
 }

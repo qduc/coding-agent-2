@@ -10,10 +10,10 @@ export interface InputBoxProps {
 
 export const InputBox: React.FC<InputBoxProps> = ({ state, options = {} }) => {
   const {
-    maxWidth = Math.min(80, (process.stdout.columns || 80) - 4),
-    minHeight = state.isMultilineMode ? 5 : 3,
+    maxWidth = (process.stdout.columns || 80) - 2,
+    minHeight = state.isMultilineMode ? 4 : 2,
     placeholder = state.value === '' ?
-      'Type your message here... (@ for files, / for commands, Ctrl+V to paste)' :
+      'Type your message... (@ for files, / for commands)' :
       undefined,
     showCursor = !options.disabled,
     disabled = false,
@@ -25,14 +25,14 @@ export const InputBox: React.FC<InputBoxProps> = ({ state, options = {} }) => {
     }
 
     if (state.pasteIndicator) {
-      return '📋 Pasted! (Enter or Ctrl+Enter to send)';
+      return '📋 Pasted!';
     }
 
     if (state.isMultilineMode) {
-      return '💬 Multi-line Message (Ctrl+Enter to send)';
+      return '💬 Multi-line (Ctrl+Enter to send)';
     }
 
-    return options.prompt || '💬 Your Message (Enter to send, Enter again for multi-line)';
+    return options.prompt || '💬 Message';
   };
 
   const inputBox = BoxRenderer.createInputBox(

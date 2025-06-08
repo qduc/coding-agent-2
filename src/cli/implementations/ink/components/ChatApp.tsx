@@ -217,14 +217,12 @@ Example Questions:
           showWelcome={showWelcome}
         />
       </Box>
-      <Box flexDirection="column" borderStyle="single" borderColor="gray" padding={1}>
-        <InputComponent
-          callbacks={inputCallbacks}
-          options={inputOptions}
-          completionManager={completionManager}
-          clipboardManager={clipboardManager}
-        />
-      </Box>
+      <InputComponent
+        callbacks={inputCallbacks}
+        options={inputOptions}
+        completionManager={completionManager}
+        clipboardManager={clipboardManager}
+      />
     </Box>
   );
 };
