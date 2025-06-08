@@ -57,6 +57,8 @@ export class ToolOrchestrator {
         this.llmService,
         this.toolExecutionHandler
       );
+      // Also initialize system prompt builder with LLM service
+      this.initializeSystemPromptBuilder();
     }
   }
 
@@ -80,6 +82,15 @@ export class ToolOrchestrator {
    */
   setProjectContext(projectContext: ProjectDiscoveryResult): void {
     this.systemPromptBuilder.setProjectContext(projectContext);
+  }
+
+  /**
+   * Initialize system prompt builder with LLM service
+   */
+  private initializeSystemPromptBuilder(): void {
+    if (this.llmService.isReady()) {
+      this.systemPromptBuilder.setLLMService(this.llmService);
+    }
   }
 
   /**
@@ -112,9 +123,10 @@ export class ToolOrchestrator {
         console.log(chalk.blue('🔄 Processing with LLM...'));
       }
 
-      // Build messages for this request
-      const systemMessage = this.systemPromptBuilder.createSystemMessage(
-        this.toolExecutionHandler.getRegisteredTools()
+      // Build messages for this request with AI-powered task-aware context
+      const systemMessage = await this.systemPromptBuilder.createSystemMessage(
+        this.toolExecutionHandler.getRegisteredTools(),
+        userInput
       );
       const messages = this.conversationManager.buildMessages(systemMessage);
 
