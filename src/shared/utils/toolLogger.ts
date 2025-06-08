@@ -273,6 +273,9 @@ export class ToolLogger {
     
     // Return meaningful outcome without emoji clutter
     if (toolLower.includes('write')) {
+      if (typeof result === 'object' && result?.linesChanged) {
+        return ` (${result.linesChanged} lines changed)`;
+      }
       const lines = args?.content ? args.content.split('\n').length : 0;
       return lines > 0 ? ` (${lines} lines)` : '';
     } else if (toolLower.includes('read')) {
@@ -311,20 +314,15 @@ export class ToolLogger {
     // Handle file operation tools specifically
     const toolLower = toolName.toLowerCase();
     
-    // Write tool - show bytes written and lines
+    // Write tool - show lines changed
     if (toolLower.includes('write')) {
       // Handle WriteResult object
-      if (typeof result === 'object' && result !== null && 'bytesWritten' in result) {
-        const bytes = result.bytesWritten || 0;
+      if (typeof result === 'object' && result !== null && 'linesChanged' in result) {
+        const linesChanged = result.linesChanged || 0;
         const created = result.created ? 'created' : 'modified';
         const mode = result.mode || 'write';
-        const lines = args?.content ? args.content.split('\n').length : 0;
         
-        if (lines > 0) {
-          return `✏️ File ${created}: ${lines} lines, ${bytes} bytes (${mode})`;
-        } else {
-          return `✏️ File ${created}: ${bytes} bytes (${mode})`;
-        }
+        return `✏️ File ${created}: ${linesChanged} lines changed (${mode})`;
       }
       
       // Fallback for string results
