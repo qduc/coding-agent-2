@@ -23,7 +23,7 @@ export interface WriteParams {
 
 export interface WriteResult {
   filePath: string;
-  bytesWritten: number;
+  linesChanged: number;
   created: boolean;
   backupPath?: string;
   mode: 'create' | 'patch';
@@ -125,6 +125,7 @@ export class WriteTool extends BaseTool {
       let finalContent: string;
       let mode: 'create' | 'patch';
       let contentSize: number;
+      let linesChanged: number;
 
       if (content !== undefined) {
         // Full content write
@@ -144,6 +145,8 @@ export class WriteTool extends BaseTool {
         }
 
         finalContent = content;
+        // For full content writes, count total lines
+        linesChanged = content.split('\n').length;
       } else {
         // Diff mode
         mode = 'patch';
@@ -158,7 +161,9 @@ export class WriteTool extends BaseTool {
         // Apply unified diff
         const currentContent = await fs.readFile(absolutePath, 'utf8');
         try {
-          finalContent = this.applyDiff(currentContent, diff!);
+          const diffResult = this.applyDiff(currentContent, diff!);
+          finalContent = diffResult.content;
+          linesChanged = diffResult.linesChanged;
         } catch (error) {
           if (error instanceof ToolError) throw error;
           throw new ToolError(
@@ -180,7 +185,7 @@ export class WriteTool extends BaseTool {
 
       // We always use atomic writes, so no backup is needed
       const shouldBackup = false;
-      return await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, fileExists, contentSize);
+      return await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, fileExists, linesChanged);
     } catch (error) {
       if (error instanceof ToolError) throw error;
       throw new ToolError(
@@ -258,7 +263,7 @@ export class WriteTool extends BaseTool {
     mode: 'create' | 'patch',
     shouldBackup: boolean,
     fileExists: boolean,
-    contentSize: number
+    linesChanged: number
   ): Promise<ToolResult> {
     let backupPath: string | undefined;
     let tempPath: string | undefined;
@@ -274,14 +279,12 @@ export class WriteTool extends BaseTool {
         }
       }
 
-      let bytesWritten = 0;
       const created = !fileExists;
 
       // Always use atomic write for safety
       tempPath = `${absolutePath}.tmp.${Date.now()}.${process.pid}`;
       await fs.writeFile(tempPath, content, encoding);
       await fs.move(tempPath, absolutePath, { overwrite: true });
-      bytesWritten = contentSize;
       tempPath = undefined; // Successfully moved, no cleanup needed
 
       // Clean up backup if everything succeeded and it was temporary
@@ -295,7 +298,7 @@ export class WriteTool extends BaseTool {
 
       const result: WriteResult = {
         filePath: absolutePath,
-        bytesWritten,
+        linesChanged,
         created,
         mode,
         ...(backupPath && shouldBackup && { backupPath })
@@ -303,7 +306,7 @@ export class WriteTool extends BaseTool {
 
       return this.createSuccessResult(result, {
         operation: mode,
-        fileSize: bytesWritten,
+        linesChanged,
         encoding
       });
 
@@ -341,7 +344,7 @@ export class WriteTool extends BaseTool {
   /**
    * Apply unified diff to existing content
    */
-  private applyDiff(currentContent: string, diff: string): string {
+  private applyDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     // Split the current content and the diff into lines
     const originalLines = currentContent.split('\n');
     const diffLines = diff.split('\n');
@@ -357,6 +360,8 @@ export class WriteTool extends BaseTool {
 
     const resultLines: string[] = [];
     let currentLineIndex = 0;  // current position in originalLines
+    let linesAdded = 0;
+    let linesRemoved = 0;
 
     let i = 0;
     while (i < diffLines.length) {
@@ -439,9 +444,11 @@ export class WriteTool extends BaseTool {
             }
             currentLineIndex++;
             lineCountInHunk++;
+            linesRemoved++;
           } else if (hunkLine.startsWith('+')) {
             // Addition: add to result
             resultLines.push(hunkLine.substring(1));
+            linesAdded++;
           } else {
             throw new ToolError(
               `Invalid diff line: ${hunkLine}`,
@@ -468,6 +475,10 @@ export class WriteTool extends BaseTool {
       currentLineIndex++;
     }
 
-    return resultLines.join('\n');
+    const linesChanged = linesAdded + linesRemoved;
+    return {
+      content: resultLines.join('\n'),
+      linesChanged
+    };
   }
 }
