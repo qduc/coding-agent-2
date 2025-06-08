@@ -27,7 +27,7 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
   const renderMessage = (message: Message) => {
     const prefix = getMessagePrefix(message.type);
     const color = getMessageColor(message.type);
-    
+
     return (
       <Box key={message.id} flexDirection="column" marginBottom={1}>
         <Box>
@@ -46,7 +46,7 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
 
   const renderStreamingMessage = () => {
     if (!streamingMessage) return null;
-    
+
     return (
       <Box flexDirection="column" marginBottom={1}>
         <Box>
@@ -60,7 +60,7 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
 
   const renderWelcome = () => {
     if (!showWelcome) return null;
-    
+
     return (
       <Box flexDirection="column" marginBottom={2}>
         <Box borderStyle="round" borderColor="cyan" padding={1}>
@@ -91,13 +91,16 @@ const MessageContent: React.FC<{ content: string; type: Message['type'] }> = ({ 
   // For agent messages, try to render markdown if detected
   if (type === 'agent' && hasMarkdown(content)) {
     try {
-      // For now, render as plain text in Ink - we could enhance this later
-      return <Text>{content}</Text>;
-    } catch {
+      const renderedMarkdown = MarkdownRenderer.render(content);
+      // Ink's Text component can handle ANSI escape codes from chalk
+      return <Text>{renderedMarkdown}</Text>;
+    } catch (error) {
+      // Fallback to plain text if markdown rendering fails
+      console.warn('Markdown rendering failed:', error);
       return <Text>{content}</Text>;
     }
   }
-  
+
   return <Text>{content}</Text>;
 };
 
@@ -122,9 +125,19 @@ function getMessageColor(type: Message['type']): string {
 }
 
 function hasMarkdown(content: string): boolean {
+  // Enhanced detection for more markdown patterns
   return /[#*`_\[\]()-]/.test(content) ||
          content.includes('```') ||
          content.includes('**') ||
          content.includes('##') ||
-         content.includes('- ');
+         content.includes('- ') ||
+         content.includes('* ') ||
+         content.includes('+ ') ||
+         content.includes('> ') ||
+         /^\d+\. /.test(content) ||
+         content.includes('---') ||
+         content.includes('___') ||
+         /^\s*[-*+]\s/.test(content) ||
+         /^\s*\d+\.\s/.test(content) ||
+         /^\s*#{1,6}\s/.test(content);
 }
