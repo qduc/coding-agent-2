@@ -20,7 +20,7 @@ const mockAnthropicSendMessage = jest.fn();
 const mockAnthropicSendMessageWithTools = jest.fn();
 const mockAnthropicStreamMessageWithTools = jest.fn();
 
-jest.mock('./anthropicProvider', () => ({
+jest.mock('./providers/AnthropicProvider', () => ({
   AnthropicProvider: jest.fn().mockImplementation(() => ({
     initialize: mockAnthropicInitialize,
     isReady: mockAnthropicIsReady,

@@ -4,15 +4,15 @@ export async function createProvider(provider: string) {
   let providerInstance;
   switch (provider) {
     case 'openai':
-      const { OpenAIProvider } = await import('../providers/OpenAIProvider');
+      const { OpenAIProvider } = await import('../services/providers/OpenAIProvider');
       providerInstance = new OpenAIProvider();
       break;
     case 'anthropic':
-      const { AnthropicProvider } = await import('../services/anthropicProvider');
+      const { AnthropicProvider } = await import('../services/providers/AnthropicProvider');
       providerInstance = new AnthropicProvider();
       break;
     case 'gemini':
-      const { GeminiProvider } = await import('../services/geminiProvider');
+      const { GeminiProvider } = await import('../services/providers/GeminiProvider');
       providerInstance = new GeminiProvider();
       break;
     default:

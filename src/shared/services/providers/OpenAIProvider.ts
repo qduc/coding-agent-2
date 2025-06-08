@@ -1,36 +1,28 @@
 import OpenAI from 'openai';
-import { LLMProvider, Message, StreamingResponse, FunctionCallResponse, ResponsesApiResponse, ResponsesInput, ReasoningConfig } from '../types/llm';
-import {ConfigManager, configManager, Config} from '../core/config';
-import { logger } from '../utils/logger';
-import { ToolLogger } from '../utils/toolLogger';
-import { SchemaAdapter } from '../services/schemaAdapter';
+import { BaseLLMProvider } from '../BaseLLMProvider';
+import { LLMProvider, Message, StreamingResponse, FunctionCallResponse, ResponsesApiResponse, ResponsesInput, ReasoningConfig } from '../../types/llm';
+import { logger } from '../../utils/logger';
+import { SchemaAdapter } from '../schemaAdapter';
 
-export class OpenAIProvider implements LLMProvider {
+export class OpenAIProvider extends BaseLLMProvider {
   private openai: OpenAI | null = null;
-  private initialized = false;
   private previousResponseId: string | null = null; // For multi-turn Responses API
-  private config: Config;
-
-  constructor() {
-    this.config = configManager.getConfig();
-  }
 
   getProviderName(): string {
     return 'openai';
   }
 
-  getModelName(): string {
-    return this.config.model || 'gpt-4';
+  protected getDefaultModel(): string {
+    return 'gpt-4';
   }
 
   async initialize(): Promise<boolean> {
     try {
-      this.config = configManager.getConfig();
+      this.refreshConfig();
       const isOpenRouter = this.config.openaiApiBaseUrl?.includes('openrouter.ai');
       const apiKey = isOpenRouter ? process.env.OPENROUTER_API_KEY : this.config.openaiApiKey;
 
-      if (!apiKey) {
-        logger.error(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} API key not configured`, undefined, {}, 'OpenAIProvider');
+      if (!this.validateApiKey(apiKey, isOpenRouter ? 'OPENROUTER_API_KEY' : 'OPENAI_API_KEY')) {
         return false;
       }
 
@@ -39,7 +31,7 @@ export class OpenAIProvider implements LLMProvider {
         : (this.config.openaiApiBaseUrl || 'https://api.openai.com/v1');
 
       this.openai = new OpenAI({
-        apiKey,
+        apiKey: apiKey!,
         baseURL,
         defaultHeaders: isOpenRouter ? {
           'HTTP-Referer': 'https://github.com/qduc/coding-agent',
@@ -60,7 +52,7 @@ export class OpenAIProvider implements LLMProvider {
     }
   }
 
-  private async testConnection(isOpenRouter: boolean): Promise<void> {
+  protected async testConnection(isOpenRouter: boolean = false): Promise<void> {
     if (!this.openai) throw new Error('OpenAI client not initialized');
 
     try {
@@ -81,13 +73,10 @@ export class OpenAIProvider implements LLMProvider {
     }
   }
 
-  isReady(): boolean {
-    return this.initialized && this.openai !== null;
-  }
-
   async sendMessage(messages: Message[]): Promise<string> {
-    const config = configManager.getConfig();
-    const model = config.model || 'gpt-4o-2024-11-20';
+    this.ensureInitialized();
+
+    const model = this.getModelName();
 
     // Use Responses API for reasoning models
     if (this.shouldUseResponsesApi(model)) {
@@ -107,6 +96,8 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
 
+    this.logApiCall('sendMessage', messages.length);
+
     try {
       const response = await this.openai!.chat.completions.create({
         model,
@@ -124,16 +115,7 @@ export class OpenAIProvider implements LLMProvider {
 
       return responseContent;
     } catch (error) {
-      const errorObj = error instanceof Error ? error : new Error('Unknown OpenAI API error');
-      logger.error('OpenAI API error in sendMessage', errorObj, {
-        messageCount: messages.length,
-        model: model
-      }, 'OpenAIProvider');
-
-      if (error instanceof Error) {
-        throw new Error(`OpenAI API error: ${error.message}`);
-      }
-      throw new Error('Unknown OpenAI API error');
+      throw this.formatError(error, 'sendMessage');
     }
   }
 
@@ -142,8 +124,9 @@ export class OpenAIProvider implements LLMProvider {
     onChunk: (chunk: string) => void,
     onComplete?: (response: StreamingResponse) => void
   ): Promise<StreamingResponse> {
-    const config = configManager.getConfig();
-    const model = config.model || 'gpt-4-turbo-preview';
+    this.ensureInitialized();
+
+    const model = this.getModelName();
 
     // Use Responses API for reasoning models
     if (this.shouldUseResponsesApi(model)) {
@@ -159,11 +142,7 @@ export class OpenAIProvider implements LLMProvider {
         const streamingResponse: StreamingResponse = {
           content: response.output_text || '',
           finishReason: response.status === 'completed' ? 'stop' : null,
-          usage: response.usage ? {
-            promptTokens: response.usage.input_tokens,
-            completionTokens: response.usage.output_tokens,
-            totalTokens: response.usage.total_tokens
-          } : undefined
+          usage: this.buildUsageResponse(response.usage)
         };
 
         if (onComplete) {
@@ -176,6 +155,8 @@ export class OpenAIProvider implements LLMProvider {
         // Fall through to Chat Completions API
       }
     }
+
+    this.logApiCall('streamMessage', messages.length);
 
     try {
       const stream = await this.openai!.chat.completions.create({
@@ -217,16 +198,7 @@ export class OpenAIProvider implements LLMProvider {
 
       return response;
     } catch (error) {
-      const errorObj = error instanceof Error ? error : new Error('Unknown OpenAI API error');
-      logger.error('OpenAI streaming API error', errorObj, {
-        messageCount: messages.length,
-        model
-      }, 'OpenAIProvider');
-
-      if (error instanceof Error) {
-        throw new Error(`OpenAI API error: ${error.message}`);
-      }
-      throw new Error('Unknown OpenAI API error');
+      throw this.formatError(error, 'streamMessage');
     }
   }
 
@@ -235,11 +207,14 @@ export class OpenAIProvider implements LLMProvider {
     functions: any[] = [],
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
-    const config = configManager.getConfig();
+    this.ensureInitialized();
+
+    const normalizedFunctions = this.validateAndNormalizeTools(functions);
+    this.logApiCall('sendMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
 
     try {
       const requestParams: any = {
-        model: config.model || 'gpt-4o-2024-11-20',
+        model: this.getModelName(),
         messages: messages.map(msg => ({
           role: msg.role,
           content: msg.content,
@@ -249,10 +224,9 @@ export class OpenAIProvider implements LLMProvider {
       };
 
       // Add function calling if functions are provided
-      if (functions.length > 0) {
+      if (normalizedFunctions.length > 0) {
         // Convert tools to OpenAI format using SchemaAdapter
-        const normalizedTools = SchemaAdapter.normalizeAll(functions);
-        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
+        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
         
         requestParams.tools = openAIFunctions.map(func => ({
           type: 'function',
@@ -264,39 +238,22 @@ export class OpenAIProvider implements LLMProvider {
       const response = await this.openai!.chat.completions.create(requestParams);
 
       const choice = response.choices[0];
-      const { logToolUsage } = configManager.getConfig();
       if (choice.message.tool_calls) {
         for (const toolCall of choice.message.tool_calls) {
           const { name, arguments: argsString } = toolCall.function;
-          let parsedArgs: any;
-          try {
-            parsedArgs = JSON.parse(argsString);
-          } catch {
-            parsedArgs = argsString;
-          }
-          if (logToolUsage) {
-            ToolLogger.logToolCall(name, parsedArgs);
-          }
-          if (onToolCall) {
-            onToolCall(name, parsedArgs);
-          }
+          const parsedArgs = this.parseToolArguments(argsString);
+          this.handleToolCall(name, parsedArgs, onToolCall);
         }
       }
+      
       return {
         content: choice.message.content,
         tool_calls: choice.message.tool_calls,
         finishReason: choice.finish_reason,
-        usage: response.usage ? {
-          promptTokens: response.usage.prompt_tokens,
-          completionTokens: response.usage.completion_tokens,
-          totalTokens: response.usage.total_tokens
-        } : undefined
+        usage: this.buildUsageResponse(response.usage)
       };
     } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`OpenAI API error: ${error.message}`);
-      }
-      throw new Error('Unknown OpenAI API error');
+      throw this.formatError(error, 'sendMessageWithTools');
     }
   }
 
@@ -306,11 +263,14 @@ export class OpenAIProvider implements LLMProvider {
     onChunk?: (chunk: string) => void,
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
-    const config = configManager.getConfig();
+    this.ensureInitialized();
+
+    const normalizedFunctions = this.validateAndNormalizeTools(functions);
+    this.logApiCall('streamMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
 
     try {
       const requestParams: any = {
-        model: config.model || 'gpt-4-turbo-preview',
+        model: this.getModelName(),
         messages: messages.map(msg => ({
           role: msg.role,
           content: msg.content,
@@ -321,10 +281,9 @@ export class OpenAIProvider implements LLMProvider {
       };
 
       // Add function calling if functions are provided
-      if (functions.length > 0) {
+      if (normalizedFunctions.length > 0) {
         // Convert tools to OpenAI format using SchemaAdapter
-        const normalizedTools = SchemaAdapter.normalizeAll(functions);
-        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
+        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
         
         requestParams.tools = openAIFunctions.map(func => ({
           type: 'function',
@@ -338,7 +297,6 @@ export class OpenAIProvider implements LLMProvider {
       let fullContent = '';
       let finishReason: string | null = null;
       let toolCalls: any[] | undefined;
-      const { logToolUsage } = configManager.getConfig();
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta;
@@ -387,18 +345,8 @@ export class OpenAIProvider implements LLMProvider {
       if (toolCalls) {
         for (const toolCall of toolCalls) {
           const { name, arguments: argsString } = toolCall.function;
-          let parsedArgs: any;
-          try {
-            parsedArgs = JSON.parse(argsString);
-          } catch {
-            parsedArgs = argsString;
-          }
-          if (logToolUsage) {
-            ToolLogger.logToolCall(name, parsedArgs);
-          }
-          if (onToolCall) {
-            onToolCall(name, parsedArgs);
-          }
+          const parsedArgs = this.parseToolArguments(argsString);
+          this.handleToolCall(name, parsedArgs, onToolCall);
         }
       }
 
@@ -410,49 +358,8 @@ export class OpenAIProvider implements LLMProvider {
         usage: undefined
       };
     } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`OpenAI API error: ${error.message}`);
-      }
-      throw new Error('Unknown OpenAI API error');
+      throw this.formatError(error, 'streamMessageWithTools');
     }
-  }
-
-  async sendToolResults(
-    messages: Message[],
-    toolResults: Array<{ tool_call_id: string; content: string }>,
-    functions: any[] = []
-  ): Promise<FunctionCallResponse> {
-    // Add tool result messages and call sendMessageWithTools
-    const updatedMessages = [...messages];
-    for (const result of toolResults) {
-      updatedMessages.push({
-        role: 'tool',
-        content: result.content,
-        tool_call_id: result.tool_call_id
-      });
-    }
-
-    return this.sendMessageWithTools(updatedMessages, functions);
-  }
-
-  async streamToolResults(
-    messages: Message[],
-    toolResults: Array<{ tool_call_id: string; content: string }>,
-    functions: any[] = [],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse> {
-    // Add tool result messages and call streamMessageWithTools
-    const updatedMessages = [...messages];
-    for (const result of toolResults) {
-      updatedMessages.push({
-        role: 'tool',
-        content: result.content,
-        tool_call_id: result.tool_call_id
-      });
-    }
-
-    return this.streamMessageWithTools(updatedMessages, functions, onChunk, onToolCall);
   }
 
   async processWithNativeToolLoop(
@@ -476,7 +383,7 @@ export class OpenAIProvider implements LLMProvider {
 
     try {
       // Convert tools to OpenAI format using SchemaAdapter
-      const normalizedTools = SchemaAdapter.normalizeAll(tools);
+      const normalizedTools = this.validateAndNormalizeTools(tools);
       const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
       
       // Send to LLM with tool schemas (single pass)
@@ -541,11 +448,12 @@ export class OpenAIProvider implements LLMProvider {
       max_output_tokens?: number;
     }
   ): Promise<ResponsesApiResponse> {
+    this.ensureInitialized();
+
     if (!this.openai) throw new Error('OpenAI client not initialized');
 
     try {
-      const config = configManager.getConfig();
-      const defaultModel = config.model || 'gpt-4-turbo-preview';
+      const defaultModel = this.getModelName();
 
       // Build request parameters
       const requestParams: any = {
@@ -611,11 +519,12 @@ export class OpenAIProvider implements LLMProvider {
     },
     onChunk?: (chunk: string) => void
   ): Promise<ResponsesApiResponse> {
+    this.ensureInitialized();
+
     if (!this.openai) throw new Error('OpenAI client not initialized');
 
     try {
-      const config = configManager.getConfig();
-      const defaultModel = config.model || 'gpt-4-turbo-preview';
+      const defaultModel = this.getModelName();
 
       // Build request parameters (same as non-streaming)
       const requestParams: any = {

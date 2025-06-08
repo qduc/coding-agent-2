@@ -1,24 +1,20 @@
-import { GoogleGenerativeAI, Content, Part, GenerateContentRequest, Tool, FunctionDeclaration, GenerateContentResult } from '@google/generative-ai';
-import chalk from 'chalk';
-import { configManager } from '../core/config';
-import { LLMProvider, Message, StreamingResponse, FunctionCallResponse } from './llm';
-import { ToolLogger } from '../utils/toolLogger';
-import { SchemaAdapter } from './schemaAdapter';
+import { GoogleGenerativeAI, Content, Part, Tool } from '@google/generative-ai';
+import { BaseLLMProvider } from '../BaseLLMProvider';
+import { Message, StreamingResponse, FunctionCallResponse } from '../../types/llm';
+import { SchemaAdapter } from '../schemaAdapter';
 
 /**
  * Google Gemini provider implementation
  */
-export class GeminiProvider implements LLMProvider {
+export class GeminiProvider extends BaseLLMProvider {
   private genAI: GoogleGenerativeAI | null = null;
-  private initialized = false;
 
   getProviderName(): string {
     return 'gemini';
   }
 
-  getModelName(): string {
-    const config = configManager.getConfig();
-    return config.model || 'gemini-2.5-flash-preview-05-20';
+  protected getDefaultModel(): string {
+    return 'gemini-2.5-flash-preview-05-20';
   }
 
   /**
@@ -26,27 +22,21 @@ export class GeminiProvider implements LLMProvider {
    */
   async initialize(): Promise<boolean> {
     try {
-      const config = configManager.getConfig();
-      if (!config.geminiApiKey) {
+      this.refreshConfig();
+      
+      if (!this.validateApiKey(this.config.geminiApiKey, 'GEMINI_API_KEY')) {
         return false;
       }
 
-      this.genAI = new GoogleGenerativeAI(config.geminiApiKey);
+      this.genAI = new GoogleGenerativeAI(this.config.geminiApiKey!);
       this.initialized = true;
       return true;
     } catch (error) {
-      console.error(chalk.red('Failed to initialize Gemini provider:'), error instanceof Error ? error.message : 'Unknown error');
+      console.error('Failed to initialize Gemini provider:', error instanceof Error ? error.message : 'Unknown error');
       return false;
     }
   }
 
-  isReady(): boolean {
-    return this.initialized;
-  }
-
-  /**
-   * Convert messages to Gemini parts format
-   */
   /**
    * Convert messages to Gemini parts format, allowing passthrough for Gemini-native messages
    */
@@ -106,7 +96,7 @@ export class GeminiProvider implements LLMProvider {
         for (const toolCall of msg.tool_calls) {
           try {
             const args = typeof toolCall.function.arguments === 'string' 
-              ? JSON.parse(toolCall.function.arguments) 
+              ? this.parseToolArguments(toolCall.function.arguments)
               : toolCall.function.arguments;
             
             parts.push({
@@ -152,7 +142,7 @@ export class GeminiProvider implements LLMProvider {
    */
   private convertToolsToGeminiFormat(functions: any[]): Tool[] {
     // Normalize tools first, then convert to Gemini format
-    const normalizedTools = SchemaAdapter.normalizeAll(functions);
+    const normalizedTools = this.validateAndNormalizeTools(functions);
     const geminiDeclarations = SchemaAdapter.convertToGemini(normalizedTools);
 
     return [{
@@ -165,56 +155,70 @@ export class GeminiProvider implements LLMProvider {
     onChunk: (chunk: string) => void,
     onComplete?: (response: StreamingResponse) => void
   ): Promise<StreamingResponse> {
+    this.ensureInitialized();
+
     if (!this.genAI) {
       throw new Error('Gemini client not initialized');
     }
 
-    const config = configManager.getConfig();
+    this.logApiCall('streamMessage', messages.length);
+
     const model = this.genAI.getGenerativeModel({
-      model: config.model || 'gemini-2.5-flash-preview-05-20',
+      model: this.getModelName(),
       generationConfig: {
-        maxOutputTokens: config.maxTokens || 8000
+        maxOutputTokens: this.config.maxTokens || 8000
       }
     });
 
-    const contents = this.convertMessagesToParts(messages);
-    const result = await model.generateContentStream({ contents });
+    try {
+      const contents = this.convertMessagesToParts(messages);
+      const result = await model.generateContentStream({ contents });
 
-    let fullContent = '';
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      fullContent += chunkText;
-      onChunk(chunkText);
+      let fullContent = '';
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        fullContent += chunkText;
+        onChunk(chunkText);
+      }
+
+      const response = {
+        content: fullContent,
+        finishReason: 'stop'
+      };
+
+      if (onComplete) {
+        onComplete(response);
+      }
+
+      return response;
+    } catch (error) {
+      throw this.formatError(error, 'streamMessage');
     }
-
-    const response = {
-      content: fullContent,
-      finishReason: 'stop'
-    };
-
-    if (onComplete) {
-      onComplete(response);
-    }
-
-    return response;
   }
 
   async sendMessage(messages: Message[]): Promise<string> {
+    this.ensureInitialized();
+
     if (!this.genAI) {
       throw new Error('Gemini client not initialized');
     }
 
-    const config = configManager.getConfig();
+    this.logApiCall('sendMessage', messages.length);
+
     const model = this.genAI.getGenerativeModel({
-      model: config.model || 'gemini-2.5-flash-preview-05-20',
+      model: this.getModelName(),
       generationConfig: {
-        maxOutputTokens: config.maxTokens || 8000
+        maxOutputTokens: this.config.maxTokens || 8000
       }
     });
 
-    const contents = this.convertMessagesToParts(messages);
-    const result = await model.generateContent({ contents });
-    return result.response.text();
+    try {
+      const contents = this.convertMessagesToParts(messages);
+      const result = await model.generateContent({ contents });
+      return result.response.text();
+    } catch (error) {
+      throw this.formatError(error, 'sendMessage');
+    }
   }
 
   async sendMessageWithTools(
@@ -222,52 +226,57 @@ export class GeminiProvider implements LLMProvider {
     functions: any[] = [],
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
+    this.ensureInitialized();
+
     if (!this.genAI) {
       throw new Error('Gemini client not initialized');
     }
 
-    const config = configManager.getConfig();
+    const normalizedFunctions = this.validateAndNormalizeTools(functions);
+    this.logApiCall('sendMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
+
     const model = this.genAI.getGenerativeModel({
-      model: config.model || 'gemini-2.5-flash-preview-05-20',
+      model: this.getModelName(),
       generationConfig: {
-        maxOutputTokens: config.maxTokens || 8000
+        maxOutputTokens: this.config.maxTokens || 8000
       },
-      tools: this.convertToolsToGeminiFormat(functions)
+      tools: normalizedFunctions.length > 0 ? this.convertToolsToGeminiFormat(normalizedFunctions) : undefined
     });
 
-    const contents = this.convertMessagesToParts(messages);
+    try {
+      const contents = this.convertMessagesToParts(messages);
+      const result = await model.generateContent({ contents });
 
-    const result = await model.generateContent({ contents });
+      // Handle tool calls
+      const toolCalls: any[] = [];
+      const response = result.response;
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.functionCall) {
+            const { name, args } = part.functionCall;
+            const parsedArgs = typeof args === 'string' ? this.parseToolArguments(args) : args;
 
-    // Handle tool calls
-    const toolCalls: any[] = [];
-    const response = result.response;
-    if (response.candidates?.[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.functionCall) {
-          const { name, args } = part.functionCall;
-          const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args;
+            this.handleToolCall(name, parsedArgs, onToolCall);
 
-          if (onToolCall) {
-            onToolCall(name, parsedArgs);
+            toolCalls.push({
+              id: `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              function: {
+                name,
+                arguments: JSON.stringify(parsedArgs)
+              }
+            });
           }
-
-          toolCalls.push({
-            id: `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            function: {
-              name,
-              arguments: JSON.stringify(parsedArgs)
-            }
-          });
         }
       }
-    }
 
-    return {
-      content: toolCalls.length > 0 ? null : response.text(),
-      tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-      finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop'
-    };
+      return {
+        content: toolCalls.length > 0 ? null : response.text(),
+        tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop'
+      };
+    } catch (error) {
+      throw this.formatError(error, 'sendMessageWithTools');
+    }
   }
 
   async streamMessageWithTools(

@@ -1,4 +1,7 @@
 
+import { AnthropicProvider } from './providers/AnthropicProvider';
+import { configManager } from '../core/config';
+import { Message, StreamingResponse, FunctionCallResponse } from './llm';
 
 describe('AnthropicProvider', () => {
   let provider: AnthropicProvider;
@@ -158,10 +161,6 @@ jest.mock('@anthropic-ai/sdk', () => {
 // Mock ToolLogger
 const mockLogToolCall = jest.fn();
 jest.mock('../utils/toolLogger', () => ({ ToolLogger: { logToolCall: mockLogToolCall } }));
-
-import { configManager } from '../core/config';
-import { AnthropicProvider } from './anthropicProvider';
-import { Message, StreamingResponse, FunctionCallResponse } from './llm';
 
 describe('AnthropicProvider', () => {
   let provider: AnthropicProvider;

@@ -1,4 +1,4 @@
-import { AnthropicProvider } from './anthropicProvider';
+import { AnthropicProvider } from './providers/AnthropicProvider';
 import { Message } from './llm';
 
 describe('AnthropicProvider Tool Results', () => {

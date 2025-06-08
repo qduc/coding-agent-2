@@ -1,4 +1,4 @@
-import { GeminiProvider } from './geminiProvider';
+import { GeminiProvider } from './providers/GeminiProvider';
 import { configManager } from '../core/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Message } from './llm';
