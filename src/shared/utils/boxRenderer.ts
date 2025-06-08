@@ -66,9 +66,11 @@ export class BoxRenderer {
     // Format code lines with wrapping for long lines
     const processedLines: string[] = [];
     codeLines.forEach((line, sourceLineIndex) => {
-      if (line.length <= contentWidth) {
+      if (this.getDisplayWidth(line) <= contentWidth) {
         // Short line - display normally
-        const lineContent = line.padEnd(contentWidth);
+        const displayWidth = this.getDisplayWidth(line);
+        const padding = Math.max(0, contentWidth - displayWidth);
+        const lineContent = line + ' '.repeat(padding);
         let formattedLine;
         if (showLineNumbers) {
           const lineNum = (sourceLineIndex + 1).toString().padStart(maxLineNumWidth, ' ');
@@ -79,12 +81,13 @@ export class BoxRenderer {
         }
         processedLines.push(formattedLine);
       } else {
-        // Long line - wrap it
-        let remaining = line;
+        // Long line - wrap it using display-width aware wrapping
+        const wrappedChunks = this.wrapTextWithCursor(line, contentWidth);
         let isFirstChunk = true;
-        while (remaining.length > 0) {
-          const chunk = remaining.substring(0, contentWidth);
-          const lineContent = chunk.padEnd(contentWidth);
+        wrappedChunks.forEach(chunk => {
+          const displayWidth = this.getDisplayWidth(chunk);
+          const padding = Math.max(0, contentWidth - displayWidth);
+          const lineContent = chunk + ' '.repeat(padding);
           let formattedLine;
           if (showLineNumbers) {
             // Show line number only on first chunk, indent continuation lines
@@ -97,13 +100,12 @@ export class BoxRenderer {
             formattedLine = chalk.gray('│ ') + lineContent + chalk.gray(' │');
           }
           processedLines.push(formattedLine);
-          remaining = remaining.substring(contentWidth);
           isFirstChunk = false;
-        }
+        });
       }
     });
 
-    const bottomBorder = '╰' + '─'.repeat(boxWidth - 1) + '╯';
+    const bottomBorder = '╰' + '─'.repeat(boxWidth - 2) + '╯';
 
     return '\n' + chalk.gray(topBorder) + '\n' +
            processedLines.join('\n') + '\n' +
@@ -120,17 +122,20 @@ export class BoxRenderer {
     const headerPadding = Math.max(0, boxWidth - titleWidth - 4); // 4 = "┌ " + " ┐"
     const topBorder = '┌─' + title + '─'.repeat(headerPadding) + '┐';
     const contentLines = content.split('\n').flatMap(line => {
-      if (line.length <= boxWidth - 4) {
-        return ['│ ' + line.padEnd(boxWidth - 4) + ' │'];
+      const maxContentWidth = boxWidth - 4; // Account for "│ " and " │"
+      if (this.getDisplayWidth(line) <= maxContentWidth) {
+        const displayWidth = this.getDisplayWidth(line);
+        const padding = Math.max(0, maxContentWidth - displayWidth);
+        return ['│ ' + line + ' '.repeat(padding) + ' │'];
       }
       // Wrap long lines instead of truncating
       const wrapped: string[] = [];
-      let remaining = line;
-      while (remaining.length > 0) {
-        const chunk = remaining.substring(0, boxWidth - 4);
-        wrapped.push('│ ' + chunk.padEnd(boxWidth - 4) + ' │');
-        remaining = remaining.substring(boxWidth - 4);
-      }
+      const wrappedChunks = this.wrapTextWithCursor(line, maxContentWidth);
+      wrappedChunks.forEach(chunk => {
+        const displayWidth = this.getDisplayWidth(chunk);
+        const padding = Math.max(0, maxContentWidth - displayWidth);
+        wrapped.push('│ ' + chunk + ' '.repeat(padding) + ' │');
+      });
       return wrapped;
     });
     const bottomBorder = '└' + '─'.repeat(boxWidth - 2) + '┘';
