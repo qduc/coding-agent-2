@@ -30,7 +30,8 @@
     "dev:fullstack": "concurrently \"npm run dev:web\" \"npm run dev:frontend\"",
     "build:all": "vite build && npm run build:frontend",
     "start:fullstack": "concurrently \"npm run start:web\" \"npm run preview:frontend\"",
-    "postbuild": "chmod +x dist/cli/index.js"
+    "postbuild": "chmod +x dist/cli/index.js",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "ai",
