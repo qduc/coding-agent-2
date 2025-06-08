@@ -239,13 +239,4 @@ Use these tools when you need to access files or gather information about the pr
       content: `You are a helpful coding assistant working in: ${currentDirectory}`
     };
   }
-
-  /**
-   * Update system message with new tools
-   */
-  updateSystemMessageWithTools(existingMessage: ConversationMessage, tools: BaseTool[]): ConversationMessage {
-    // For now, just create a new system message
-    // In the future, this could be optimized to only update the tools section
-    return this.createSystemMessage(tools);
-  }
 }

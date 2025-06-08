@@ -63,7 +63,10 @@ export class LLMService implements LLMProvider {
       // Fallback if provider doesn't implement getModelName
       const config = configManager.getConfig();
       const providerName = this.getProviderName();
-      return config[providerName]?.model || `${providerName}-default`;
+
+      // Get provider-specific configuration or use default model
+      const providerConfig = config[providerName] as { model?: string } | undefined;
+      return providerConfig?.model || `${providerName}-default`;
     }
     return this.provider.getModelName();
   }

@@ -16,6 +16,8 @@ export interface Config {
   logToolUsage?: boolean;
   streaming?: boolean;
   useResponsesApi?: boolean; // Use OpenAI Responses API for reasoning models
+  // Allow accessing provider-specific settings with string index
+  [key: string]: any;
   // Tool display configuration
   toolDisplayMode?: 'off' | 'minimal' | 'condensed' | 'standard' | 'verbose'; // Controls tool call display level
   // Logging configuration

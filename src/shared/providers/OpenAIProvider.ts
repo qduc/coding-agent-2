@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { LLMProvider, Message, StreamingResponse, FunctionCallResponse, ResponsesApiResponse, ResponsesInput, ReasoningConfig } from '../types/llm';
-import { configManager } from '../core/config';
+import {ConfigManager, configManager, Config} from '../core/config';
 import { logger } from '../utils/logger';
 import { ToolLogger } from '../utils/toolLogger';
 import { SchemaAdapter } from '../services/schemaAdapter';
@@ -9,6 +9,11 @@ export class OpenAIProvider implements LLMProvider {
   private openai: OpenAI | null = null;
   private initialized = false;
   private previousResponseId: string | null = null; // For multi-turn Responses API
+  private config: Config;
+
+  constructor() {
+    this.config = configManager.getConfig();
+  }
 
   getProviderName(): string {
     return 'openai';
@@ -20,9 +25,9 @@ export class OpenAIProvider implements LLMProvider {
 
   async initialize(): Promise<boolean> {
     try {
-      const config = configManager.getConfig();
-      const isOpenRouter = config.openaiApiBaseUrl?.includes('openrouter.ai');
-      const apiKey = isOpenRouter ? process.env.OPENROUTER_API_KEY : config.openaiApiKey;
+      this.config = configManager.getConfig();
+      const isOpenRouter = this.config.openaiApiBaseUrl?.includes('openrouter.ai');
+      const apiKey = isOpenRouter ? process.env.OPENROUTER_API_KEY : this.config.openaiApiKey;
 
       if (!apiKey) {
         logger.error(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} API key not configured`, undefined, {}, 'OpenAIProvider');
@@ -31,7 +36,7 @@ export class OpenAIProvider implements LLMProvider {
 
       const baseURL = isOpenRouter
         ? 'https://openrouter.ai/api/v1'
-        : (config.openaiApiBaseUrl || 'https://api.openai.com/v1');
+        : (this.config.openaiApiBaseUrl || 'https://api.openai.com/v1');
 
       this.openai = new OpenAI({
         apiKey,
@@ -46,7 +51,7 @@ export class OpenAIProvider implements LLMProvider {
       // Test the connection
       await this.testConnection(!!isOpenRouter);
       this.initialized = true;
-      logger.info(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} provider initialized successfully`, { model: config.model }, 'OpenAIProvider');
+      logger.info(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} provider initialized successfully`, { model: this.config.model }, 'OpenAIProvider');
       return true;
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error('Unknown error');

@@ -295,7 +295,7 @@ export class SubAgentCommunicationCoordinator {
       this.messageCount++;
     } catch (error) {
       this.errorCount++;
-      logger.error('Failed to route message:', error);
+      logger.error('Failed to route message:', error as Error);
       throw error;
     }
   }
@@ -314,7 +314,7 @@ export class SubAgentCommunicationCoordinator {
         };
         
         promises.push(
-          channel.handleMessageFromParent(fullMessage)
+          Promise.resolve(channel.handleMessageFromParent(fullMessage))
         );
       }
     }
