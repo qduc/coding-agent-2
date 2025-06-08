@@ -1,3 +1,3 @@
 export * from './CLIToolExecutionContext';
-export * from './InkInputHandler';
+export { InkInputHandler } from './ink';
 // export * from './CommanderInputHandler'; // Replaced with InkInputHandler
