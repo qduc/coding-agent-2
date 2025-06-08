@@ -29,6 +29,15 @@ export class InkChatHandler implements IInputHandler {
   }
 
   async handleInteractiveMode(
+    onInput: (input: string) => Promise<void>,
+    onEnd: () => void
+  ): Promise<void> {
+    // This method signature matches the interface, but InkChatHandler uses a different approach
+    // We'll throw an error to indicate this method shouldn't be used
+    throw new Error('InkChatHandler uses handleInteractiveChatMode instead of handleInteractiveMode');
+  }
+
+  async handleInteractiveChatMode(
     agent: Agent,
     options: {
       verbose?: boolean;
@@ -37,6 +46,10 @@ export class InkChatHandler implements IInputHandler {
   ): Promise<void> {
     return new Promise<void>((resolve) => {
       const handleExit = () => {
+        if (this.unmountFunction) {
+          this.unmountFunction();
+          this.unmountFunction = null;
+        }
         resolve();
       };
 

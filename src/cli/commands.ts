@@ -222,7 +222,7 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
     process.on('SIGINT', handleExit);
 
     // Start the full Ink interactive mode
-    await chatHandler.handleInteractiveMode(agent, {
+    await chatHandler.handleInteractiveChatMode(agent, {
       verbose: options.verbose,
       streaming: shouldStream,
     });
