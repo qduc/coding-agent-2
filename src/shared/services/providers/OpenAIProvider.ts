@@ -73,7 +73,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  async sendMessage(messages: Message[]): Promise<string> {
+  protected async _sendMessage(messages: Message[]): Promise<string> {
     this.ensureInitialized();
 
     const model = this.getModelName();
@@ -119,7 +119,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  async streamMessage(
+  protected async _streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
     onComplete?: (response: StreamingResponse) => void
@@ -202,7 +202,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  async sendMessageWithTools(
+  protected async _sendMessageWithTools(
     messages: Message[],
     functions: any[] = [],
     onToolCall?: (toolName: string, args: any) => void
@@ -257,7 +257,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  async streamMessageWithTools(
+  protected async _streamMessageWithTools(
     messages: Message[],
     functions: any[] = [],
     onChunk?: (chunk: string) => void,

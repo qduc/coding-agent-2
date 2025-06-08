@@ -3,6 +3,8 @@ import { configManager, Config } from '../core/config';
 import { ToolLogger } from '../utils/toolLogger';
 import { SchemaAdapter } from './schemaAdapter';
 import { logger } from '../utils/logger';
+import { readFileSync, existsSync } from 'fs';
+import { resolve, isAbsolute } from 'path';
 
 /**
  * Abstract base class for LLM providers that implements common functionality
@@ -19,23 +21,59 @@ export abstract class BaseLLMProvider implements LLMProvider {
   // Abstract methods that must be implemented by concrete providers
   abstract initialize(): Promise<boolean>;
   abstract getProviderName(): string;
-  abstract sendMessage(messages: Message[]): Promise<string>;
-  abstract streamMessage(
+  
+  // Abstract internal methods that handle processed messages
+  protected abstract _sendMessage(messages: Message[]): Promise<string>;
+  protected abstract _streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
     onComplete?: (response: StreamingResponse) => void
   ): Promise<StreamingResponse>;
-  abstract sendMessageWithTools(
+  protected abstract _sendMessageWithTools(
     messages: Message[],
     functions?: any[],
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
-  abstract streamMessageWithTools(
+  protected abstract _streamMessageWithTools(
     messages: Message[],
     functions?: any[],
     onChunk?: (chunk: string) => void,
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
+
+  // Public methods that process file references before calling abstract methods
+  async sendMessage(messages: Message[]): Promise<string> {
+    const processedMessages = this.processFileReferences(messages);
+    return this._sendMessage(processedMessages);
+  }
+
+  async streamMessage(
+    messages: Message[],
+    onChunk: (chunk: string) => void,
+    onComplete?: (response: StreamingResponse) => void
+  ): Promise<StreamingResponse> {
+    const processedMessages = this.processFileReferences(messages);
+    return this._streamMessage(processedMessages, onChunk, onComplete);
+  }
+
+  async sendMessageWithTools(
+    messages: Message[],
+    functions?: any[],
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse> {
+    const processedMessages = this.processFileReferences(messages);
+    return this._sendMessageWithTools(processedMessages, functions, onToolCall);
+  }
+
+  async streamMessageWithTools(
+    messages: Message[],
+    functions?: any[],
+    onChunk?: (chunk: string) => void,
+    onToolCall?: (toolName: string, args: any) => void
+  ): Promise<FunctionCallResponse> {
+    const processedMessages = this.processFileReferences(messages);
+    return this._streamMessageWithTools(processedMessages, functions, onChunk, onToolCall);
+  }
 
   // Concrete methods with shared implementation
   
@@ -187,8 +225,9 @@ export abstract class BaseLLMProvider implements LLMProvider {
       });
     }
 
-    // Send the updated conversation back to the LLM
-    return this.sendMessageWithTools(updatedMessages, functions);
+    // Process file references and send the updated conversation back to the LLM
+    const processedMessages = this.processFileReferences(updatedMessages);
+    return this._sendMessageWithTools(processedMessages, functions);
   }
 
   /**
@@ -214,8 +253,9 @@ export abstract class BaseLLMProvider implements LLMProvider {
       });
     }
 
-    // Send the updated conversation back to the LLM with streaming
-    return this.streamMessageWithTools(updatedMessages, functions, onChunk, onToolCall);
+    // Process file references and send the updated conversation back to the LLM with streaming
+    const processedMessages = this.processFileReferences(updatedMessages);
+    return this._streamMessageWithTools(processedMessages, functions, onChunk, onToolCall);
   }
 
   /**
@@ -250,5 +290,104 @@ export abstract class BaseLLMProvider implements LLMProvider {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Process messages to include file content for file path references
+   */
+  protected processFileReferences(messages: Message[]): Message[] {
+    return messages.map(message => {
+      if (message.role === 'user' || message.role === 'assistant') {
+        const processedContent = this.expandFileReferences(message.content || '');
+        return { ...message, content: processedContent };
+      }
+      return message;
+    });
+  }
+
+  /**
+   * Detect file path references and expand them with file content
+   * Only matches patterns that begin with @ sign (e.g., @package.json, @src/file.ts)
+   */
+  private expandFileReferences(content: string): string {
+    // Simplified pattern: must start with @ followed by file path with extension
+    const filePathPattern = /@([a-zA-Z0-9\/_\-\.]+\.[a-zA-Z0-9]+)/g;
+    
+    const fileBlocks: string[] = [];
+    const processedFilePaths = new Set<string>();
+    let cleanedContent = content;
+    let match;
+    
+    // First pass: collect all unique file references and their content
+    while ((match = filePathPattern.exec(content)) !== null) {
+      const [fullMatch, filePath] = match;
+      
+      // Skip if we've already processed this file
+      if (processedFilePaths.has(filePath)) continue;
+      
+      // Try to resolve the file path
+      const resolvedPath = this.resolveFilePath(filePath);
+      
+      if (resolvedPath && existsSync(resolvedPath)) {
+        try {
+          const fileContent = readFileSync(resolvedPath, 'utf-8');
+          const fileExtension = filePath.split('.').pop() || '';
+          
+          // Create a code block with the file content
+          const codeBlock = `\`\`\`${fileExtension}\n// File: ${filePath}\n${fileContent}\n\`\`\``;
+          fileBlocks.push(codeBlock);
+          processedFilePaths.add(filePath);
+          
+          logger.debug(`Collected file reference: ${filePath}`, { resolvedPath }, this.getProviderName());
+        } catch (error) {
+          logger.warn(`Failed to read file: ${filePath}`, { 
+            error: error instanceof Error ? error.message : String(error) 
+          }, this.getProviderName());
+        }
+      }
+    }
+    
+    // Second pass: replace file references with more natural language
+    if (processedFilePaths.size > 0) {
+      // Replace @filePath references with natural references
+      for (const filePath of processedFilePaths) {
+        const referencePattern = new RegExp(`@${filePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+        const fileName = filePath.split('/').pop() || filePath;
+        cleanedContent = cleanedContent.replace(referencePattern, `the above ${fileName} file`);
+      }
+    }
+    
+    // Combine file blocks at the beginning + cleaned content
+    if (fileBlocks.length > 0) {
+      return fileBlocks.join('\n\n') + '\n\n' + cleanedContent.trim();
+    }
+    
+    return content;
+  }
+
+  /**
+   * Resolve file path relative to current working directory
+   */
+  private resolveFilePath(filePath: string): string {
+    if (isAbsolute(filePath)) {
+      return filePath;
+    }
+    
+    // Try relative to current working directory
+    const cwdPath = resolve(process.cwd(), filePath);
+    if (existsSync(cwdPath)) {
+      return cwdPath;
+    }
+    
+    // Try common project root patterns
+    const commonRoots = ['./src/', './'];
+    for (const root of commonRoots) {
+      const rootPath = resolve(process.cwd(), root, filePath);
+      if (existsSync(rootPath)) {
+        return rootPath;
+      }
+    }
+    
+    return cwdPath; // Return the cwd path as fallback
   }
 }

@@ -119,7 +119,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   /**
    * Send a message and get streaming response
    */
-  async streamMessage(
+  protected async _streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
     onComplete?: (response: StreamingResponse) => void
@@ -172,7 +172,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   /**
    * Send a simple message and get complete response
    */
-  async sendMessage(messages: Message[]): Promise<string> {
+  protected async _sendMessage(messages: Message[]): Promise<string> {
     this.ensureInitialized();
 
     const systemMessage = this.extractSystemMessage(messages);
@@ -200,7 +200,7 @@ export class AnthropicProvider extends BaseLLMProvider {
    * Send a message with function calling support
    * Note: Anthropic has different tool calling format than OpenAI
    */
-  async sendMessageWithTools(
+  protected async _sendMessageWithTools(
     messages: Message[],
     functions: any[] = [],
     onToolCall?: (toolName: string, args: any) => void
@@ -271,7 +271,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   /**
    * Send a message with function calling support and streaming
    */
-  async streamMessageWithTools(
+  protected async _streamMessageWithTools(
     messages: Message[],
     functions: any[] = [],
     onChunk?: (chunk: string) => void,
