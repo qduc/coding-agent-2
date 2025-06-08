@@ -128,7 +128,7 @@ export class ToolOrchestrator {
 
     // Instead of a fixed iteration count, use a combination of approaches to detect infinite loops
     const startTime = Date.now();
-    const MAX_EXECUTION_TIME = 5 * 60 * 1000; // 5 minutes max execution time
+    const MAX_EXECUTION_TIME = 10 * 60 * 1000; // 10 minutes max execution time
     const toolCallHistory: { name: string, args: string }[] = [];
     let fullResponse = '';
 
@@ -253,7 +253,7 @@ export class ToolOrchestrator {
 
           similaritySum += similarity;
 
-          if (similarity < 0.8) { // 80% similarity threshold
+          if (similarity < 0.9) { // 90% similarity threshold
             isRepeating = false;
             break;
           }
@@ -274,16 +274,21 @@ export class ToolOrchestrator {
     const lastTool = recentCalls[recentCalls.length - 1]?.name;
     if (lastTool) {
       const sameToolCount = recentCalls.filter(call => call.name === lastTool).length;
-      if (sameToolCount >= 5) { // If the same tool is called 5+ times recently
+      
+      // Set tool-specific limits - exploratory tools get higher limits
+      const exploratoryTools = ['read', 'glob', 'ripgrep', 'ls'];
+      const limit = exploratoryTools.includes(lastTool) ? 12 : 8;
+      
+      if (sameToolCount >= limit) {
         return { 
           detected: true, 
-          reason: `Same tool '${lastTool}' called ${sameToolCount} times in the last ${recentCalls.length} calls`
+          reason: `Same tool '${lastTool}' called ${sameToolCount} times in the last ${recentCalls.length} calls (limit: ${limit})`
         };
       }
     }
 
     // Check for excessive total calls
-    if (toolCallHistory.length > 30) {
+    if (toolCallHistory.length > 50) {
       return {
         detected: true,
         reason: `Excessive number of tool calls (${toolCallHistory.length}) without resolution`
