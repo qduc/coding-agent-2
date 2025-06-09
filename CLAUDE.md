@@ -155,6 +155,7 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 
 #### System Tools
 - **Bash Tool** (`bash.ts`): Command execution with security controls
+- **Web Search Tool** (`webSearch.ts`): Internet search using Brave Search API
 
 #### Tool Infrastructure
 - **Base Tool** (`base.ts`): Abstract base class with schema definitions
@@ -343,6 +344,19 @@ This architecture provides a robust, extensible foundation for AI-powered progra
 ---
 
 ## Recent Updates (Latest First)
+
+### 2025-01-09: Web Search Tool Implementation
+- **COMPLETED**: Added comprehensive web search functionality using Brave Search API
+- **Added**: WebSearchTool class (`src/shared/tools/webSearch.ts`) with full search capabilities
+- **Features**: 
+  - Real-time internet search with up-to-date information
+  - Support for multiple search parameters (count, language, country, safesearch, freshness)
+  - Comprehensive error handling (rate limits, authentication, network issues)
+  - Pagination support with offset and count controls
+  - Rich result formatting with titles, URLs, descriptions, and snippets
+- **Configuration**: Integrated with config manager for BRAVE_SEARCH_API_KEY support
+- **Testing**: Complete test suite with 21 test cases covering all scenarios
+- **Integration**: Added to tool registry and exports for immediate availability
 
 ### 2025-01-08: AI-Powered Task Analysis System
 - **COMPLETED**: Replaced primitive keyword-based task detection with intelligent AI analysis

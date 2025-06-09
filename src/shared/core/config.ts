@@ -9,6 +9,7 @@ export interface Config {
   openaiApiBaseUrl?: string; // Custom OpenAI-compatible endpoint
   anthropicApiKey?: string;
   geminiApiKey?: string;
+  braveSearchApiKey?: string;
   provider?: 'openai' | 'anthropic' | 'gemini';
   verbose?: boolean;
   maxTokens?: number;
@@ -102,6 +103,9 @@ export class ConfigManager {
     if (process.env.GEMINI_API_KEY) {
       envConfig.geminiApiKey = process.env.GEMINI_API_KEY;
     }
+    if (process.env.BRAVE_SEARCH_API_KEY) {
+      envConfig.braveSearchApiKey = process.env.BRAVE_SEARCH_API_KEY;
+    }
     if (process.env.CODING_AGENT_PROVIDER) {
       envConfig.provider = process.env.CODING_AGENT_PROVIDER as 'openai' | 'anthropic' | 'gemini';
     }
@@ -158,6 +162,7 @@ export class ConfigManager {
     delete configToSave.openaiApiKey; // Never save API key to file
     delete configToSave.anthropicApiKey; // Never save API key to file
     delete configToSave.geminiApiKey; // Never save API key to file
+    delete configToSave.braveSearchApiKey; // Never save API key to file
 
     await fs.writeFile(this.configPath, JSON.stringify(configToSave, null, 2));
   }
@@ -188,6 +193,13 @@ export class ConfigManager {
    */
   hasGeminiKey(): boolean {
     return !!this.config.geminiApiKey;
+  }
+
+  /**
+   * Check if Brave Search API key is configured
+   */
+  hasBraveSearchKey(): boolean {
+    return !!this.config.braveSearchApiKey;
   }
 
   /**
@@ -227,6 +239,13 @@ export class ConfigManager {
   }
 
   /**
+   * Get Brave Search API key
+   */
+  getBraveSearchKey(): string | undefined {
+    return this.config.braveSearchApiKey;
+  }
+
+  /**
    * Set OpenAI API key (in memory only)
    */
   setOpenAIKey(apiKey: string): void {
@@ -245,6 +264,13 @@ export class ConfigManager {
    */
   setGeminiKey(apiKey: string): void {
     this.config.geminiApiKey = apiKey;
+  }
+
+  /**
+   * Set Brave Search API key (in memory only)
+   */
+  setBraveSearchKey(apiKey: string): void {
+    this.config.braveSearchApiKey = apiKey;
   }
 
   /**

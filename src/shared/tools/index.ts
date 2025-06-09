@@ -20,6 +20,7 @@ export * from './ripgrep';
 export * from './bash';
 export * from './todo';
 export * from './subAgent';
+export * from './webSearch';
 
 // Tool registry for dynamic tool loading
 import { BaseTool } from './base';
@@ -31,6 +32,7 @@ import { RipgrepTool } from './ripgrep';
 import { BashTool } from './bash';
 import { TodoTool } from './todo';
 import { SubAgentTool } from './subAgent';
+import { WebSearchTool } from './webSearch';
 
 /**
  * Registry of all available tools
@@ -43,7 +45,8 @@ export const tools: Record<string, new (...args: any[]) => BaseTool> = {
   ripgrep: RipgrepTool,
   bash: BashTool,
   todo: TodoTool,
-  sub_agent: SubAgentTool
+  sub_agent: SubAgentTool,
+  web_search: WebSearchTool
 };
 
 // Default tools array - can be used to create orchestrator with common tools

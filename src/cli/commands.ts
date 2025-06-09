@@ -272,7 +272,7 @@ export function renderResponse(content: string): string {
 
   if (hasMarkdown) {
     try {
-      return MarkdownRenderer.renderWithCodeHighlight(content);
+      return MarkdownRenderer.render(content);
     } catch (error) {
       // Fallback to plain text if markdown rendering fails
       return content;
