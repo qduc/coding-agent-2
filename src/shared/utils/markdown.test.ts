@@ -36,6 +36,7 @@ jest.mock('chalk', () => ({
   blue: mockChalkObj('BLUE', { underline: 'BLUE_UNDERLINE', bold: 'BLUE_BOLD' }),
   yellow: mockChalkObj('YELLOW', { bold: 'YELLOW_BOLD' }),
   magenta: mockChalkFn('MAGENTA'),
+  white: mockChalkFn('WHITE'),
   black: Object.assign(mockChalkFn('BLACK'), { bold: mockChalkFn('BLACK_BOLD') }),
   bgGray: Object.assign(mockChalkFn('BGGRAY'), { black: mockChalkFn('BGGRAY_BLACK') }),
 }));
@@ -135,10 +136,10 @@ describe('MarkdownRenderer', () => {
     });
   });
 
-  describe('renderWithCodeHighlight() - Syntax Highlighting', () => {
+  describe('render() - Syntax Highlighting', () => {
     test('should highlight JavaScript code', () => {
       const input = '```javascript\nconst message = "hello";\nfunction test() {\n  return true;\n}\n```';
-      const result = MarkdownRenderer.renderWithCodeHighlight(input);
+      const result = MarkdownRenderer.render(input);
 
       expect(result).toContain('MAGENTA(const)');
       expect(result).toContain('MAGENTA(function)');
@@ -149,7 +150,7 @@ describe('MarkdownRenderer', () => {
 
     test('should highlight TypeScript code', () => {
       const input = '```typescript\ninterface User {\n  name: string;\n}\n```';
-      const result = MarkdownRenderer.renderWithCodeHighlight(input);
+      const result = MarkdownRenderer.render(input);
 
       // Should use JavaScript highlighter for TypeScript
       expect(result).toContain('typescript');
@@ -157,7 +158,7 @@ describe('MarkdownRenderer', () => {
 
     test('should highlight JSON code', () => {
       const input = '```json\n{\n  "name": "test",\n  "count": 42,\n  "active": true\n}\n```';
-      const result = MarkdownRenderer.renderWithCodeHighlight(input);
+      const result = MarkdownRenderer.render(input);
 
       expect(result).toContain('CYAN("name")');
       expect(result).toContain('GREEN("test")');
@@ -167,7 +168,7 @@ describe('MarkdownRenderer', () => {
 
     test('should highlight Bash code', () => {
       const input = '```bash\nls -la\n# This is a comment\necho "hello"\n```';
-      const result = MarkdownRenderer.renderWithCodeHighlight(input);
+      const result = MarkdownRenderer.render(input);
 
       expect(result).toContain('CYAN(ls)');
       expect(result).toContain('YELLOW(-la)');
@@ -177,7 +178,7 @@ describe('MarkdownRenderer', () => {
 
     test('should fallback to plain text for unknown languages', () => {
       const input = '```unknown\nsome code here\n```';
-      const result = MarkdownRenderer.renderWithCodeHighlight(input);
+      const result = MarkdownRenderer.render(input);
 
       expect(result).toContain('some code here');
       expect(result).toContain('unknown');
@@ -331,7 +332,7 @@ describe('MarkdownRenderer', () => {
 
     test('should handle mixed content types (semantic)', () => {
       const input = `# Main Title\n\nHere's some **bold** text and *italic* text.\n\n\`\`\`javascript\nconst example = "code block";\nconsole.log(example);\n\`\`\`\n\n- List item 1\n- List item 2\n\n> This is a blockquote\n> with multiple lines\n\n[Link example](https://example.com)\n\n| Table | Example |\n|-------|---------|\n| Row 1 | Data 1  |\n| Row 2 | Data 2  |\n\n---\n\nEnd of document.`;
-      const result = stripVisuals(MarkdownRenderer.renderWithCodeHighlight(input));
+      const result = stripVisuals(MarkdownRenderer.render(input));
       expect(result).toContain('Main Title');
       expect(result).toContain('bold');
       expect(result).toContain('italic');

@@ -15,7 +15,10 @@ export const CompletionDropdown: React.FC<CompletionDropdownProps> = ({
     return null;
   }
 
-  const visibleItems = state.items.slice(0, maxItems);
+  // Calculate scrolling window based on selected index
+  const startIndex = Math.max(0, Math.min(state.selectedIndex - Math.floor(maxItems / 2), state.items.length - maxItems));
+  const endIndex = Math.min(startIndex + maxItems, state.items.length);
+  const visibleItems = state.items.slice(startIndex, endIndex);
   const hasMoreItems = state.items.length > maxItems;
 
   const getTitle = () => {
@@ -36,7 +39,8 @@ export const CompletionDropdown: React.FC<CompletionDropdownProps> = ({
       </Text>
       <Box flexDirection="column" marginLeft={2}>
         {visibleItems.map((item, index) => {
-          const isSelected = index === state.selectedIndex;
+          const actualIndex = startIndex + index;
+          const isSelected = actualIndex === state.selectedIndex;
           return (
             <Text
               key={index}

@@ -33,7 +33,12 @@ const patterns = {
   operator: /[+\-*/=<>!&|%^~?:]/g,
 
   // Decorators/Annotations
-  decorator: /@([a-zA-Z_$][a-zA-Z0-9_$]*)\b/g
+  decorator: /@([a-zA-Z_$][a-zA-Z0-9_$]*)\b/g,
+
+  // Additional patterns for specific languages
+  tag: undefined as RegExp | undefined,
+  selector: undefined as RegExp | undefined,
+  property: undefined as RegExp | undefined,
 };
 
 /**
@@ -53,13 +58,7 @@ export class CodeHighlighter {
     }
 
     // Apply highlighting patterns in order of precedence
-    // Comments first to avoid highlighting keywords in comments
-    highlighted = highlighted.replace(languagePatterns.comment || patterns.comment, (match) => chalk.gray(match));
-    
-    // Strings second to avoid highlighting keywords in strings
-    highlighted = highlighted.replace(languagePatterns.string || patterns.string, (match) => chalk.green(match));
-
-    // Keywords
+    // Keywords first
     highlighted = highlighted.replace(languagePatterns.keyword || patterns.keyword, (match) => chalk.blue(match));
 
     // Numbers
@@ -75,6 +74,10 @@ export class CodeHighlighter {
     if (patterns.decorator) {
       highlighted = highlighted.replace(patterns.decorator, (match) => chalk.magenta(match));
     }
+
+    // Strings and comments last to override everything inside them
+    highlighted = highlighted.replace(languagePatterns.string || patterns.string, (match) => chalk.green(match));
+    highlighted = highlighted.replace(languagePatterns.comment || patterns.comment, (match) => chalk.gray(match));
 
     return highlighted;
   }

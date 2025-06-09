@@ -16,18 +16,32 @@ export class MarkdownRenderer {
    */
   static render(markdownText: string): string {
     let output = markdownText;
-
-    // Code blocks MUST be processed before inline code
-    output = output.replace(/```[\s\S]*?```/g, (match) => {
-      const lines = match.split('\n');
-      const language = lines[0].replace('```', '').trim();
-      const code = lines.slice(1, -1).join('\n');
-      return BoxRenderer.createCodeBox(language, code, {
+    
+    // Store code blocks in placeholders to protect them from markdown processing
+    const codeBlocks: string[] = [];
+    
+    // Extract and process code blocks, storing them separately
+    output = output.replace(/```(\w+)?\n?([\s\S]*?)```/g, (match, language, code) => {
+      const lang = language || 'text';
+      const highlightedCode = this.highlightCode(code.trim(), lang);
+      const renderedCodeBlock = BoxRenderer.createCodeBox(lang, highlightedCode, {
         showLineNumbers: true,
         maxWidth: 70
       });
+      codeBlocks.push(renderedCodeBlock);
+      return `§§§CODEBLOCK${codeBlocks.length - 1}§§§`;
     });
 
+    // Store inline code in placeholders to protect them from markdown processing
+    const inlineCodes: string[] = [];
+    
+    output = output.replace(/`(.*?)`/g, (match, code) => {
+      const renderedInlineCode = chalk.bgGray.black(' ' + code + ' ');
+      inlineCodes.push(renderedInlineCode);
+      return `§§§INLINECODE${inlineCodes.length - 1}§§§`;
+    });
+
+    // Now apply all other markdown formatting (code is protected)
     // Headers with enhanced visual hierarchy
     output = output.replace(/^### (.*$)/gm, '\n' + chalk.yellow.bold('▸ $1') + '\n');
     output = output.replace(/^## (.*$)/gm, '\n' + chalk.cyan.bold('▸▸ $1') + '\n');
@@ -40,9 +54,6 @@ export class MarkdownRenderer {
     // Italic text (ignore unmatched or bold markers)
     output = output.replace(/(?<!\*)\*(?!\*)(.*?)\*(?!\*)/g, chalk.italic('$1'));
     output = output.replace(/(?<!_)_(?!_)(.*?)_(?!_)/g, chalk.italic('$1'));
-
-    // Enhanced inline code with better contrast
-    output = output.replace(/`(.*?)`/g, chalk.bgGray.black(' $1 '));
 
     // Links with better formatting
     output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, chalk.blue.underline('$1') + chalk.gray.dim(' ↗ $2'));
@@ -58,24 +69,19 @@ export class MarkdownRenderer {
     // Enhanced horizontal rules
     output = output.replace(/^---$/gm, '\n' + chalk.gray('─'.repeat(Math.min(56, process.stdout.columns - 4 || 56))) + '\n');
 
+    // Restore inline code blocks
+    output = output.replace(/§§§INLINECODE(\d+)§§§/g, (match, index) => {
+      return inlineCodes[parseInt(index)];
+    });
+
+    // Restore code blocks last
+    output = output.replace(/§§§CODEBLOCK(\d+)§§§/g, (match, index) => {
+      return codeBlocks[parseInt(index)];
+    });
+
     return output;
   }
 
-  /**
-   * Render markdown with enhanced code syntax highlighting
-   */
-  static renderWithCodeHighlight(markdownText: string): string {
-    // Enhanced code block handling with basic syntax highlighting and line numbers
-    let output = markdownText.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
-      const lang = language || 'text';
-      const highlightedCode = this.highlightCode(code.trim(), lang);
-      return BoxRenderer.createCodeBox(lang, highlightedCode, {
-        showLineNumbers: true,
-        maxWidth: 70
-      });
-    });
-    return this.render(output);
-  }
 
   /**
    * Highlight code with syntax highlighting
@@ -84,7 +90,7 @@ export class MarkdownRenderer {
    * @param language Optional language identifier for language-specific highlighting
    * @returns Highlighted code string
    */
-  private static highlightCode(code: string, language?: string): string {
+  static highlightCode(code: string, language?: string): string {
     // Use CodeHighlighter for all languages
     return CodeHighlighter.highlight(code, language);
   }

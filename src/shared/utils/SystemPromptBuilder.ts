@@ -75,10 +75,9 @@ Key capabilities:
     const fullSystemMessage = `${baseSystemMessage}\n${projectContextSection}\nWhen working with files:
 - Use the current working directory (${currentDirectory}) as the base for relative paths
 - When users say "this file" or "this project", they mean files in the current directory
-- Use the ls tool to explore the project structure when needed
-- Always provide helpful context about what you find
+- When using tools, always explain your intention first before executing the tool
 
-Use these tools when you need to access files or gather information about the project. Always be helpful, accurate, and focused on the specific coding task at hand.`;
+Always be helpful, accurate, and focused on the specific coding task at hand.`;
 
     return {
       role: 'system',

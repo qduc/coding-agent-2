@@ -299,9 +299,11 @@ export class ToolLogger {
       }
     } else if (toolLower.includes('grep')) {
       if (typeof result === 'string') {
-        const matches = result.split('\n').filter(line => line.trim()).length;
+        const matches = result.trim() ? result.split('\n').filter(line => line.trim()).length : 0;
         return ` (${matches} matches)`;
       }
+      // Even if result is not a string, show 0 matches for grep tools
+      return ' (0 matches)';
     }
 
     return '';
