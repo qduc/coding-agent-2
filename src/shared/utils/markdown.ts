@@ -1,6 +1,7 @@
 
 import chalk from 'chalk';
 import { BoxRenderer } from './boxRenderer';
+import { CodeHighlighter } from './codeHighlighter';
 
 /**
  * Markdown Renderer - Utility for rendering markdown content in the terminal
@@ -77,93 +78,15 @@ export class MarkdownRenderer {
   }
 
   /**
-   * Basic syntax highlighting for common languages
+   * Highlight code with syntax highlighting
+   * 
+   * @param code The code to highlight
+   * @param language Optional language identifier for language-specific highlighting
+   * @returns Highlighted code string
    */
-  private static highlightCode(code: string, language: string): string {
-    switch (language.toLowerCase()) {
-      case 'javascript':
-      case 'js':
-      case 'typescript':
-      case 'ts':
-        return this.highlightJavaScript(code);
-      case 'json':
-        return this.highlightJSON(code);
-      case 'bash':
-      case 'shell':
-        return this.highlightBash(code);
-      default:
-        return code;
-    }
-  }
-
-  /**
-   * Highlight JavaScript/TypeScript code
-   */
-  private static highlightJavaScript(code: string): string {
-    let highlighted = code;
-
-    // Keywords
-    const keywords = ['const', 'let', 'var', 'function', 'class', 'if', 'else', 'for', 'while', 'return', 'import', 'export', 'from', 'async', 'await'];
-    keywords.forEach(keyword => {
-      highlighted = highlighted.replace(
-        new RegExp(`\\b${keyword}\\b`, 'g'),
-        chalk.magenta(keyword)
-      );
-    });
-
-    // Strings
-    highlighted = highlighted.replace(/(['"`])((?:(?!\1)[^\\]|\\.)*)(\1)/g, chalk.green('$1$2$3'));
-
-    // Comments
-    highlighted = highlighted.replace(/\/\/.*$/gm, chalk.gray('$&'));
-    highlighted = highlighted.replace(/\/\*[\s\S]*?\*\//g, chalk.gray('$&'));
-
-    // Numbers
-    highlighted = highlighted.replace(/\b\d+\.?\d*\b/g, chalk.yellow('$&'));
-    // Booleans and null
-    highlighted = highlighted.replace(/\b(true|false|null)\b/g, chalk.yellow('$1'));
-
-    return highlighted;
-  }
-
-  /**
-   * Highlight JSON code
-   */
-  private static highlightJSON(code: string): string {
-    let highlighted = code;
-
-    // Strings (keys and values)
-    highlighted = highlighted.replace(/"([^"]+)":/g, chalk.cyan('"$1"') + ':');
-    highlighted = highlighted.replace(/:\s*"([^"]+)"/g, ': ' + chalk.green('"$1"'));
-
-    // Numbers
-    highlighted = highlighted.replace(/:\s*(\d+\.?\d*)/g, ': ' + chalk.yellow('$1'));
-
-    // Booleans and null
-    highlighted = highlighted.replace(/:\s*(true|false|null)/g, ': ' + chalk.magenta('$1'));
-
-    return highlighted;
-  }
-
-  /**
-   * Highlight Bash/Shell code
-   */
-  private static highlightBash(code: string): string {
-    let highlighted = code;
-
-    // Commands
-    highlighted = highlighted.replace(/^(\w+)/gm, chalk.cyan('$1'));
-
-    // Flags
-    highlighted = highlighted.replace(/\s(-{1,2}\w+)/g, ' ' + chalk.yellow('$1'));
-
-    // Comments
-    highlighted = highlighted.replace(/#.*$/gm, chalk.gray('$&'));
-
-    // Strings
-    highlighted = highlighted.replace(/(['"`])((?:(?!\1)[^\\]|\\.)*)(\1)/g, chalk.green('$1$2$3'));
-
-    return highlighted;
+  private static highlightCode(code: string, language?: string): string {
+    // Use CodeHighlighter for all languages
+    return CodeHighlighter.highlight(code, language);
   }
 
   /**

@@ -139,10 +139,7 @@ export class ToolOrchestrator {
       }
 
       // Build messages for this request with AI-powered task-aware context
-      const systemMessage = await this.systemPromptBuilder.createSystemMessage(
-        this.toolExecutionHandler.getRegisteredTools(),
-        userInput
-      );
+      const systemMessage = await this.systemPromptBuilder.createSystemMessage();
       const messages = this.conversationManager.buildMessages(systemMessage);
 
       try {
