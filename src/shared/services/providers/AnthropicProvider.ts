@@ -1,9 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseLLMProvider } from '../BaseLLMProvider';
 import { Message, StreamingResponse, FunctionCallResponse } from '../../types/llm';
+import { PromptCachingService } from '../PromptCachingService';
 
 export class AnthropicProvider extends BaseLLMProvider {
   private anthropic: Anthropic | null = null;
+  private cachingService: PromptCachingService;
+
+  constructor() {
+    super();
+    this.cachingService = new PromptCachingService(this.config);
+  }
 
   getProviderName(): string {
     return 'anthropic';
@@ -68,15 +75,20 @@ export class AnthropicProvider extends BaseLLMProvider {
 
       if (message.role === 'tool') {
         // Handle tool result messages - convert to proper tool_result format
+        const toolResultContent: any = {
+          type: 'tool_result',
+          tool_use_id: message.tool_call_id || '',
+          content: message.content || ''
+        };
+
+        // Add cache control if present
+        if (message.cache_control) {
+          toolResultContent.cache_control = message.cache_control;
+        }
+
         anthropicMessages.push({
           role: 'user',
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: message.tool_call_id || '',
-              content: message.content || ''
-            }
-          ]
+          content: [toolResultContent]
         });
       } else if (message.role === 'user' || message.role === 'assistant') {
         // Handle regular messages and assistant messages with tool calls
@@ -85,19 +97,33 @@ export class AnthropicProvider extends BaseLLMProvider {
           const content: any[] = [];
 
           if (message.content) {
-            content.push({
+            const textContent: any = {
               type: 'text',
               text: message.content
-            });
+            };
+
+            // Add cache control to the last content block if present
+            if (message.cache_control && !message.tool_calls.length) {
+              textContent.cache_control = message.cache_control;
+            }
+
+            content.push(textContent);
           }
 
           for (const toolCall of message.tool_calls) {
-            content.push({
+            const toolUseContent: any = {
               type: 'tool_use',
               id: toolCall.id,
               name: toolCall.function.name,
               input: this.parseToolArguments(toolCall.function.arguments)
-            });
+            };
+
+            content.push(toolUseContent);
+          }
+
+          // Add cache control to the last tool call if present
+          if (message.cache_control && content.length > 0) {
+            content[content.length - 1].cache_control = message.cache_control;
           }
 
           anthropicMessages.push({
@@ -105,10 +131,29 @@ export class AnthropicProvider extends BaseLLMProvider {
             content
           });
         } else {
-          anthropicMessages.push({
-            role: message.role,
-            content: message.content || ''
-          });
+          // Handle simple text messages
+          if (typeof message.content === 'string') {
+            const textContent: any = {
+              type: 'text',
+              text: message.content
+            };
+
+            // Add cache control if present
+            if (message.cache_control) {
+              textContent.cache_control = message.cache_control;
+            }
+
+            anthropicMessages.push({
+              role: message.role,
+              content: [textContent]
+            });
+          } else {
+            // Fallback for non-string content
+            anthropicMessages.push({
+              role: message.role,
+              content: message.content || ''
+            });
+          }
         }
       }
     }
@@ -127,21 +172,38 @@ export class AnthropicProvider extends BaseLLMProvider {
     this.ensureInitialized();
 
     const systemMessage = this.extractSystemMessage(messages);
-    const anthropicMessages = this.convertMessages(messages);
+    
+    // Apply prompt caching
+    const { messages: cachedMessages, systemMessages } = this.cachingService.applyCacheControl(
+      messages,
+      undefined,
+      systemMessage
+    );
+    
+    const anthropicMessages = this.convertMessages(cachedMessages);
 
     this.logApiCall('streamMessage', messages.length);
 
     try {
-      const stream = await this.anthropic!.messages.create({
+      const requestParams: any = {
         model: this.getModelName(),
         max_tokens: this.config.maxTokens || 8000,
-        system: systemMessage,
         messages: anthropicMessages,
         stream: true
-      });
+      };
+
+      // Use cached system messages if available, otherwise use original
+      if (systemMessages && systemMessages.length > 0) {
+        requestParams.system = systemMessages;
+      } else if (systemMessage) {
+        requestParams.system = systemMessage;
+      }
+
+      const stream = await this.anthropic!.messages.create(requestParams) as any;
 
       let fullContent = '';
       let finishReason: string | null = null;
+      let usage: any = undefined;
 
       for await (const chunk of stream) {
         if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
@@ -152,11 +214,18 @@ export class AnthropicProvider extends BaseLLMProvider {
         if (chunk.type === 'message_stop') {
           finishReason = 'stop';
         }
+
+        // Capture usage information if available
+        if (chunk.type === 'message_delta' && chunk.usage) {
+          usage = chunk.usage;
+        }
       }
 
+      // Build response with cache usage if available
       const response: StreamingResponse = {
         content: fullContent,
-        finishReason
+        finishReason,
+        usage: usage ? this.buildUsageResponse(usage) : undefined
       };
 
       if (onComplete) {
@@ -176,17 +245,33 @@ export class AnthropicProvider extends BaseLLMProvider {
     this.ensureInitialized();
 
     const systemMessage = this.extractSystemMessage(messages);
-    const anthropicMessages = this.convertMessages(messages);
+    
+    // Apply prompt caching
+    const { messages: cachedMessages, systemMessages } = this.cachingService.applyCacheControl(
+      messages,
+      undefined,
+      systemMessage
+    );
+    
+    const anthropicMessages = this.convertMessages(cachedMessages);
 
     this.logApiCall('sendMessage', messages.length);
 
     try {
-      const response = await this.anthropic!.messages.create({
+      const requestParams: any = {
         model: this.getModelName(),
         max_tokens: this.config.maxTokens || 8000,
-        system: systemMessage,
         messages: anthropicMessages
-      });
+      };
+
+      // Use cached system messages if available, otherwise use original
+      if (systemMessages && systemMessages.length > 0) {
+        requestParams.system = systemMessages;
+      } else if (systemMessage) {
+        requestParams.system = systemMessage;
+      }
+
+      const response = await this.anthropic!.messages.create(requestParams);
 
       return response.content.map(block =>
         block.type === 'text' ? block.text : ''
@@ -208,8 +293,16 @@ export class AnthropicProvider extends BaseLLMProvider {
     this.ensureInitialized();
 
     const systemMessage = this.extractSystemMessage(messages);
-    const anthropicMessages = this.convertMessages(messages);
     const normalizedFunctions = this.validateAndNormalizeTools(functions);
+    
+    // Apply prompt caching
+    const { messages: cachedMessages, tools: cachedTools, systemMessages } = this.cachingService.applyCacheControl(
+      messages,
+      normalizedFunctions,
+      systemMessage
+    );
+    
+    const anthropicMessages = this.convertMessages(cachedMessages);
 
     this.logApiCall('sendMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
 
@@ -217,16 +310,24 @@ export class AnthropicProvider extends BaseLLMProvider {
       const requestParams: any = {
         model: this.getModelName(),
         max_tokens: this.config.maxTokens || 8000,
-        system: systemMessage,
         messages: anthropicMessages
       };
 
+      // Use cached system messages if available, otherwise use original
+      if (systemMessages && systemMessages.length > 0) {
+        requestParams.system = systemMessages;
+      } else if (systemMessage) {
+        requestParams.system = systemMessage;
+      }
+
       // Add tool calling if functions are provided
-      if (normalizedFunctions.length > 0) {
-        requestParams.tools = normalizedFunctions.map(func => ({
+      const toolsToUse = cachedTools || normalizedFunctions;
+      if (toolsToUse.length > 0) {
+        requestParams.tools = toolsToUse.map(func => ({
           name: func.name,
           description: func.description,
-          input_schema: func.input_schema || func.parameters
+          input_schema: func.input_schema || func.parameters,
+          cache_control: func.cache_control
         }));
       }
 

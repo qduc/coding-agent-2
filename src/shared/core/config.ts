@@ -29,6 +29,13 @@ export interface Config {
   // Optional global defaults for tool execution, can be overridden at other levels
   maxFileSize?: number;
   timeout?: number;
+  // Prompt caching configuration
+  enablePromptCaching?: boolean;
+  promptCachingStrategy?: 'aggressive' | 'conservative' | 'custom';
+  cacheSystemPrompts?: boolean;
+  cacheToolDefinitions?: boolean;
+  cacheConversationHistory?: boolean;
+  cacheTTL?: '5m' | '1h';
 }
 
 export { LogLevel }; // Re-export LogLevel
@@ -63,6 +70,13 @@ export class ConfigManager {
       enableConsoleLogging: false, // Disable general console logging by default
       enableToolConsoleLogging: true, // But keep tool messages in console
       openaiApiBaseUrl: 'https://api.openai.com/v1', // Default to official endpoint
+      // Prompt caching configuration
+      enablePromptCaching: true,
+      promptCachingStrategy: 'aggressive',
+      cacheSystemPrompts: true,
+      cacheToolDefinitions: true,
+      cacheConversationHistory: true,
+      cacheTTL: '5m',
     };
 
     let fileConfig: Partial<Config> = {};
@@ -137,6 +151,30 @@ export class ConfigManager {
       const mode = process.env.CODING_AGENT_TOOL_DISPLAY_MODE as 'off' | 'minimal' | 'condensed' | 'standard' | 'verbose';
       if (['off', 'minimal', 'condensed', 'standard', 'verbose'].includes(mode)) {
         envConfig.toolDisplayMode = mode;
+      }
+    }
+    if (process.env.CODING_AGENT_ENABLE_PROMPT_CACHING) {
+      envConfig.enablePromptCaching = process.env.CODING_AGENT_ENABLE_PROMPT_CACHING === 'true';
+    }
+    if (process.env.CODING_AGENT_PROMPT_CACHING_STRATEGY) {
+      const strategy = process.env.CODING_AGENT_PROMPT_CACHING_STRATEGY as 'aggressive' | 'conservative' | 'custom';
+      if (['aggressive', 'conservative', 'custom'].includes(strategy)) {
+        envConfig.promptCachingStrategy = strategy;
+      }
+    }
+    if (process.env.CODING_AGENT_CACHE_SYSTEM_PROMPTS) {
+      envConfig.cacheSystemPrompts = process.env.CODING_AGENT_CACHE_SYSTEM_PROMPTS === 'true';
+    }
+    if (process.env.CODING_AGENT_CACHE_TOOL_DEFINITIONS) {
+      envConfig.cacheToolDefinitions = process.env.CODING_AGENT_CACHE_TOOL_DEFINITIONS === 'true';
+    }
+    if (process.env.CODING_AGENT_CACHE_CONVERSATION_HISTORY) {
+      envConfig.cacheConversationHistory = process.env.CODING_AGENT_CACHE_CONVERSATION_HISTORY === 'true';
+    }
+    if (process.env.CODING_AGENT_CACHE_TTL) {
+      const ttl = process.env.CODING_AGENT_CACHE_TTL as '5m' | '1h';
+      if (['5m', '1h'].includes(ttl)) {
+        envConfig.cacheTTL = ttl;
       }
     }
 

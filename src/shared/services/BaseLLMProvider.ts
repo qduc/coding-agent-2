@@ -155,19 +155,28 @@ export abstract class BaseLLMProvider implements LLMProvider {
   /**
    * Build usage response object in standard format
    */
-  protected buildUsageResponse(usage: any): { promptTokens: number; completionTokens: number; totalTokens: number } | undefined {
+  protected buildUsageResponse(usage: any): { promptTokens: number; completionTokens: number; totalTokens: number; cacheUsage?: any } | undefined {
     if (!usage) {
       return undefined;
     }
 
+    // Extract cache usage if available (only for Anthropic)
+    const cacheUsage = this.extractCacheUsage(usage);
+
     // Handle different provider usage formats
     if (usage.input_tokens !== undefined && usage.output_tokens !== undefined) {
       // Anthropic format
-      return {
+      const response: { promptTokens: number; completionTokens: number; totalTokens: number; cacheUsage?: any } = {
         promptTokens: usage.input_tokens,
         completionTokens: usage.output_tokens,
         totalTokens: usage.input_tokens + usage.output_tokens
       };
+      
+      if (cacheUsage) {
+        response.cacheUsage = cacheUsage;
+      }
+      
+      return response;
     } else if (usage.prompt_tokens !== undefined && usage.completion_tokens !== undefined) {
       // OpenAI format
       return {
@@ -185,6 +194,29 @@ export abstract class BaseLLMProvider implements LLMProvider {
     }
 
     return undefined;
+  }
+
+  /**
+   * Extract cache usage information from API response (for Anthropic)
+   */
+  protected extractCacheUsage(usage: any): any {
+    if (!usage) return undefined;
+
+    const cacheUsage: any = {};
+    
+    if (usage.cache_creation_input_tokens) {
+      cacheUsage.cache_creation_input_tokens = usage.cache_creation_input_tokens;
+    }
+    
+    if (usage.cache_read_input_tokens) {
+      cacheUsage.cache_read_input_tokens = usage.cache_read_input_tokens;
+    }
+    
+    if (usage.cache_creation) {
+      cacheUsage.cache_creation = usage.cache_creation;
+    }
+
+    return Object.keys(cacheUsage).length > 0 ? cacheUsage : undefined;
   }
 
   /**

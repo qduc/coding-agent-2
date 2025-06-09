@@ -3,6 +3,21 @@ export interface Message {
   content: string | null;
   tool_calls?: any[];
   tool_call_id?: string;
+  // Prompt caching support
+  cache_control?: {
+    type: 'ephemeral';
+    ttl?: '5m' | '1h';
+  };
+}
+
+// Add cache-related fields to usage tracking
+export interface CacheUsage {
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation?: {
+    ephemeral_5m_input_tokens?: number;
+    ephemeral_1h_input_tokens?: number;
+  };
 }
 
 export interface StreamingResponse {
@@ -12,6 +27,8 @@ export interface StreamingResponse {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    // Add cache usage tracking
+    cacheUsage?: CacheUsage;
   };
 }
 
@@ -23,6 +40,8 @@ export interface FunctionCallResponse {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    // Add cache usage tracking
+    cacheUsage?: CacheUsage;
   };
 }
 
