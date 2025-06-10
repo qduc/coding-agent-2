@@ -153,7 +153,8 @@ export class GeminiProvider extends BaseLLMProvider {
   protected async _streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void
+    onComplete?: (response: StreamingResponse) => void,
+    functions?: any[]
   ): Promise<StreamingResponse> {
     this.ensureInitialized();
 
@@ -196,7 +197,7 @@ export class GeminiProvider extends BaseLLMProvider {
     }
   }
 
-  protected async _sendMessage(messages: Message[]): Promise<string> {
+  protected async _sendMessage(messages: Message[], functions?: any[]): Promise<string> {
     this.ensureInitialized();
 
     if (!this.genAI) {

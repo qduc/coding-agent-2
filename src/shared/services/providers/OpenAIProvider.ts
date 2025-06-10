@@ -73,7 +73,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  protected async _sendMessage(messages: Message[]): Promise<string> {
+  protected async _sendMessage(messages: Message[], functions: any[] = []): Promise<string> {
     this.ensureInitialized();
 
     const model = this.getModelName();
@@ -82,11 +82,13 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (this.shouldUseResponsesApi(model)) {
       try {
         const input = this.convertMessagesToResponsesInput(messages);
+        const normalizedFunctions = this.validateAndNormalizeTools(functions);
         const response = await this.sendResponsesMessage(input, {
           model,
           reasoning: this.isReasoningModel(model) ? { effort: 'medium' } : undefined,
           store: true,
-          previous_response_id: this.previousResponseId || undefined
+          previous_response_id: this.previousResponseId || undefined,
+          tools: normalizedFunctions.length > 0 ? normalizedFunctions : undefined
         });
 
         return response.output_text || '';
@@ -99,10 +101,25 @@ export class OpenAIProvider extends BaseLLMProvider {
     this.logApiCall('sendMessage', messages.length);
 
     try {
-      const response = await this.openai!.chat.completions.create({
+      const requestParams: any = {
         model,
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-      });
+      };
+
+      // Add function calling if functions are provided
+      if (functions && functions.length > 0) {
+        const normalizedFunctions = this.validateAndNormalizeTools(functions);
+        // Convert tools to OpenAI format using SchemaAdapter
+        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
+        
+        requestParams.tools = openAIFunctions.map(func => ({
+          type: 'function',
+          function: func
+        }));
+        requestParams.tool_choice = 'auto';
+      }
+
+      const response = await this.openai!.chat.completions.create(requestParams);
 
       const responseContent = response.choices[0]?.message?.content || '';
 
@@ -110,7 +127,8 @@ export class OpenAIProvider extends BaseLLMProvider {
         messageCount: messages.length,
         responseLength: responseContent.length,
         model: model,
-        usage: response.usage
+        usage: response.usage,
+        toolsProvided: functions ? functions.length : 0
       }, 'OpenAIProvider');
 
       return responseContent;
@@ -122,7 +140,8 @@ export class OpenAIProvider extends BaseLLMProvider {
   protected async _streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void
+    onComplete?: (response: StreamingResponse) => void,
+    functions: any[] = []
   ): Promise<StreamingResponse> {
     this.ensureInitialized();
 
@@ -132,11 +151,13 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (this.shouldUseResponsesApi(model)) {
       try {
         const input = this.convertMessagesToResponsesInput(messages);
+        const normalizedFunctions = this.validateAndNormalizeTools(functions);
         const response = await this.streamResponsesMessage(input, {
           model,
           reasoning: this.isReasoningModel(model) ? { effort: 'medium' } : undefined,
           store: true,
-          previous_response_id: this.previousResponseId || undefined
+          previous_response_id: this.previousResponseId || undefined,
+          tools: normalizedFunctions.length > 0 ? normalizedFunctions : undefined
         }, onChunk);
 
         const streamingResponse: StreamingResponse = {
@@ -159,11 +180,26 @@ export class OpenAIProvider extends BaseLLMProvider {
     this.logApiCall('streamMessage', messages.length);
 
     try {
-      const stream = await this.openai!.chat.completions.create({
+      const requestParams: any = {
         model,
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
         stream: true,
-      });
+      };
+
+      // Add function calling if functions are provided
+      if (functions && functions.length > 0) {
+        const normalizedFunctions = this.validateAndNormalizeTools(functions);
+        // Convert tools to OpenAI format using SchemaAdapter
+        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
+        
+        requestParams.tools = openAIFunctions.map(func => ({
+          type: 'function',
+          function: func
+        }));
+        requestParams.tool_choice = 'auto';
+      }
+
+      const stream = await this.openai!.chat.completions.create(requestParams);
 
       let fullContent = '';
       let finishReason: string | null = null;
@@ -189,7 +225,8 @@ export class OpenAIProvider extends BaseLLMProvider {
       logger.debug('Streaming message completed', {
         messageCount: messages.length,
         responseLength: fullContent.length,
-        finishReason
+        finishReason,
+        toolsProvided: functions ? functions.length : 0
       }, 'OpenAIProvider');
 
       if (onComplete) {

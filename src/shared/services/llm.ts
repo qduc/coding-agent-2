@@ -77,22 +77,23 @@ export class LLMService implements LLMProvider {
   async streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void
+    onComplete?: (response: StreamingResponse) => void,
+    functions?: any[]
   ): Promise<StreamingResponse> {
     if (!this.provider) {
       throw new Error('LLM service not initialized');
     }
-    return this.provider.streamMessage(messages, onChunk, onComplete);
+    return this.provider.streamMessage(messages, onChunk, onComplete, functions);
   }
 
   /**
    * Send a message and return the complete response
    */
-  async sendMessage(messages: Message[]): Promise<string> {
+  async sendMessage(messages: Message[], functions?: any[]): Promise<string> {
     if (!this.provider) {
       throw new Error('LLM service not initialized');
     }
-    return this.provider.sendMessage(messages);
+    return this.provider.sendMessage(messages, functions);
   }
 
   /**

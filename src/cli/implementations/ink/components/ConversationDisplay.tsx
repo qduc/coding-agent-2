@@ -4,10 +4,18 @@ import { MarkdownRenderer } from '../../../../shared/utils/markdown';
 
 export interface Message {
   id: string;
-  type: 'user' | 'agent' | 'system' | 'error' | 'tool';
+  type: 'user' | 'agent' | 'system' | 'error' | 'tool_call' | 'tool_result';
   content: string;
   timestamp: Date;
   streaming?: boolean;
+  toolData?: {
+    toolName: string;
+    args?: any;
+    result?: any;
+    success?: boolean;
+    duration?: number;
+    error?: string;
+  };
 }
 
 export interface ConversationDisplayProps {
@@ -27,6 +35,24 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
   const renderMessage = (message: Message) => {
     const prefix = getMessagePrefix(message.type);
     const color = getMessageColor(message.type);
+
+    // Special rendering for tool calls and results
+    if (message.type === 'tool_call' || message.type === 'tool_result') {
+      return (
+        <Box key={message.id} flexDirection="column" marginBottom={1}>
+          <Box>
+            <Text color={color} bold>
+              {prefix}
+            </Text>
+            <Text> </Text>
+            <ToolMessage message={message} />
+          </Box>
+          <Box>
+            <Text color="gray">─{Array(48).fill('─').join('')}</Text>
+          </Box>
+        </Box>
+      );
+    }
 
     return (
       <Box key={message.id} flexDirection="column" marginBottom={1}>
@@ -104,13 +130,83 @@ const MessageContent: React.FC<{ content: string; type: Message['type'] }> = ({ 
   return <Text>{content}</Text>;
 };
 
+// New component for rendering tool messages with enhanced information
+const ToolMessage: React.FC<{ message: Message }> = ({ message }) => {
+  const { toolData } = message;
+  
+  if (!toolData) {
+    return <Text>{message.content}</Text>;
+  }
+
+  if (message.type === 'tool_call') {
+    return (
+      <Box flexDirection="column">
+        <Box>
+          <Text color="magenta" bold>{toolData.toolName}</Text>
+          <Text color="gray"> with input:</Text>
+        </Box>
+        <Box marginLeft={2}>
+          <Text color="white">
+            {JSON.stringify(toolData.args, null, 2)}
+          </Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (message.type === 'tool_result') {
+    const statusColor = toolData.success ? 'green' : 'red';
+    const statusIcon = toolData.success ? '✅' : '❌';
+    
+    return (
+      <Box flexDirection="column">
+        <Box>
+          <Text color="magenta" bold>{toolData.toolName}</Text>
+          <Text color={statusColor}> {statusIcon} {toolData.success ? 'completed' : 'failed'}</Text>
+          {toolData.duration && (
+            <Text color="gray"> ({toolData.duration}ms)</Text>
+          )}
+        </Box>
+        
+        {toolData.error && (
+          <Box marginLeft={2} marginTop={1}>
+            <Text color="red" bold>Error: </Text>
+            <Text color="red">{toolData.error}</Text>
+          </Box>
+        )}
+        
+        {toolData.result && !toolData.error && (
+          <Box marginLeft={2} marginTop={1}>
+            <Text color="gray">Result:</Text>
+            <Box marginLeft={1}>
+              <Text color="white">
+                {typeof toolData.result === 'string' 
+                  ? toolData.result.length > 200 
+                    ? `${toolData.result.substring(0, 200)}...`
+                    : toolData.result
+                  : JSON.stringify(toolData.result, null, 2).length > 200
+                    ? `${JSON.stringify(toolData.result, null, 2).substring(0, 200)}...`
+                    : JSON.stringify(toolData.result, null, 2)
+                }
+              </Text>
+            </Box>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  return <Text>{message.content}</Text>;
+};
+
 function getMessagePrefix(type: Message['type']): string {
   switch (type) {
     case 'user': return '👤 You:';
     case 'agent': return '🤖 Agent:';
     case 'system': return 'ℹ️ System:';
     case 'error': return '❌ Error:';
-    case 'tool': return '🔧 Tool:';
+    case 'tool_call': return '🚀 Calling:';
+    case 'tool_result': return '📋 Result:';
     default: return '💬';
   }
 }
@@ -121,7 +217,8 @@ function getMessageColor(type: Message['type']): string {
     case 'agent': return 'cyan';
     case 'system': return 'yellow';
     case 'error': return 'red';
-    case 'tool': return 'magenta';
+    case 'tool_call': return 'magenta';
+    case 'tool_result': return 'magenta';
     default: return 'white';
   }
 }

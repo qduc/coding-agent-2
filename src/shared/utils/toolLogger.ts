@@ -138,77 +138,21 @@ export class ToolLogger {
   }
 
   /**
-   * Format tool call for UI display (respects user's display mode preference)
+   * Format tool call for UI display
    */
   static formatToolCallForUI(toolName: string, args: any): string {
-    const config = configManager.getConfig();
-    const displayMode = config.toolDisplayMode || 'condensed';
-
-    switch (displayMode) {
-      case 'off':
-        return ''; // Don't show tool calls at all
-
-      case 'minimal':
-        return toolName; // Just tool name
-
-      case 'condensed':
-        return this.formatToolOperationCondensed(toolName, args); // New streamlined format
-
-      case 'standard':
-        const humanReadableArgs = this.formatArgsForDisplay(toolName, args);
-        return `🔧 ${toolName}${humanReadableArgs ? ` - ${humanReadableArgs}` : ''}`;
-
-      case 'verbose':
-      default:
-        const verboseArgs = this.formatArgsForDisplay(toolName, args);
-        return `🔧 Tool Usage: ${toolName}${verboseArgs ? ` - ${verboseArgs}` : ''}`;
-    }
+    return this.formatToolOperationCondensed(toolName, args);
   }
 
   /**
-   * Format tool result for UI display (respects user's display mode preference)
+   * Format tool result for UI display
    */
   static formatToolResultForUI(toolName: string, success: boolean, result?: any, args?: any): string {
-    const config = configManager.getConfig();
-    const displayMode = config.toolDisplayMode || 'condensed';
-
-    switch (displayMode) {
-      case 'off':
-        return ''; // Don't show tool results at all
-
-      case 'minimal':
-        return success ? '✓' : '✗'; // Just status symbol
-
-      case 'condensed':
-        return this.formatToolOperationCondensed(toolName, args, success, result); // Complete operation in one line
-
-      case 'standard':
-        const status = success ? '✅' : '❌';
-        const statusText = success ? 'completed' : 'failed';
-        const metrics = result ? this.getResultMetrics(toolName, result, args) : null;
-
-        let message = `${status} ${toolName} ${statusText}`;
-        if (metrics) {
-          message += ` - ${metrics}`;
-        }
-        return message;
-
-      case 'verbose':
-      default:
-        const verboseStatus = success ? '✅' : '❌';
-        const verboseStatusText = success ? 'completed' : 'failed';
-        const verboseMetrics = result ? this.getResultMetrics(toolName, result, args) : null;
-
-        let verboseMessage = `${verboseStatus} ${toolName} ${verboseStatusText}`;
-        if (verboseMetrics) {
-          verboseMessage += ` - ${verboseMetrics}`;
-        }
-        return verboseMessage;
-    }
+    return this.formatToolOperationCondensed(toolName, args, success, result);
   }
 
   /**
-   * Format tool operation as a single condensed line (new streamlined format)
+   * Format tool operation as a single condensed line
    */
   static formatToolOperationCondensed(toolName: string, args: any, success?: boolean, result?: any): string {
     const essentialContext = this.getEssentialContext(toolName, args);
@@ -270,39 +214,122 @@ export class ToolLogger {
    */
   private static getCondensedOutcome(toolName: string, success: boolean, result?: any, args?: any): string {
     if (!success) {
+      // Show the actual error for failed tools
+      if (result instanceof Error) {
+        return ` failed: ${result.message}`;
+      }
+      if (typeof result === 'string' && result.trim()) {
+        const errorMsg = result.length > 50 ? result.substring(0, 50) + '…' : result;
+        return ` failed: ${errorMsg}`;
+      }
       return ' failed';
     }
 
     const toolLower = toolName.toLowerCase();
 
-    // Return meaningful outcome without emoji clutter
+    // Return meaningful outcome with detailed information
     if (toolLower.includes('write')) {
       if (typeof result === 'object' && result?.linesChanged) {
-        return ` (${result.linesChanged} lines changed)`;
+        const action = result.created ? 'created' : 'modified';
+        let outcome = ` (${action}, ${result.linesChanged} lines changed`;
+        
+        // Show preview of what was written
+        if (args?.content && typeof args.content === 'string') {
+          const preview = args.content.split('\n')
+            .slice(0, 3)
+            .map((line: string) => line.trim())
+            .filter((line: string) => line.length > 0);
+          if (preview.length > 0) {
+            const previewText = preview.join('\n');
+            const truncated = previewText.length > 80 ? previewText.substring(0, 80) + '…' : previewText;
+            outcome += `:\n${truncated}`;
+          }
+        }
+        
+        return outcome + ')';
       }
+      
       const lines = args?.content ? args.content.split('\n').length : 0;
-      return lines > 0 ? ` (${lines} lines)` : '';
+      let outcome = lines > 0 ? ` (written, ${lines} lines` : ' (written';
+      
+      // Show preview of what was written
+      if (args?.content && typeof args.content === 'string') {
+        const preview = args.content.split('\n')
+          .slice(0, 3)
+          .map((line: string) => line.trim())
+          .filter((line: string) => line.length > 0);
+        if (preview.length > 0) {
+          const previewText = preview.join('\n');
+          const truncated = previewText.length > 80 ? previewText.substring(0, 80) + '…' : previewText;
+          outcome += `:\n${truncated}`;
+        }
+      }
+      
+      return outcome + ')';
     } else if (toolLower.includes('read')) {
       if (typeof result === 'object' && result?.lineCount) {
-        return ` (${result.lineCount} lines)`;
+        const partial = result.partialRead ? ', truncated' : '';
+        return ` (${result.lineCount} lines${partial})`;
       } else if (typeof result === 'string') {
         const lines = result.split('\n').length;
-        return ` (${lines} lines)`;
+        const chars = result.length;
+        return ` (${lines} lines, ${chars} chars)`;
       }
     } else if (toolLower.includes('bash')) {
       if (typeof result === 'object' && result?.exitCode !== undefined) {
-        return result.exitCode === 0 ? '' : ` (exit ${result.exitCode})`;
+        const stdout = result.stdout || '';
+        const stderr = result.stderr || '';
+        const outputLines = stdout ? stdout.split('\n').filter((line: string) => line.trim()).length : 0;
+        const hasStderr = stderr && stderr.trim();
+        
+        let outcome = `exit ${result.exitCode}`;
+        if (outputLines > 0) {
+          outcome += `, ${outputLines} lines output`;
+          // Show first 5 lines of output for user awareness
+          const firstLines = stdout.split('\n')
+            .filter((line: string) => line.trim())
+            .slice(0, 5)
+            .map((line: string) => line.trim());
+          if (firstLines.length > 0) {
+            const preview = firstLines.join('\n');
+            const truncated = preview.length > 100 ? preview.substring(0, 100) + '…' : preview;
+            outcome += `:\n${truncated}`;
+          }
+        }
+        if (hasStderr) outcome += ', warnings';
+        if (result.executionTime > 1000) outcome += `, ${Math.round(result.executionTime)}ms`;
+        
+        return ` (${outcome})`;
       }
+      return ' (executed)';
     } else if (toolLower.includes('glob') || toolLower.includes('ls')) {
       if (Array.isArray(result)) {
+        const files = result.filter(item => !item.endsWith('/')).length;
+        const dirs = result.length - files;
+        if (dirs > 0) {
+          return ` (${files} files, ${dirs} dirs)`;
+        }
         return ` (${result.length} items)`;
       }
     } else if (toolLower.includes('grep')) {
-      if (typeof result === 'string') {
-        const matches = result.trim() ? result.split('\n').filter(line => line.trim()).length : 0;
+      // Handle RipgrepResult object format
+      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
+        const matches = result.matches.length;
+        const files = new Set(result.matches.map((match: any) => match.file)).size;
+        if (files > 1) {
+          return ` (${matches} matches in ${files} files)`;
+        }
         return ` (${matches} matches)`;
       }
-      // Even if result is not a string, show 0 matches for grep tools
+      // Handle string format (for other grep tools)
+      if (typeof result === 'string') {
+        const matches = result.trim() ? result.split('\n').filter(line => line.trim()).length : 0;
+        const files = result.trim() ? new Set(result.split('\n').map(line => line.split(':')[0])).size : 0;
+        if (files > 1) {
+          return ` (${matches} matches in ${files} files)`;
+        }
+        return ` (${matches} matches)`;
+      }
       return ' (0 matches)';
     }
 

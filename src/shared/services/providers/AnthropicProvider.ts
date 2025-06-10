@@ -167,19 +167,20 @@ export class AnthropicProvider extends BaseLLMProvider {
   protected async _streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void
+    onComplete?: (response: StreamingResponse) => void,
+    functions?: any[]
   ): Promise<StreamingResponse> {
     this.ensureInitialized();
 
     const systemMessage = this.extractSystemMessage(messages);
-    
+
     // Apply prompt caching
     const { messages: cachedMessages, systemMessages } = this.cachingService.applyCacheControl(
       messages,
       undefined,
       systemMessage
     );
-    
+
     const anthropicMessages = this.convertMessages(cachedMessages);
 
     this.logApiCall('streamMessage', messages.length);
@@ -241,18 +242,18 @@ export class AnthropicProvider extends BaseLLMProvider {
   /**
    * Send a simple message and get complete response
    */
-  protected async _sendMessage(messages: Message[]): Promise<string> {
+  protected async _sendMessage(messages: Message[], functions?: any[]): Promise<string> {
     this.ensureInitialized();
 
     const systemMessage = this.extractSystemMessage(messages);
-    
+
     // Apply prompt caching
     const { messages: cachedMessages, systemMessages } = this.cachingService.applyCacheControl(
       messages,
       undefined,
       systemMessage
     );
-    
+
     const anthropicMessages = this.convertMessages(cachedMessages);
 
     this.logApiCall('sendMessage', messages.length);
@@ -294,14 +295,14 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const systemMessage = this.extractSystemMessage(messages);
     const normalizedFunctions = this.validateAndNormalizeTools(functions);
-    
+
     // Apply prompt caching
     const { messages: cachedMessages, tools: cachedTools, systemMessages } = this.cachingService.applyCacheControl(
       messages,
       normalizedFunctions,
       systemMessage
     );
-    
+
     const anthropicMessages = this.convertMessages(cachedMessages);
 
     this.logApiCall('sendMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });

@@ -125,12 +125,12 @@ describe('SubAgentTool', () => {
     it('should handle timeout', async () => {
       const timeoutParams = {
         ...validParams,
-        timeout: 100 // Very short timeout
+        timeout: 5000 // Short timeout (minimum allowed)
       };
 
       // Make processTask take longer than timeout
-      mockSubAgent.processTask.mockImplementation(() => 
-        new Promise(resolve => setTimeout(resolve, 200))
+      mockSubAgent.processTask.mockImplementation(() =>
+        new Promise(resolve => setTimeout(resolve, 6000)) // 6 seconds
       );
 
       const result = await tool.execute(timeoutParams);
@@ -142,7 +142,7 @@ describe('SubAgentTool', () => {
     it('should reuse existing sub-agent when available', async () => {
       // First execution
       await tool.execute(validParams);
-      
+
       // Second execution - should reuse the same sub-agent
       await tool.execute(validParams);
 
@@ -202,7 +202,7 @@ describe('SubAgentTool', () => {
       expect(stats).toHaveProperty('activeSubAgents');
       expect(stats).toHaveProperty('totalDelegations');
       expect(stats).toHaveProperty('subAgentsBySpecialization');
-      
+
       expect(typeof stats.activeSubAgents).toBe('number');
       expect(typeof stats.totalDelegations).toBe('number');
       expect(typeof stats.subAgentsBySpecialization).toBe('object');

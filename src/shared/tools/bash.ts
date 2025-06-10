@@ -119,12 +119,19 @@ export class BashTool extends BaseTool {
       };
 
       if (result.exitCode !== 0) {
-        return this.createErrorResult(
-          `Command failed with exit code ${result.exitCode}`,
-          'COMMAND_FAILED',
-          ['Check the command syntax', 'Verify the command exists and is executable'],
-          bashResult
-        );
+        return {
+          success: false,
+          error: new ToolError(
+            `Command failed with exit code ${result.exitCode}`,
+            'COMMAND_FAILED',
+            ['Check the command syntax', 'Verify the command exists and is executable']
+          ),
+          output: bashResult,
+          metadata: {
+            executionTime: executionTime,
+            errorCode: 'COMMAND_FAILED'
+          }
+        };
       }
 
       return this.createSuccessResult(bashResult, {

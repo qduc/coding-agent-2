@@ -14,14 +14,8 @@
 - Test core capabilities, parameter validation, security features, and actual use cases
 - Avoid testing unimplemented features, complex internal implementation details, or theoretical edge cases
 - Write fewer, focused tests that verify what the code actually does
+- ALWAYS run tests using shell command
 
-
-# Aider
-- You have a coding assistant name Aider that is good at doing isolated tasks that doesn't need to explore the codebase, only dealing with a set of files or create a new feature from scratch.
-- When delegate subtasks to Aider, provide clear and concise instructions, give him context of the task, specify the files to be modified (max 10 files), and outline the desired outcome.
-- If the task is very complex, use aider with a reasoner model.
-- IMPORTANT: Aider CANNOT do file/folder operations like renaming, moving, or deleting files or creating directories. DO NOT use Aider for these tasks.
-- DO NOT use Aider for super simple tasks like find and replace a few strings, he need to read a whole file to do that so it is very inefficient.
 
 # Project Overview
 
@@ -35,37 +29,4 @@ coding-agent
 
 # Direct commands
 coding-agent "help me understand this file"
-```
-
-## Architecture
-
-```
-coding-agent/
-├── src/
-│   ├── cli/
-│   │   └── index.ts          # Main CLI entry point
-│   ├── core/
-│   │   ├── agent.ts          # Core AI agent logic
-│   │   ├── config.ts         # Configuration management
-│   │   └── orchestrator.ts   # Tool orchestration logic
-│   ├── tools/
-│   │   ├── base.ts           # Base tool interface
-│   │   ├── glob.ts           # Pattern matching
-│   │   ├── index.ts          # Tool exports
-│   │   ├── ls.ts             # Directory listing
-│   │   ├── read.ts           # File reading (MVP core tool)
-│   │   ├── retry.ts          # Retry logic for tools
-│   │   ├── types.ts          # Tool type definitions
-│   │   ├── validation.ts     # Input validation
-│   │   ├── write.ts          # File writing operations
-│   │   └── *.test.ts         # Tool unit tests
-│   ├── services/
-│   │   └── llm.ts            # OpenAI integration
-│   └── utils/
-│       └── toolLogger.ts     # Tool execution logging
-├── tests/                    # Test directory
-├── dist/                     # Compiled output
-├── package.json
-├── tsconfig.json
-└── jest.config.js            # Jest testing configuration
 ```

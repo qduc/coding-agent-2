@@ -21,13 +21,14 @@ export abstract class BaseLLMProvider implements LLMProvider {
   // Abstract methods that must be implemented by concrete providers
   abstract initialize(): Promise<boolean>;
   abstract getProviderName(): string;
-  
+
   // Abstract internal methods that handle processed messages
-  protected abstract _sendMessage(messages: Message[]): Promise<string>;
+  protected abstract _sendMessage(messages: Message[], functions?: any[]): Promise<string>;
   protected abstract _streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void
+    onComplete?: (response: StreamingResponse) => void,
+    functions?: any[]
   ): Promise<StreamingResponse>;
   protected abstract _sendMessageWithTools(
     messages: Message[],
@@ -42,18 +43,19 @@ export abstract class BaseLLMProvider implements LLMProvider {
   ): Promise<FunctionCallResponse>;
 
   // Public methods that process file references before calling abstract methods
-  async sendMessage(messages: Message[]): Promise<string> {
+  async sendMessage(messages: Message[], functions?: any[]): Promise<string> {
     const processedMessages = this.processFileReferences(messages);
-    return this._sendMessage(processedMessages);
+    return this._sendMessage(processedMessages, functions);
   }
 
   async streamMessage(
     messages: Message[],
     onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void
+    onComplete?: (response: StreamingResponse) => void,
+    functions?: any[]
   ): Promise<StreamingResponse> {
     const processedMessages = this.processFileReferences(messages);
-    return this._streamMessage(processedMessages, onChunk, onComplete);
+    return this._streamMessage(processedMessages, onChunk, onComplete, functions);
   }
 
   async sendMessageWithTools(
@@ -76,7 +78,7 @@ export abstract class BaseLLMProvider implements LLMProvider {
   }
 
   // Concrete methods with shared implementation
-  
+
   /**
    * Check if the provider is ready for use
    */
@@ -171,11 +173,11 @@ export abstract class BaseLLMProvider implements LLMProvider {
         completionTokens: usage.output_tokens,
         totalTokens: usage.input_tokens + usage.output_tokens
       };
-      
+
       if (cacheUsage) {
         response.cacheUsage = cacheUsage;
       }
-      
+
       return response;
     } else if (usage.prompt_tokens !== undefined && usage.completion_tokens !== undefined) {
       // OpenAI format
@@ -203,15 +205,15 @@ export abstract class BaseLLMProvider implements LLMProvider {
     if (!usage) return undefined;
 
     const cacheUsage: any = {};
-    
+
     if (usage.cache_creation_input_tokens) {
       cacheUsage.cache_creation_input_tokens = usage.cache_creation_input_tokens;
     }
-    
+
     if (usage.cache_read_input_tokens) {
       cacheUsage.cache_read_input_tokens = usage.cache_read_input_tokens;
     }
-    
+
     if (usage.cache_creation) {
       cacheUsage.cache_creation = usage.cache_creation;
     }
@@ -344,41 +346,41 @@ export abstract class BaseLLMProvider implements LLMProvider {
   private expandFileReferences(content: string): string {
     // Simplified pattern: must start with @ followed by file path with extension
     const filePathPattern = /@([a-zA-Z0-9\/_\-\.]+\.[a-zA-Z0-9]+)/g;
-    
+
     const fileBlocks: string[] = [];
     const processedFilePaths = new Set<string>();
     let cleanedContent = content;
     let match;
-    
+
     // First pass: collect all unique file references and their content
     while ((match = filePathPattern.exec(content)) !== null) {
       const [fullMatch, filePath] = match;
-      
+
       // Skip if we've already processed this file
       if (processedFilePaths.has(filePath)) continue;
-      
+
       // Try to resolve the file path
       const resolvedPath = this.resolveFilePath(filePath);
-      
+
       if (resolvedPath && existsSync(resolvedPath)) {
         try {
           const fileContent = readFileSync(resolvedPath, 'utf-8');
           const fileExtension = filePath.split('.').pop() || '';
-          
+
           // Create a code block with the file content
           const codeBlock = `\`\`\`${fileExtension}\n// File: ${filePath}\n${fileContent}\n\`\`\``;
           fileBlocks.push(codeBlock);
           processedFilePaths.add(filePath);
-          
+
           logger.debug(`Collected file reference: ${filePath}`, { resolvedPath }, this.getProviderName());
         } catch (error) {
-          logger.warn(`Failed to read file: ${filePath}`, { 
-            error: error instanceof Error ? error.message : String(error) 
+          logger.warn(`Failed to read file: ${filePath}`, {
+            error: error instanceof Error ? error.message : String(error)
           }, this.getProviderName());
         }
       }
     }
-    
+
     // Second pass: replace file references with more natural language
     if (processedFilePaths.size > 0) {
       // Replace @filePath references with natural references
@@ -388,12 +390,12 @@ export abstract class BaseLLMProvider implements LLMProvider {
         cleanedContent = cleanedContent.replace(referencePattern, `the above ${fileName} file`);
       }
     }
-    
+
     // Combine file blocks at the beginning + cleaned content
     if (fileBlocks.length > 0) {
       return fileBlocks.join('\n\n') + '\n\n' + cleanedContent.trim();
     }
-    
+
     return content;
   }
 
@@ -404,13 +406,13 @@ export abstract class BaseLLMProvider implements LLMProvider {
     if (isAbsolute(filePath)) {
       return filePath;
     }
-    
+
     // Try relative to current working directory
     const cwdPath = resolve(process.cwd(), filePath);
     if (existsSync(cwdPath)) {
       return cwdPath;
     }
-    
+
     // Try common project root patterns
     const commonRoots = ['./src/', './'];
     for (const root of commonRoots) {
@@ -419,7 +421,7 @@ export abstract class BaseLLMProvider implements LLMProvider {
         return rootPath;
       }
     }
-    
+
     return cwdPath; // Return the cwd path as fallback
   }
 }
