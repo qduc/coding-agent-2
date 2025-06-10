@@ -63,7 +63,7 @@ export class FileCompletionProvider implements CompletionProvider {
         pattern: '**/*',
         cwd: this.toolContext.workingDirectory,
         includeHidden: false,
-        maxDepth: 3,
+        maxDepth: 10,
         caseSensitive: false
       });
 
@@ -78,7 +78,7 @@ export class FileCompletionProvider implements CompletionProvider {
           return match.type === 'directory' ? relativePath + '/' : relativePath;
         })
         .sort()
-        .slice(0, 100);
+        .slice(0, 10000);
     } catch (error) {
       return [];
     }

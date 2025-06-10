@@ -337,8 +337,15 @@ export class WriteTool extends BaseTool {
         }
       }
 
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Write operation failed: ${errorMessage}`, { 
+        path: absolutePath, 
+        mode, 
+        encoding 
+      });
+      
       throw new ToolError(
-        `Failed to write file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to write file: ${errorMessage}`,
         'PERMISSION_DENIED',
         [
           'Check write permissions for the file and directory',

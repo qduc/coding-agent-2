@@ -216,10 +216,15 @@ export class ToolLogger {
     if (!success) {
       // Show the actual error for failed tools
       if (result instanceof Error) {
-        return ` failed: ${result.message}`;
+        const errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
+        return ` failed: ${errorMsg}`;
       }
       if (typeof result === 'string' && result.trim()) {
-        const errorMsg = result.length > 50 ? result.substring(0, 50) + '…' : result;
+        const errorMsg = result.length > 100 ? result.substring(0, 100) + '…' : result;
+        return ` failed: ${errorMsg}`;
+      }
+      if (typeof result === 'object' && result !== null && result.message) {
+        const errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
         return ` failed: ${errorMsg}`;
       }
       return ' failed';
@@ -303,6 +308,17 @@ export class ToolLogger {
       }
       return ' (executed)';
     } else if (toolLower.includes('glob') || toolLower.includes('ls')) {
+      // Handle GlobResult object format (has matches array)
+      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
+        const matches = result.matches;
+        const files = matches.filter((item: any) => item.type === 'file').length;
+        const dirs = matches.filter((item: any) => item.type === 'directory').length;
+        if (dirs > 0) {
+          return ` (${files} files, ${dirs} dirs)`;
+        }
+        return ` (${matches.length} items)`;
+      }
+      // Handle direct array format (for backward compatibility)
       if (Array.isArray(result)) {
         const files = result.filter(item => !item.endsWith('/')).length;
         const dirs = result.length - files;
@@ -481,6 +497,12 @@ export class ToolLogger {
         return `📁 Found: ${result.directories.length} directories`;
       }
       if (result.matches && Array.isArray(result.matches)) {
+        // Handle GlobResult format specifically
+        if (toolName.toLowerCase().includes('glob')) {
+          const files = result.matches.filter((item: any) => item.type === 'file').length;
+          const dirs = result.matches.filter((item: any) => item.type === 'directory').length;
+          return `🔍 Found: ${files} files, ${dirs} directories`;
+        }
         return `🔍 Found: ${result.matches.length} matches`;
       }
 
