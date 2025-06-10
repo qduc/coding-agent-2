@@ -102,6 +102,11 @@ export class ToolExecutionHandler {
 
       logger.debug('Executing tool', { toolName: func.name, args }, 'TOOL_EXECUTION');
 
+      // Log tool call for UI display
+      if (logToolUsage) {
+        ToolLogger.logToolCall(func.name, args);
+      }
+
       // Execute the tool
       const result = await tool.execute(args);
       const executionTime = Date.now() - startTime;
@@ -203,11 +208,16 @@ export class ToolExecutionHandler {
         throw new Error(`Invalid JSON arguments: ${func.arguments}`);
       }
 
+      // Log tool call for UI display
+      const { logToolUsage } = configManager.getConfig();
+      if (logToolUsage) {
+        ToolLogger.logToolCall(func.name, args);
+      }
+
       // Execute the tool
       const result = await tool.execute(args);
 
       // Log tool usage if enabled
-      const { logToolUsage } = configManager.getConfig();
       if (logToolUsage) {
         const logResult = (func.name.toLowerCase() === 'bash' && result.output) 
           ? result.output 

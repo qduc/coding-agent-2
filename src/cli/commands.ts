@@ -141,6 +141,7 @@ export async function handleDirectCommand(command: string, agent: Agent, options
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
+
   try {
     if (options.verbose) {
       console.log(chalk.blue('🛠️  Registered tools:'), agent.getRegisteredTools().map(t => t.name).join(', '));
@@ -212,6 +213,7 @@ export async function handleDirectCommand(command: string, agent: Agent, options
       console.log(chalk.gray('Conversation summary:'));
       console.log(chalk.gray(agent.getConversationSummary()));
     }
+
   } catch (error) {
     console.error(chalk.red('Error processing command:'), error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
