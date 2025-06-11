@@ -133,7 +133,57 @@ export class ToolLogger {
       logger.debug(`Tool completed: ${toolName}`, { toolName, success, result }, 'TOOL');
     } else {
       const error = result instanceof Error ? result : undefined;
-      logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');
+
+      // Enhanced logging for failed write operations
+      if (toolName.toLowerCase().includes('write')) {
+        // Log with full context including arguments for write failures
+        logger.error(`Write tool failed: ${toolName}`, error, {
+          toolName,
+          success,
+          result,
+          args: this.filterLongParams(args),
+          errorDetails: {
+            message: error?.message || (typeof result === 'string' ? result : 'Unknown error'),
+            arguments: args,
+            timestamp: new Date().toISOString()
+          }
+        }, 'TOOL');
+
+        // Output detailed failure information to console for immediate visibility
+        const config = configManager.getConfig();
+        if (config.enableToolConsole) {
+          console.error(chalk.red('\n━━━ WRITE TOOL FAILURE ━━━'));
+          console.error(chalk.red(`Tool: ${toolName}`));
+          console.error(chalk.red(`Error: ${error?.message || (typeof result === 'string' ? result : 'Unknown error')}`));
+
+          if (args) {
+            console.error(chalk.yellow('Arguments passed to tool:'));
+            const formattedArgs = this.formatArgsForDisplay(toolName, args);
+            console.error(chalk.gray(`  ${formattedArgs}`));
+
+            // Show specific write parameters
+            if (args.path) {
+              console.error(chalk.gray(`  Target file: ${args.path}`));
+            }
+            if (args.content !== undefined) {
+              const contentInfo = typeof args.content === 'string'
+                ? `${args.content.split('\n').length} lines, ${args.content.length} chars`
+                : 'non-string content';
+              console.error(chalk.gray(`  Content: ${contentInfo}`));
+            }
+            if (args.diff !== undefined) {
+              const diffInfo = typeof args.diff === 'string'
+                ? `${args.diff.split('\n').length} lines`
+                : 'non-string diff';
+              console.error(chalk.gray(`  Diff: ${diffInfo}`));
+            }
+          }
+          console.error(chalk.red('━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+        }
+      } else {
+        // Standard logging for other tool failures
+        logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');
+      }
     }
   }
 
@@ -214,7 +264,37 @@ export class ToolLogger {
    */
   private static getCondensedOutcome(toolName: string, success: boolean, result?: any, args?: any): string {
     if (!success) {
-      // Show the actual error for failed tools
+      // Enhanced error display for write tool failures
+      if (toolName.toLowerCase().includes('write')) {
+        let errorMsg = 'failed';
+
+        if (result instanceof Error) {
+          errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
+        } else if (typeof result === 'string' && result.trim()) {
+          errorMsg = result.length > 100 ? result.substring(0, 100) + '…' : result;
+        } else if (typeof result === 'object' && result !== null && result.message) {
+          errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
+        }
+
+        // Add context about what was being written
+        let context = '';
+        if (args) {
+          if (args.path) {
+            context += ` to ${args.path}`;
+          }
+          if (args.content !== undefined) {
+            const lines = typeof args.content === 'string' ? args.content.split('\n').length : 0;
+            context += ` (${lines} lines)`;
+          } else if (args.diff !== undefined) {
+            const lines = typeof args.diff === 'string' ? args.diff.split('\n').length : 0;
+            context += ` (diff: ${lines} lines)`;
+          }
+        }
+
+        return ` failed${context}: ${errorMsg}`;
+      }
+
+      // Standard error handling for other tools
       if (result instanceof Error) {
         const errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
         return ` failed: ${errorMsg}`;
@@ -237,7 +317,7 @@ export class ToolLogger {
       if (typeof result === 'object' && result?.linesChanged) {
         const action = result.created ? 'created' : 'modified';
         let outcome = ` (${action}, ${result.linesChanged} lines changed`;
-        
+
         // Show preview of what was written
         if (args?.content && typeof args.content === 'string') {
           const preview = args.content.split('\n')
@@ -250,13 +330,13 @@ export class ToolLogger {
             outcome += `:\n${truncated}`;
           }
         }
-        
+
         return outcome + ')';
       }
-      
+
       const lines = args?.content ? args.content.split('\n').length : 0;
       let outcome = lines > 0 ? ` (written, ${lines} lines` : ' (written';
-      
+
       // Show preview of what was written
       if (args?.content && typeof args.content === 'string') {
         const preview = args.content.split('\n')
@@ -269,7 +349,7 @@ export class ToolLogger {
           outcome += `:\n${truncated}`;
         }
       }
-      
+
       return outcome + ')';
     } else if (toolLower.includes('read')) {
       if (typeof result === 'object' && result?.lineCount) {
@@ -286,7 +366,7 @@ export class ToolLogger {
         const stderr = result.stderr || '';
         const outputLines = stdout ? stdout.split('\n').filter((line: string) => line.trim()).length : 0;
         const hasStderr = stderr && stderr.trim();
-        
+
         let outcome = `exit ${result.exitCode}`;
         if (outputLines > 0) {
           outcome += `, ${outputLines} lines output`;
@@ -303,7 +383,7 @@ export class ToolLogger {
         }
         if (hasStderr) outcome += ', warnings';
         if (result.executionTime > 1000) outcome += `, ${Math.round(result.executionTime)}ms`;
-        
+
         return ` (${outcome})`;
       }
       return ' (executed)';

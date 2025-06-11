@@ -152,6 +152,25 @@ export class Agent {
   }
 
   /**
+   * Clear conversation history and refresh project context
+   */
+  async clearHistoryAndRefresh(): Promise<void> {
+    this.orchestrator.clearHistory();
+    await this.refreshProjectContext();
+  }
+
+  /**
+   * Refresh project discovery context
+   */
+  async refreshProjectContext(): Promise<void> {
+    // Re-run project discovery with force refresh
+    this.discoveryResult = await this.projectDiscovery.discover(true);
+    
+    // Update project context in orchestrator
+    this.orchestrator.setProjectContext(this.discoveryResult);
+  }
+
+  /**
    * Get conversation summary for debugging
    */
   getConversationSummary(): string {

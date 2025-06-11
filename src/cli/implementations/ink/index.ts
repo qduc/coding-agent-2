@@ -6,6 +6,7 @@ export { InputComponent } from './components/InputComponent';
 export { InputBox } from './components/InputBox';
 export { HelpText } from './components/HelpText';
 export { CompletionDropdown } from './components/CompletionDropdown';
+export { Spinner, ProcessingSpinner, ThinkingSpinner, TypingSpinner } from './components/Spinner';
 
 // Hooks
 export { useInputState } from './hooks/useInputState';

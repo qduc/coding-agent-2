@@ -54,16 +54,16 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     if (event.type === 'tool_call') {
       // Store the tool call but don't display it yet
       const toolKey = `${event.toolName}_${Date.now()}`;
-      setPendingToolCalls(prev => new Map(prev).set(toolKey, { 
-        toolName: event.toolName, 
-        args: event.args 
+      setPendingToolCalls(prev => new Map(prev).set(toolKey, {
+        toolName: event.toolName,
+        args: event.args
       }));
     } else if (event.type === 'tool_result') {
       // Show the complete operation in one line
       const content = ToolLogger.formatToolOperationCondensed(
-        event.toolName, 
-        event.args, 
-        event.success, 
+        event.toolName,
+        event.args,
+        event.success,
         event.result
       );
       if (content.trim()) {
@@ -118,7 +118,8 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 Available Commands: (press TAB for auto-completion)
     /help              - Show this help
     /exit, /quit, /q   - Exit interactive mode
-    /clear             - Clear chat history and reset context
+    /clear             - Clear chat history and refresh project context
+    /refresh           - Refresh project context without clearing history
 
 File Completion (Fuzzy Search):
     @                  - Shows live file list, fuzzy search as you type
@@ -137,12 +138,42 @@ Example Questions:
 
     // Handle clear command
     if (trimmedInput.toLowerCase() === '/clear') {
-      agent.clearHistory();
-      setMessages([]);
-      addMessage({
-        type: 'system',
-        content: '✨ Chat history cleared. Context has been reset to initial state.',
-      });
+      setIsProcessing(true);
+      try {
+        await agent.clearHistoryAndRefresh();
+        setMessages([]);
+        addMessage({
+          type: 'system',
+          content: '✨ Chat history cleared and project context refreshed. Starting fresh!',
+        });
+      } catch (error) {
+        addMessage({
+          type: 'error',
+          content: `Failed to refresh project context: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // Handle refresh command
+    if (trimmedInput.toLowerCase() === '/refresh') {
+      setIsProcessing(true);
+      try {
+        await agent.refreshProjectContext();
+        addMessage({
+          type: 'system',
+          content: '🔄 Project context refreshed successfully. I now have updated information about your project.',
+        });
+      } catch (error) {
+        addMessage({
+          type: 'error',
+          content: `Failed to refresh project context: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      } finally {
+        setIsProcessing(false);
+      }
       return;
     }
 
@@ -215,8 +246,8 @@ Example Questions:
   };
 
   const inputOptions: InputOptions = {
-    prompt: isProcessing 
-      ? '🤖 Processing...' 
+    prompt: isProcessing
+      ? '🤖 Processing...'
       : '💬 Your Message (Enter to send, Enter again for multi-line):',
     disabled: isProcessing,
   };
@@ -248,6 +279,7 @@ Example Questions:
           messages={messages}
           streamingMessage={streamingMessage}
           showWelcome={showWelcome}
+          isProcessing={isProcessing}
         />
       </Box>
       <InputComponent
