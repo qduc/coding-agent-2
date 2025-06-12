@@ -202,376 +202,119 @@ export class ToolLogger {
   }
 
   /**
-   * Format tool operation with full details
+   * Format tool operation with modern minimalistic design
    */
   static formatToolOperationFull(toolName: string, args: any, success?: boolean, result?: any): string {
-    const fullContext = this.getFullContext(toolName, args);
-    const outcome = success !== undefined ? this.getFullOutcome(toolName, success, result, args) : '';
-
     if (success === undefined) {
-      // Tool call only - show full arguments
-      return `🔧 ${toolName}\n${fullContext}`;
+      // Tool call in progress - clean, minimal format
+      const context = this.getMinimalContext(toolName, args);
+      return `▶ ${toolName}${context}`;
     } else {
-      // Complete operation with full details
-      const status = success ? '✅' : '❌';
-      const statusText = success ? 'SUCCESS' : 'FAILED';
-      let output = `${status} ${toolName} - ${statusText}\n`;
+      // Complete operation with modern design
+      const status = success ? '✓' : '✗';
+      const context = this.getMinimalContext(toolName, args);
+      const outcome = this.getMinimalOutcome(toolName, success, result, args);
       
-      if (fullContext.trim()) {
-        output += `Arguments:\n${fullContext}\n`;
-      }
-      
-      if (outcome.trim()) {
-        output += `Result:\n${outcome}`;
-      }
-      
-      return output;
+      return `${status} ${toolName}${context}${outcome}`;
     }
   }
 
   /**
-   * Get full context for a tool call (all arguments with detailed formatting)
+   * Get minimal context for modern display
    */
-  private static getFullContext(toolName: string, args: any): string {
+  private static getMinimalContext(toolName: string, args: any): string {
     if (!args || typeof args !== 'object') {
-      return args ? `  ${String(args)}` : '';
+      return '';
     }
 
     const toolLower = toolName.toLowerCase();
-    const parts: string[] = [];
-
-    // Tool-specific detailed formatting
-    if (toolLower.includes('read')) {
-      if (args.path) parts.push(`  📁 Path: ${args.path}`);
-      if (args.startLine) parts.push(`  📝 Lines: ${args.startLine}-${args.endLine || 'end'}`);
-      if (args.maxLines) parts.push(`  📊 Max Lines: ${args.maxLines}`);
-      if (args.encoding && args.encoding !== 'utf8') parts.push(`  🔤 Encoding: ${args.encoding}`);
-    } else if (toolLower.includes('write')) {
-      if (args.path) parts.push(`  📁 Path: ${args.path}`);
-      if (args.content) {
-        const lines = args.content.split('\n').length;
-        const chars = args.content.length;
-        parts.push(`  📝 Content: ${lines} lines, ${chars} characters`);
-        // Show first few lines as preview
-        const preview = args.content.split('\n').slice(0, 3).join('\n');
-        const truncated = preview.length > 200 ? preview.substring(0, 200) + '...' : preview;
-        parts.push(`  👀 Preview:\n    ${truncated.replace(/\n/g, '\n    ')}`);
-      }
-      if (args.diff) {
-        const lines = args.diff.split('\n').length;
-        parts.push(`  🔄 Diff: ${lines} lines`);
-        // Show diff preview
-        const diffPreview = args.diff.split('\n').slice(0, 5).join('\n');
-        parts.push(`  👀 Diff Preview:\n    ${diffPreview.replace(/\n/g, '\n    ')}`);
-      }
-      if (args.encoding && args.encoding !== 'utf8') parts.push(`  🔤 Encoding: ${args.encoding}`);
-      if (args.backup === false) parts.push(`  💾 Backup: disabled`);
-    } else if (toolLower.includes('ls')) {
-      if (args.path) parts.push(`  📁 Path: ${args.path}`);
-      if (args.recursive) parts.push(`  🔄 Recursive: enabled`);
-      if (args.includeHidden) parts.push(`  👁️ Include Hidden: enabled`);
-    } else if (toolLower.includes('glob')) {
-      if (args.pattern) parts.push(`  🔍 Pattern: ${args.pattern}`);
-      if (args.cwd) parts.push(`  📁 Working Dir: ${args.cwd}`);
-    } else if (toolLower.includes('grep') || toolLower.includes('search')) {
-      if (args.pattern) parts.push(`  🔍 Pattern: ${args.pattern}`);
-      if (args.path) parts.push(`  📁 Path: ${args.path}`);
-      if (args.filePattern) parts.push(`  📄 File Pattern: ${args.filePattern}`);
-    } else if (toolLower.includes('bash')) {
-      if (args.command) parts.push(`  ⚡ Command: ${args.command}`);
-      if (args.cwd) parts.push(`  📁 Working Dir: ${args.cwd}`);
-      if (args.timeout) parts.push(`  ⏱️ Timeout: ${args.timeout}ms`);
-    } else {
-      // Generic formatting for other tools
-      for (const [key, value] of Object.entries(args)) {
-        if (typeof value === 'string') {
-          if (value.length > 500) {
-            parts.push(`  ${key}: [${value.length} characters]`);
-            // Show preview for long strings
-            const preview = value.substring(0, 200) + '...';
-            parts.push(`    Preview: ${preview}`);
-          } else {
-            parts.push(`  ${key}: ${value}`);
-          }
-        } else if (typeof value === 'object' && value !== null) {
-          parts.push(`  ${key}: ${JSON.stringify(value, null, 2).replace(/\n/g, '\n  ')}`);
-        } else {
-          parts.push(`  ${key}: ${value}`);
-        }
-      }
+    
+    // Clean, minimal context - show only the most essential info
+    if (toolLower.includes('read') && args.path) {
+      return ` ${this.truncatePath(args.path)}`;
+    } else if (toolLower.includes('write') && args.path) {
+      const lines = args.content ? args.content.split('\n').length : 0;
+      return ` ${this.truncatePath(args.path)} (${lines}L)`;
+    } else if (toolLower.includes('bash') && args.command) {
+      const cmd = args.command.length > 40 ? args.command.substring(0, 40) + '…' : args.command;
+      return ` "${cmd}"`;
+    } else if ((toolLower.includes('glob') || toolLower.includes('grep')) && args.pattern) {
+      const pattern = args.pattern.length > 30 ? args.pattern.substring(0, 30) + '…' : args.pattern;
+      return ` "${pattern}"`;
+    } else if (toolLower.includes('ls') && args.path) {
+      return ` ${this.truncatePath(args.path)}`;
     }
 
-    return parts.join('\n');
+    return '';
   }
 
   /**
-   * Get full outcome for tool result (detailed information)
+   * Get minimal outcome for modern display
    */
-  private static getFullOutcome(toolName: string, success: boolean, result?: any, args?: any): string {
-    const parts: string[] = [];
-    const toolLower = toolName.toLowerCase();
-
+  private static getMinimalOutcome(toolName: string, success: boolean, result?: any, args?: any): string {
     if (!success) {
-      // Detailed error display
-      parts.push('  ❌ Status: FAILED');
-      
       let errorMsg = 'Unknown error';
       if (result instanceof Error) {
         errorMsg = result.message;
-        parts.push(`  🚨 Error Type: ${result.name || 'Error'}`);
-        if (result.stack) {
-          const stackLines = result.stack.split('\n').slice(1, 4); // Show first 3 stack lines
-          parts.push(`  📍 Stack Trace:\n    ${stackLines.join('\n    ')}`);
-        }
       } else if (typeof result === 'string' && result.trim()) {
         errorMsg = result;
       } else if (typeof result === 'object' && result !== null && result.message) {
         errorMsg = result.message;
       }
       
-      parts.push(`  💥 Error Message: ${errorMsg}`);
-      
-      // Add context about what was being attempted
-      if (toolLower.includes('write') && args) {
-        if (args.path) parts.push(`  📁 Target File: ${args.path}`);
-        if (args.content !== undefined) {
-          const lines = typeof args.content === 'string' ? args.content.split('\n').length : 0;
-          parts.push(`  📝 Content Size: ${lines} lines`);
-        }
-        if (args.diff !== undefined) {
-          const lines = typeof args.diff === 'string' ? args.diff.split('\n').length : 0;
-          parts.push(`  🔄 Diff Size: ${lines} lines`);
-        }
-      }
-
-      return parts.join('\n');
+      const truncated = errorMsg.length > 60 ? errorMsg.substring(0, 60) + '…' : errorMsg;
+      return ` • ${truncated}`;
     }
 
-    // Success outcomes with detailed information
-    parts.push('  ✅ Status: SUCCESS');
-
+    // Success - show concise, meaningful metrics
+    const toolLower = toolName.toLowerCase();
+    
     if (toolLower.includes('write')) {
       if (typeof result === 'object' && result?.linesChanged) {
-        const action = result.created ? '✨ Created new file' : '📝 Modified existing file';
-        parts.push(`  ${action}`);
-        parts.push(`  📊 Lines Changed: ${result.linesChanged}`);
-        parts.push(`  🔧 Operation Mode: ${result.mode || 'write'}`);
-        
-        if (result.backupPath) {
-          parts.push(`  💾 Backup Created: ${result.backupPath}`);
-        }
-      } else {
-        parts.push('  📝 File written successfully');
-        if (args?.content) {
-          const lines = args.content.split('\n').length;
-          const chars = args.content.length;
-          parts.push(`  📊 Content: ${lines} lines, ${chars} characters`);
-        }
+        return ` • ${result.linesChanged}L changed`;
+      } else if (args?.content) {
+        const lines = args.content.split('\n').length;
+        return ` • ${lines}L written`;
       }
-      
-      // Show content preview
-      if (args?.content && typeof args.content === 'string') {
-        const preview = args.content.split('\n')
-          .slice(0, 5)
-          .map((line: string, index: number) => `    ${index + 1}: ${line}`)
-          .join('\n');
-        const truncated = preview.length > 500 ? preview.substring(0, 500) + '\n    ...' : preview;
-        parts.push(`  👀 Content Preview:\n${truncated}`);
-      }
-      
+      return ` • saved`;
     } else if (toolLower.includes('read')) {
       if (typeof result === 'object' && result?.lineCount) {
-        parts.push(`  📊 Lines Read: ${result.lineCount}`);
-        if (result.content) {
-          parts.push(`  📏 Characters: ${result.content.length}`);
-        }
-        if (result.partialRead) {
-          parts.push(`  ⚠️ Partial Read: File was truncated`);
-        }
-        if (result.encoding) {
-          parts.push(`  🔤 Encoding: ${result.encoding}`);
-        }
+        return ` • ${result.lineCount}L read`;
       } else if (typeof result === 'string') {
         const lines = result.split('\n').length;
-        const chars = result.length;
-        parts.push(`  📊 Content: ${lines} lines, ${chars} characters`);
-        
-        // Show content preview
-        const preview = result.split('\n')
-          .slice(0, 5)
-          .map((line: string, index: number) => `    ${index + 1}: ${line}`)
-          .join('\n');
-        const truncated = preview.length > 500 ? preview.substring(0, 500) + '\n    ...' : preview;
-        parts.push(`  👀 Content Preview:\n${truncated}`);
+        return ` • ${lines}L read`;
       }
-      
+      return ` • loaded`;
     } else if (toolLower.includes('bash')) {
       if (typeof result === 'object' && result?.exitCode !== undefined) {
-        parts.push(`  🚀 Exit Code: ${result.exitCode}`);
-        
-        if (result.executionTime) {
-          parts.push(`  ⏱️ Execution Time: ${result.executionTime}ms`);
-        }
-        
-        const stdout = result.stdout || '';
-        const stderr = result.stderr || '';
-        
-        if (stdout) {
-          const outputLines = stdout.split('\n').filter((line: string) => line.trim()).length;
-          parts.push(`  📤 Stdout: ${outputLines} lines`);
-          
-          // Show stdout preview
-          const stdoutPreview = stdout.split('\n')
-            .slice(0, 10)
-            .map((line: string) => `    ${line}`)
-            .join('\n');
-          const truncated = stdoutPreview.length > 1000 ? stdoutPreview.substring(0, 1000) + '\n    ...' : stdoutPreview;
-          parts.push(`  👀 Output Preview:\n${truncated}`);
-        }
-        
-        if (stderr) {
-          const errorLines = stderr.split('\n').filter((line: string) => line.trim()).length;
-          parts.push(`  ⚠️ Stderr: ${errorLines} lines`);
-          
-          // Show stderr preview
-          const stderrPreview = stderr.split('\n')
-            .slice(0, 5)
-            .map((line: string) => `    ${line}`)
-            .join('\n');
-          parts.push(`  🚨 Error Output:\n${stderrPreview}`);
-        }
-      } else {
-        parts.push('  🚀 Command executed successfully');
+        const time = result.executionTime ? ` ${result.executionTime}ms` : '';
+        return result.exitCode === 0 ? ` • ok${time}` : ` • exit ${result.exitCode}${time}`;
       }
-      
+      return ` • executed`;
     } else if (toolLower.includes('glob') || toolLower.includes('ls')) {
-      // Handle GlobResult object format
-      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
-        const matches = result.matches;
-        const files = matches.filter((item: any) => item.type === 'file');
-        const dirs = matches.filter((item: any) => item.type === 'directory');
-        
-        parts.push(`  📊 Total Items: ${matches.length}`);
-        parts.push(`  📄 Files: ${files.length}`);
-        parts.push(`  📁 Directories: ${dirs.length}`);
-        
-        // Show file listing
-        if (matches.length > 0) {
-          const listing = matches
-            .slice(0, 20) // Show first 20 items
-            .map((item: any) => `    ${item.type === 'directory' ? '📁' : '📄'} ${item.path}`)
-            .join('\n');
-          const more = matches.length > 20 ? `\n    ... and ${matches.length - 20} more items` : '';
-          parts.push(`  📋 Items Found:\n${listing}${more}`);
-        }
-        
+      if (typeof result === 'object' && result?.matches) {
+        const files = result.matches.filter((item: any) => item.type === 'file').length;
+        const dirs = result.matches.filter((item: any) => item.type === 'directory').length;
+        return ` • ${files}F ${dirs}D`;
       } else if (Array.isArray(result)) {
-        const files = result.filter(item => !item.endsWith('/'));
-        const dirs = result.filter(item => item.endsWith('/'));
-        
-        parts.push(`  📊 Total Items: ${result.length}`);
-        parts.push(`  📄 Files: ${files.length}`);
-        parts.push(`  📁 Directories: ${dirs.length}`);
-        
-        // Show listing
-        if (result.length > 0) {
-          const listing = result
-            .slice(0, 20)
-            .map((item: string) => `    ${item.endsWith('/') ? '📁' : '📄'} ${item}`)
-            .join('\n');
-          const more = result.length > 20 ? `\n    ... and ${result.length - 20} more items` : '';
-          parts.push(`  📋 Items Found:\n${listing}${more}`);
-        }
+        const files = result.filter(item => !item.endsWith('/')).length;
+        const dirs = result.length - files;
+        return ` • ${files}F ${dirs}D`;
       }
-      
+      return ` • listed`;
     } else if (toolLower.includes('grep')) {
-      // Handle RipgrepResult object format
-      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
-        const matches = result.matches;
-        const files = new Set(matches.map((match: any) => match.file));
-        
-        parts.push(`  📊 Total Matches: ${matches.length}`);
-        parts.push(`  📄 Files with Matches: ${files.size}`);
-        
-        // Show match details
-        if (matches.length > 0) {
-          const matchDetails = matches
-            .slice(0, 10) // Show first 10 matches
-            .map((match: any) => `    📍 ${match.file}:${match.line}: ${match.text?.trim() || ''}`)
-            .join('\n');
-          const more = matches.length > 10 ? `\n    ... and ${matches.length - 10} more matches` : '';
-          parts.push(`  🔍 Matches Found:\n${matchDetails}${more}`);
-        }
-        
+      if (typeof result === 'object' && result?.matches) {
+        const matches = result.matches.length;
+        const files = new Set(result.matches.map((match: any) => match.file)).size;
+        return ` • ${matches} matches in ${files} files`;
       } else if (typeof result === 'string') {
-        const lines = result.trim() ? result.split('\n').filter(line => line.trim()) : [];
-        const files = result.trim() ? new Set(lines.map(line => line.split(':')[0])) : new Set();
-        
-        parts.push(`  📊 Total Matches: ${lines.length}`);
-        parts.push(`  📄 Files with Matches: ${files.size}`);
-        
-        if (lines.length > 0) {
-          const preview = lines
-            .slice(0, 10)
-            .map((line: string) => `    📍 ${line}`)
-            .join('\n');
-          const more = lines.length > 10 ? `\n    ... and ${lines.length - 10} more matches` : '';
-          parts.push(`  🔍 Matches Found:\n${preview}${more}`);
-        }
+        const lines = result.trim() ? result.split('\n').filter(line => line.trim()).length : 0;
+        return ` • ${lines} matches`;
       }
-      
-    } else {
-      // Generic result handling
-      if (typeof result === 'string') {
-        const lines = result.split('\n').length;
-        const chars = result.length;
-        parts.push(`  📝 Output: ${lines} lines, ${chars} characters`);
-        
-        if (result.trim()) {
-          const preview = result.split('\n')
-            .slice(0, 10)
-            .map((line: string) => `    ${line}`)
-            .join('\n');
-          const truncated = preview.length > 1000 ? preview.substring(0, 1000) + '\n    ...' : preview;
-          parts.push(`  👀 Content:\n${truncated}`);
-        }
-        
-      } else if (Array.isArray(result)) {
-        parts.push(`  📊 Array Length: ${result.length}`);
-        
-        if (result.length > 0) {
-          const preview = result
-            .slice(0, 10)
-            .map((item: any, index: number) => `    [${index}]: ${typeof item === 'string' ? item : JSON.stringify(item)}`)
-            .join('\n');
-          const more = result.length > 10 ? `\n    ... and ${result.length - 10} more items` : '';
-          parts.push(`  📋 Array Contents:\n${preview}${more}`);
-        }
-        
-      } else if (typeof result === 'object' && result !== null) {
-        const keys = Object.keys(result);
-        parts.push(`  📦 Object Properties: ${keys.length}`);
-        
-        if (keys.length > 0) {
-          const preview = keys
-            .slice(0, 10)
-            .map((key: string) => {
-              const value = result[key];
-              const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
-              const truncated = valueStr.length > 100 ? valueStr.substring(0, 100) + '...' : valueStr;
-              return `    ${key}: ${truncated}`;
-            })
-            .join('\n');
-          const more = keys.length > 10 ? `\n    ... and ${keys.length - 10} more properties` : '';
-          parts.push(`  🔍 Object Contents:\n${preview}${more}`);
-        }
-        
-      } else {
-        parts.push(`  📤 Result: ${String(result)}`);
-      }
+      return ` • searched`;
     }
 
-    return parts.join('\n');
+    return ` • completed`;
   }
 
   /**
@@ -665,6 +408,26 @@ export class ToolLogger {
     }
 
     return '';
+  }
+
+  /**
+   * Helper to truncate file paths for display
+   */
+  private static truncatePath(path: string): string {
+    if (path.length <= 40) return path;
+    
+    const parts = path.split('/');
+    if (parts.length <= 2) {
+      return path.substring(0, 40) + '…';
+    }
+    
+    // Show first and last parts with … in middle
+    const first = parts[0] || '';
+    const last = parts[parts.length - 1];
+    const middle = parts.length > 3 ? '/…/' : '/';
+    
+    const truncated = `${first}${middle}${last}`;
+    return truncated.length > 40 ? path.substring(0, 40) + '…' : truncated;
   }
 
   /**

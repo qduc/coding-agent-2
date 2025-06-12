@@ -117,8 +117,8 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           }
         }
       } else {
-        // Condensed mode: show one line summary
-        const content = ToolLogger.formatToolOperationCondensed(
+        // Modern minimalistic display with full information
+        const content = ToolLogger.formatToolOperationFull(
           event.toolName,
           event.args,
           event.success,
@@ -180,7 +180,7 @@ Available Commands: (press TAB for auto-completion)
     /clear             - Clear chat history and refresh project context
     /refresh           - Refresh project context without clearing history
     /tools             - Toggle tool logging on/off
-    /verbose-tools     - Toggle verbose tool logging (shows full details)
+    /verbose-tools     - Toggle verbose tool logging (shows detailed breakdown)
 
 File Completion (Fuzzy Search):
     @                  - Shows live file list, fuzzy search as you type
@@ -243,7 +243,7 @@ Example Questions:
       setVerboseToolLogs(!verboseToolLogs);
       addMessage({
         type: 'system',
-        content: `🔧 Verbose tool logging ${!verboseToolLogs ? 'enabled' : 'disabled'}. Tool calls will now show ${!verboseToolLogs ? 'detailed information including arguments and full results' : 'condensed one-line summaries'}.`,
+        content: `🔧 Verbose tool logging ${!verboseToolLogs ? 'enabled' : 'disabled'}. Tool calls will now show ${!verboseToolLogs ? 'detailed breakdown with arguments and results' : 'clean, minimalistic format'}.`,
       });
       return;
     }
