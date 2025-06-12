@@ -59,7 +59,7 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
 
     return (
       <Box key={message.id} flexDirection="column" marginBottom={1}>
-        <Box>
+        <Box marginBottom={1}>
           <Text color={color} bold>
             {prefix}
           </Text>

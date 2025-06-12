@@ -118,7 +118,13 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
   } else if (toolLower.includes('bash')) {
     if (typeof result === 'object' && result?.exitCode !== undefined) {
       const time = result.executionTime ? ` ${result.executionTime}ms` : '';
-      return result.exitCode === 0 ? ` • ok${time}` : ` • exit ${result.exitCode}${time}`;
+      if (result.exitCode === 0) {
+        // For successful commands, show stdout if available
+        const output = result.stdout ? `\n${result.stdout}` : '';
+        return ` • ok${time}${output}`;
+      } else {
+        return ` • exit ${result.exitCode}${time}\n${result.stdout}`;
+      }
     }
     return ` • executed`;
   } else if (toolLower.includes('glob') || toolLower.includes('ls')) {
