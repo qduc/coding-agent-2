@@ -39,6 +39,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const [showToolLogs, setShowToolLogs] = useState(true);
   const [verboseToolLogs, setVerboseToolLogs] = useState(false);
   const [pendingToolCalls, setPendingToolCalls] = useState<Map<string, { toolName: string, args: any }>>(new Map());
+  const [agentInfo, setAgentInfo] = useState<string[]>([]);
 
   const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
     setMessages(prev => [...prev, {
@@ -333,6 +334,22 @@ Example Questions:
     disabled: isProcessing,
   };
 
+  // Expose method to add agent info messages
+  const addAgentInfo = useCallback((info: string) => {
+    setAgentInfo(prev => [...prev, info]);
+  }, []);
+
+  // Expose method to clear agent info
+  const clearAgentInfo = useCallback(() => {
+    setAgentInfo([]);
+  }, []);
+
+  // Add methods to agent instance for UI updates
+  useEffect(() => {
+    (agent as any).addAgentInfo = addAgentInfo;
+    (agent as any).clearAgentInfo = clearAgentInfo;
+  }, [agent, addAgentInfo, clearAgentInfo]);
+
   // Set up tool event listener
   useEffect(() => {
     toolEventEmitter.onToolEvent(handleToolEvent);
@@ -355,6 +372,16 @@ Example Questions:
 
   return (
     <Box flexDirection="column" height="100%">
+      {agentInfo.length > 0 && (
+        <Box paddingX={1} paddingY={0} borderStyle="round" borderColor="blue">
+          <Box flexDirection="column">
+            <Text color="blue" bold>🤖 Agent Information</Text>
+            {agentInfo.map((info, index) => (
+              <Text key={index} color="cyan">{info}</Text>
+            ))}
+          </Box>
+        </Box>
+      )}
       <Box flexGrow={1} flexDirection="column" overflow="hidden">
         <ConversationDisplay
           messages={messages}

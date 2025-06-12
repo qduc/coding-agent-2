@@ -32,6 +32,8 @@ export class Agent {
   private discoveryResult?: ProjectDiscoveryResult;
   private inputHandler?: IInputHandler;
   private toolContext?: IToolExecutionContext;
+  public addAgentInfo?: (info: string) => void;
+  public clearAgentInfo?: () => void;
 
   constructor(options: AgentOptions = {}) {
     this.inputHandler = options.inputHandler;
@@ -65,8 +67,17 @@ export class Agent {
     if (ripgrepAvailable) {
       tools.push(ripgrepTool);
     } else {
-      console.warn('System ripgrep (rg) command not found. Ripgrep tool will not be available.');
-      console.warn('For better search capabilities, install ripgrep: https://github.com/BurntSushi/ripgrep#installation');
+      // Use UI display if available, otherwise fall back to console
+      const warnMessage1 = '⚠️ System ripgrep (rg) command not found. Ripgrep tool will not be available.';
+      const warnMessage2 = '💡 For better search capabilities, install ripgrep: https://github.com/BurntSushi/ripgrep#installation';
+      
+      if (this.addAgentInfo) {
+        this.addAgentInfo(warnMessage1);
+        this.addAgentInfo(warnMessage2);
+      } else {
+        console.warn('System ripgrep (rg) command not found. Ripgrep tool will not be available.');
+        console.warn('For better search capabilities, install ripgrep: https://github.com/BurntSushi/ripgrep#installation');
+      }
     }
 
     // Initialize the orchestrator with available tools
@@ -107,9 +118,20 @@ export class Agent {
       try {
         modelName = this.llmService.getModelName();
       } catch (error) {
-        console.warn('Could not get model name, showing provider only');
+        const warnMessage = '⚠️ Could not get model name, showing provider only';
+        if (this.addAgentInfo) {
+          this.addAgentInfo(warnMessage);
+        } else {
+          console.warn('Could not get model name, showing provider only');
+        }
       }
-      console.log(`Initialized with provider: ${providerName}${modelName !== 'unknown' ? `, model: ${modelName}` : ''}`);
+      
+      const initMessage = `✅ Initialized with provider: ${providerName}${modelName !== 'unknown' ? `, model: ${modelName}` : ''}`;
+      if (this.addAgentInfo) {
+        this.addAgentInfo(initMessage);
+      } else {
+        console.log(`Initialized with provider: ${providerName}${modelName !== 'unknown' ? `, model: ${modelName}` : ''}`);
+      }
 
       // Initialize the orchestrator's provider strategy now that LLM service is ready
       this.orchestrator.initializeProviderStrategy();
