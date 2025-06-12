@@ -291,20 +291,6 @@ router.post('/validate', generalLimiter, async (req: Request, res: Response) => 
 });
 
 // Helper functions
-function getAvailableModels(provider?: string): string[] {
-  const models = {
-    openai: ['gpt-4', 'gpt-4-turbo-preview', 'gpt-3.5-turbo'],
-    anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-2.1'], // Example models
-    gemini: ['gemini-pro', 'gemini-ultra'] // Example models
-  };
-  // Ensure provider is a valid key
-  if (provider && provider in models) {
-    return models[provider as keyof typeof models];
-  }
-  // Return all models if no specific provider or provider is invalid
-  return [...models.openai, ...models.anthropic, ...models.gemini];
-}
-
 function getFeatureFlags(): ConfigFeatureFlags {
   // This should match the ConfigFeatureFlags type in api.ts
   return {

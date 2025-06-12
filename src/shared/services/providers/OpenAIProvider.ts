@@ -59,7 +59,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       if (isOpenRouter) {
         await this.openai.chat.completions.create({
           messages: [{ role: 'user', content: 'test' }],
-          model: 'openai/gpt-3.5-turbo',
+          model: 'openai/gpt-4.1-mini',
           max_tokens: 1
         });
       } else {
@@ -191,7 +191,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         const normalizedFunctions = this.validateAndNormalizeTools(functions);
         // Convert tools to OpenAI format using SchemaAdapter
         const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
-        
+
         requestParams.tools = openAIFunctions.map(func => ({
           type: 'function',
           function: func
@@ -264,7 +264,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       if (normalizedFunctions.length > 0) {
         // Convert tools to OpenAI format using SchemaAdapter
         const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
-        
+
         requestParams.tools = openAIFunctions.map(func => ({
           type: 'function',
           function: func
@@ -282,7 +282,7 @@ export class OpenAIProvider extends BaseLLMProvider {
           this.handleToolCall(name, parsedArgs, onToolCall);
         }
       }
-      
+
       return {
         content: choice.message.content,
         tool_calls: choice.message.tool_calls,
@@ -321,7 +321,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       if (normalizedFunctions.length > 0) {
         // Convert tools to OpenAI format using SchemaAdapter
         const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
-        
+
         requestParams.tools = openAIFunctions.map(func => ({
           type: 'function',
           function: func
@@ -408,7 +408,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     // This method is deprecated in favor of the orchestrator pattern
     // For OpenAI, tool execution should be handled by ToolOrchestrator with OpenAIStrategy
     // This implementation provides basic compatibility for legacy code
-    
+
     // Initialize conversation with system message and user input
     let messages: Message[] = [
       {
@@ -422,7 +422,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       // Convert tools to OpenAI format using SchemaAdapter
       const normalizedTools = this.validateAndNormalizeTools(tools);
       const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
-      
+
       // Send to LLM with tool schemas (single pass)
       const response = await this.streamMessageWithTools(
         messages,
@@ -435,7 +435,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         if (verbose) {
           console.log(`🔧 OpenAI requested ${response.tool_calls.length} tool call(s) - use ToolOrchestrator for full execution`);
         }
-        
+
         // Return indication that tool calls are needed
         return JSON.stringify({
           type: 'tool_calls_required',
