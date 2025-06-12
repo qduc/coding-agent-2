@@ -10,6 +10,7 @@ import { BashTool } from '../tools/bash';
 import { SubAgentTool } from '../tools/subAgent';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
+import { toolContextManager } from '../utils/ToolContextManager';
 
 /**
  * Core Agent - Primary interface for AI programming assistant
@@ -73,6 +74,11 @@ export class Agent {
 
     // Initialize project discovery
     this.projectDiscovery = new ProjectDiscovery();
+
+    // Set up periodic cleanup of tool context manager (every 30 minutes)
+    setInterval(() => {
+      toolContextManager.cleanup();
+    }, 30 * 60 * 1000);
   }
 
   /**

@@ -37,6 +37,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showToolLogs, setShowToolLogs] = useState(true);
+  const [verboseToolLogs, setVerboseToolLogs] = useState(false);
   const [pendingToolCalls, setPendingToolCalls] = useState<Map<string, { toolName: string, args: any }>>(new Map());
 
   const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
@@ -59,18 +60,76 @@ export const ChatApp: React.FC<ChatAppProps> = ({
         args: event.args
       }));
     } else if (event.type === 'tool_result') {
-      // Show the complete operation in one line
-      const content = ToolLogger.formatToolOperationCondensed(
-        event.toolName,
-        event.args,
-        event.success,
-        event.result
-      );
-      if (content.trim()) {
+      // Show the complete operation - verbose or condensed
+      if (verboseToolLogs) {
+        // Verbose mode: show detailed information
+        const callInfo = ToolLogger.formatToolCallForUI(event.toolName, event.args);
+        const resultInfo = ToolLogger.formatToolResultForUI(event.toolName, event.success, event.result, event.args);
+        
         addMessage({
           type: 'tool_call',
-          content,
+          content: `🔧 ${callInfo}`,
         });
+        
+        // Show arguments if they exist
+        if (event.args && Object.keys(event.args).length > 0) {
+          const argsContent = Object.entries(event.args)
+            .map(([key, value]) => {
+              if (typeof value === 'string' && value.length > 200) {
+                return `  ${key}: [${value.length} characters]`;
+              } else if (typeof value === 'object') {
+                return `  ${key}: ${JSON.stringify(value, null, 2).substring(0, 200)}...`;
+              }
+              return `  ${key}: ${value}`;
+            })
+            .join('\n');
+          addMessage({
+            type: 'tool_call',
+            content: `📋 Arguments:\n${argsContent}`,
+          });
+        }
+        
+        // Show result details
+        addMessage({
+          type: 'tool_call',
+          content: `📤 ${resultInfo}`,
+        });
+        
+        // Show error details if failed
+        if (!event.success && event.result) {
+          let errorDetails = '';
+          if (event.result instanceof Error) {
+            errorDetails = event.result.message;
+            if (event.result.stack) {
+              errorDetails += `\nStack: ${event.result.stack.substring(0, 500)}...`;
+            }
+          } else if (typeof event.result === 'string') {
+            errorDetails = event.result;
+          } else if (typeof event.result === 'object') {
+            errorDetails = JSON.stringify(event.result, null, 2);
+          }
+          
+          if (errorDetails) {
+            addMessage({
+              type: 'error',
+              content: `❌ Error Details:\n${errorDetails}`,
+            });
+          }
+        }
+      } else {
+        // Condensed mode: show one line summary
+        const content = ToolLogger.formatToolOperationCondensed(
+          event.toolName,
+          event.args,
+          event.success,
+          event.result
+        );
+        if (content.trim()) {
+          addMessage({
+            type: 'tool_call',
+            content,
+          });
+        }
       }
       // Clean up pending tool call (find by tool name)
       setPendingToolCalls(prev => {
@@ -84,7 +143,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
         return newMap;
       });
     }
-  }, [addMessage, showToolLogs, setPendingToolCalls]);
+  }, [addMessage, showToolLogs, verboseToolLogs, setPendingToolCalls]);
 
   const handleExit = useCallback(() => {
     if (onExit) {
@@ -120,6 +179,8 @@ Available Commands: (press TAB for auto-completion)
     /exit, /quit, /q   - Exit interactive mode
     /clear             - Clear chat history and refresh project context
     /refresh           - Refresh project context without clearing history
+    /tools             - Toggle tool logging on/off
+    /verbose-tools     - Toggle verbose tool logging (shows full details)
 
 File Completion (Fuzzy Search):
     @                  - Shows live file list, fuzzy search as you type
@@ -174,6 +235,26 @@ Example Questions:
       } finally {
         setIsProcessing(false);
       }
+      return;
+    }
+
+    // Handle verbose tool logging toggle
+    if (trimmedInput.toLowerCase() === '/verbose-tools') {
+      setVerboseToolLogs(!verboseToolLogs);
+      addMessage({
+        type: 'system',
+        content: `🔧 Verbose tool logging ${!verboseToolLogs ? 'enabled' : 'disabled'}. Tool calls will now show ${!verboseToolLogs ? 'detailed information including arguments and full results' : 'condensed one-line summaries'}.`,
+      });
+      return;
+    }
+
+    // Handle tool logging toggle
+    if (trimmedInput.toLowerCase() === '/tools') {
+      setShowToolLogs(!showToolLogs);
+      addMessage({
+        type: 'system',
+        content: `🔧 Tool logging ${!showToolLogs ? 'enabled' : 'disabled'}. Tool calls will ${!showToolLogs ? 'now be shown' : 'no longer be displayed'} in the chat.`,
+      });
       return;
     }
 

@@ -14,6 +14,8 @@ import * as path from 'path';
 import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError } from './types';
 import { validatePath, validateFileExtension } from './validation';
+import { toolContextManager } from '../utils/ToolContextManager';
+import * as crypto from 'crypto';
 
 /**
  * Parameters for the Read tool
@@ -162,6 +164,10 @@ export class ReadTool extends BaseTool {
         startLine,
         endLine
       });
+
+      // Record file read for tracking
+      const contentHash = crypto.createHash('md5').update(result.content).digest('hex');
+      toolContextManager.recordFileRead(absolutePath, contentHash);
 
       return this.createSuccessResult(result, {
         filePath: absolutePath,

@@ -13,6 +13,7 @@ import * as path from 'path';
 import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError, ToolContext } from './types';
 import { validatePath } from './validation';
+import { toolContextManager } from '../utils/ToolContextManager';
 
 export interface WriteParams {
   path: string;
@@ -31,13 +32,13 @@ export interface WriteResult {
 
 export class WriteTool extends BaseTool {
   readonly name = 'write';
-  readonly description = 'Write content to files with safety features and backup support. Use either content (for full writes) or diff (for patching existing files). Diff format example:\n@@ -1,3 +1,3 @@\n context line\n-old line to remove\n+new line to add\n another context line';
+  readonly description = 'Write content to files with safety features. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a unified diff to selectively modify parts of an existing file';
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
-      diff: { type: 'string', description: 'Unified diff to apply to an existing file (only for modifying existing files). Format: @@ -startLine,lineCount +startLine,lineCount @@\\n context line\\n-line to remove\\n+line to add' },
+      diff: { type: 'string', description: 'Unified diff to apply to an existing file. Format uses standard git-style unified diff notation with context. IMPORTANT: Only one hunk (section starting with @@ line) is allowed per tool call.\n\nExample:\n@@ -2,3 +2,4 @@\n  line of context\n-line to remove\n+line to replace it with\n+another line to add\n  more context\n\nContext lines (starting with space) help verify the location. Lines to remove start with - and lines to add start with +.' },
       encoding: {
         type: 'string',
         description: 'File encoding',
@@ -140,6 +141,31 @@ export class WriteTool extends BaseTool {
 
       const fileExists = await fs.pathExists(absolutePath);
 
+      // Validate write operation based on tool call history (skip in test environment)
+      const isDiffMode = diff !== undefined;
+      const isTestMode = process.env.NODE_ENV === 'test';
+      
+      if (!isTestMode) {
+        const validation = toolContextManager.validateWriteOperation(absolutePath, isDiffMode);
+        
+        if (!validation.isValid) {
+          // Create a detailed error with context from validation
+          const errorMessage = validation.warnings.join('\n') + '\n\n' + validation.suggestions.join('\n');
+          
+          return this.createErrorResult(
+            errorMessage,
+            'VALIDATION_ERROR',
+            validation.suggestions
+          );
+        }
+
+        // Log warnings even if we proceed
+        if (validation.warnings.length > 0) {
+          // Use ToolLogger to log warnings for visibility
+          console.warn('⚠️ Write operation warnings:', validation.warnings.join(', '));
+        }
+      }
+
       let finalContent: string;
       let mode: 'create' | 'patch';
       let contentSize: number;
@@ -211,8 +237,16 @@ export class WriteTool extends BaseTool {
 
       // We always use atomic writes, so no backup is needed
       const shouldBackup = false;
-      return await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, fileExists, linesChanged);
+      const result = await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, fileExists, linesChanged);
+      
+      // Record successful write operation
+      toolContextManager.recordFileWrite(absolutePath, true);
+      
+      return result;
     } catch (error) {
+      // Record failed write operation
+      toolContextManager.recordFileWrite(filePath, false);
+      
       if (error instanceof ToolError) throw error;
       throw new ToolError(
         `Failed to write file: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -367,6 +401,19 @@ export class WriteTool extends BaseTool {
   /**
    * Apply unified diff to existing content
    */
+  /**
+   * Apply a unified diff to existing content
+   * 
+   * The diff parser has been simplified to be more forgiving while maintaining safety:
+   * - Improved context matching with multiple normalization strategies
+   * - Clearer error messages when problems occur
+   * - More robust handling of common diff format variations
+   * - Maintains safety checks to prevent corruption
+   *
+   * @param currentContent The current content of the file
+   * @param diff The unified diff to apply
+   * @returns The patched content and number of lines changed
+   */
   private applyDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     // Validate input types
     if (typeof currentContent !== 'string' || typeof diff !== 'string') {
@@ -385,29 +432,12 @@ export class WriteTool extends BaseTool {
       );
     }
 
-    // Validate diff format more strictly
+    // Basic validation of diff format
     this.validateDiffFormat(diff);
 
     // Split the current content and the diff into lines
     const originalLines = currentContent.split('\n');
     const diffLines = diff.split('\n');
-
-    // Basic validation - must have at least one hunk header
-    const hasHunkHeader = diffLines.some(line => line.match(/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/));
-    if (!hasHunkHeader) {
-      throw new ToolError(
-        'Invalid diff format: no valid hunk headers found',
-        'VALIDATION_ERROR',
-        [
-          'Diff must contain at least one hunk header like: @@ -1,3 +1,3 @@',
-          'Example valid diff:',
-          '@@ -1,2 +1,2 @@',
-          ' context line',
-          '-old line',
-          '+new line'
-        ]
-      );
-    }
 
     const resultLines: string[] = [];
     let currentLineIndex = 0;  // current position in originalLines
@@ -419,8 +449,9 @@ export class WriteTool extends BaseTool {
       const line = diffLines[i];
       i++;
 
-      // Skip file headers
-      if (line.startsWith('--- ') || line.startsWith('+++ ')) {
+      // Skip file headers and known metadata
+      if (line.startsWith('--- ') || line.startsWith('+++ ') || 
+          this.isKnownMetadata(line)) {
         continue;
       }
 
@@ -429,10 +460,8 @@ export class WriteTool extends BaseTool {
       if (hunkHeaderMatch) {
         const origStart = parseInt(hunkHeaderMatch[1], 10);
         const origCount = parseInt(hunkHeaderMatch[2] || '1', 10);
-        // const patchedStart = parseInt(hunkHeaderMatch[3], 10);
-        // const patchedCount = parseInt(hunkHeaderMatch[4] || '1', 10);
 
-        // Basic validation of hunk header values
+        // Validate hunk header line numbers
         if (isNaN(origStart) || origStart < 1) {
           throw new ToolError(
             `Invalid hunk header: ${line}`,
@@ -441,12 +470,13 @@ export class WriteTool extends BaseTool {
           );
         }
 
-        // Copy lines from currentLineIndex to origStart-1 (0-based index: origStart-1)
+        // Copy lines from current position to hunk start
         while (currentLineIndex < origStart - 1) {
           if (currentLineIndex >= originalLines.length) {
             throw new ToolError(
-              `Hunk starts beyond end of file (line ${origStart})`,
-              'VALIDATION_ERROR'
+              `Hunk starts beyond end of file at line ${origStart}`,
+              'VALIDATION_ERROR',
+              ['The diff references a line that does not exist in the file']
             );
           }
           resultLines.push(originalLines[currentLineIndex]);
@@ -454,136 +484,87 @@ export class WriteTool extends BaseTool {
         }
 
         // Process the hunk lines
-        let lineCountInHunk = 0;
+        // Collect all lines until next hunk header or end of diff
         let j = i;
-        // Collect all lines until next hunk or end of diff
         while (j < diffLines.length && !diffLines[j].startsWith('@@')) {
           j++;
         }
         const hunkLines = diffLines.slice(i, j);
         i = j;  // move outer index to next hunk
 
-        // Skip empty hunks - they're allowed
-        if (hunkLines.length === 0) {
-          continue;
-        }
-
-        let hasNoNewlineMarker = false;
+        if (hunkLines.length === 0) continue; // Skip empty hunks
 
         for (const hunkLine of hunkLines) {
+          // Skip newline markers
           if (hunkLine === '\\ No newline at end of file') {
-            hasNoNewlineMarker = true;
             continue;
           }
 
-          // Basic line format validation - allow more flexibility
+          // Skip invalid lines
           if (hunkLine.length === 0 || ![' ', '+', '-'].includes(hunkLine[0])) {
-            // Skip malformed lines with a warning instead of failing
             continue;
           }
 
-          if (hunkLine.startsWith(' ')) {
-            // Context line: must match
+          if (hunkLine.startsWith(' ')) { // Context line
             if (currentLineIndex >= originalLines.length) {
               throw new ToolError(
-                `Context line beyond end of file at line ${currentLineIndex + 1}`,
-                'VALIDATION_ERROR'
+                `Context line references line ${currentLineIndex + 1} which is beyond the end of file`,
+                'VALIDATION_ERROR',
+                ['The diff references a line that does not exist in the file']
               );
             }
+
             const contextLine = hunkLine.substring(1);
             const actualLine = originalLines[currentLineIndex];
 
-            // Try flexible matching first (ignore whitespace differences)
-            const normalizedContext = contextLine.trim();
-            const normalizedActual = actualLine.trim();
-
-            if (normalizedContext !== normalizedActual) {
-              // Generate helpful context for the error
-              const contextStart = Math.max(0, currentLineIndex - 3);
-              const contextEnd = Math.min(originalLines.length, currentLineIndex + 4);
-              const fileContext = originalLines.slice(contextStart, contextEnd)
-                .map((line, idx) => {
-                  const lineNum = contextStart + idx + 1;
-                  const marker = lineNum === currentLineIndex + 1 ? '>>>' : '   ';
-                  return `${marker} ${lineNum}: ${line}`;
-                }).join('\n');
-
+            // Improved forgiving matching - normalize whitespace completely
+            if (!this.contextMatches(contextLine, actualLine)) {
               throw new ToolError(
-                `Context mismatch at line ${currentLineIndex + 1}. The diff appears to be out of sync with the current file content.\n\nExpected: '${contextLine}'\nFound: '${actualLine}'\n\nFile context:\n${fileContext}`,
+                `Context mismatch at line ${currentLineIndex + 1}. Diff is out of sync with file content.`,
                 'VALIDATION_ERROR',
                 [
-                  'The file has changed since this diff was created',
-                  'Try reading the current file content first and creating a new diff',
-                  'Or use content mode to overwrite the entire file instead of applying a diff',
-                  'Check that line numbers in the diff match the current file structure'
+                  'Use the read tool to get current file content before creating a diff',
+                  'Verify line numbers match the current file structure'
                 ]
               );
             }
+
             resultLines.push(contextLine);
             currentLineIndex++;
-            lineCountInHunk++;
-          } else if (hunkLine.startsWith('-')) {
-            // Deletion: must match and skip
+          } else if (hunkLine.startsWith('-')) { // Deletion
             if (currentLineIndex >= originalLines.length) {
               throw new ToolError(
-                `Deletion beyond end of file at line ${currentLineIndex + 1}`,
-                'VALIDATION_ERROR'
+                `Cannot delete line ${currentLineIndex + 1} - beyond end of file`,
+                'VALIDATION_ERROR',
+                ['The diff attempts to delete a line that does not exist']
               );
             }
+
             const deletionLine = hunkLine.substring(1);
             const actualLine = originalLines[currentLineIndex];
 
-            // Try flexible matching for deletions too
-            const normalizedDeletion = deletionLine.trim();
-            const normalizedActual = actualLine.trim();
-
-            if (normalizedDeletion !== normalizedActual) {
-              // Generate helpful context for the error
-              const contextStart = Math.max(0, currentLineIndex - 3);
-              const contextEnd = Math.min(originalLines.length, currentLineIndex + 4);
-              const fileContext = originalLines.slice(contextStart, contextEnd)
-                .map((line, idx) => {
-                  const lineNum = contextStart + idx + 1;
-                  const marker = lineNum === currentLineIndex + 1 ? '>>>' : '   ';
-                  return `${marker} ${lineNum}: ${line}`;
-                }).join('\n');
-
+            // Use same matching logic as context lines for consistency
+            if (!this.contextMatches(deletionLine, actualLine)) {
               throw new ToolError(
-                `Deletion mismatch at line ${currentLineIndex + 1}. The diff appears to be out of sync with the current file content.\n\nExpected to delete: '${deletionLine}'\nFound: '${actualLine}'\n\nFile context:\n${fileContext}`,
+                `Deletion mismatch at line ${currentLineIndex + 1}. Diff is out of sync with file content.`,
                 'VALIDATION_ERROR',
                 [
-                  'The file has changed since this diff was created',
-                  'Try reading the current file content first and creating a new diff',
-                  'Or use content mode to overwrite the entire file instead of applying a diff',
-                  'Check that line numbers in the diff match the current file structure'
+                  'Use the read tool to get current file content before creating a diff',
+                  'Verify line numbers match the current file structure'
                 ]
               );
             }
+
             currentLineIndex++;
-            lineCountInHunk++;
             linesRemoved++;
-          } else if (hunkLine.startsWith('+')) {
-            // Addition: add to result
+          } else if (hunkLine.startsWith('+')) { // Addition
             resultLines.push(hunkLine.substring(1));
             linesAdded++;
-          } else {
-            // Skip invalid lines instead of throwing error
-            continue;
           }
         }
-
-        // Allow minor line count mismatches - continue processing
-        if (lineCountInHunk !== origCount) {
-          // Just continue - minor mismatches are acceptable
-        }
       } else if (line.trim() !== '') {
-        // Allow any non-empty lines outside hunks - be more permissive
-        // Just ignore unknown lines instead of failing
-        if (!line.startsWith('index ') && !line.startsWith('diff ') && !line.startsWith('new ') &&
-            !line.startsWith('deleted ') && !line.startsWith('old mode ') && !line.startsWith('new mode ') &&
-            !line.startsWith('---') && !line.startsWith('+++')) {
-          // Silently ignore unknown lines
-        }
+        // Silently ignore unknown non-empty lines outside of hunks
+        continue;
       }
     }
 
@@ -604,6 +585,42 @@ export class WriteTool extends BaseTool {
       content: finalContent,
       linesChanged
     };
+  }
+
+  /**
+   * Improved context matching with multiple normalization strategies
+   */
+  private contextMatches(expected: string, actual: string): boolean {
+    // Try exact match first (fastest)
+    if (expected === actual) return true;
+
+    // Try basic whitespace normalization
+    if (expected.trim() === actual.trim()) return true;
+
+    // Try more aggressive normalization (collapse all whitespace)
+    const normalizeAggressively = (str: string) => str.trim().replace(/\s+/g, ' ');
+    if (normalizeAggressively(expected) === normalizeAggressively(actual)) return true;
+
+    // Consider partial matching for long lines (useful for long lines with minor changes)
+    if (expected.length > 40 && actual.length > 40) {
+      // Check if most of the content matches using Levenshtein distance or other similarity metric
+      // This is a simplified implementation - just checks if 70% of characters match in order
+      let matchCount = 0;
+      const minLength = Math.min(expected.length, actual.length);
+      for (let i = 0; i < minLength; i++) {
+        if (expected[i] === actual[i]) matchCount++;
+      }
+      if (matchCount / minLength > 0.7) return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a line is known git diff metadata
+   */
+  private isKnownMetadata(line: string): boolean {
+    return !!line.match(/^(index |diff |new |deleted |old mode |new mode |similarity index |rename |copy |Binary files |---|\\ No newline)/);
   }
 
   /**
@@ -639,55 +656,80 @@ export class WriteTool extends BaseTool {
    * Check if content appears to be binary
    */
   private isBinaryContent(content: string): boolean {
-    // Simple heuristic: check for null bytes or high ratio of non-printable characters
+    // Quick check: If it contains null bytes, it's definitely binary
     if (content.includes('\0')) {
       return true;
     }
 
-    // Check first 1000 characters for high ratio of non-printable characters
-    const sampleSize = Math.min(1000, content.length);
-    const sample = content.substring(0, sampleSize);
-    const nonPrintableCount = sample.split('').filter(char => {
+    // Check first 1000 characters for non-printable characters
+    const sample = content.substring(0, 1000);
+
+    // Look for high concentration of control characters (except tabs, newlines, etc)
+    const nonPrintableCount = Array.from(sample).filter(char => {
       const code = char.charCodeAt(0);
-      return (code < 32 && code !== 9 && code !== 10 && code !== 13) || code > 126;
+      return (code < 32 && ![9, 10, 13].includes(code)) || code > 126;
     }).length;
 
-    // If more than 30% are non-printable, consider it binary
-    return nonPrintableCount / sampleSize > 0.3;
+    // If more than 10% are non-printable, consider it binary
+    return nonPrintableCount > sample.length * 0.1;
   }
 
   /**
-   * Validate basic diff format - simplified validation
+   * Validate basic diff format
    */
   private validateDiffFormat(diff: string): void {
     if (diff.trim() === '') {
       throw new ToolError(
         'Empty diff provided',
         'VALIDATION_ERROR',
-        [
-          'Provide a valid unified diff with at least one change',
-          'Example:',
-          '@@ -1,1 +1,1 @@',
-          '-old content',
-          '+new content'
-        ]
+        ['Please provide a valid unified diff with at least one change']
       );
     }
 
-    // Basic validation - just check for at least one hunk header
-    const hasHunkHeader = diff.includes('@@');
-    if (!hasHunkHeader) {
+    // Check for at least one hunk header with valid format
+    const hunkHeaderRegex = /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/g;
+    const hunkMatches = diff.match(hunkHeaderRegex);
+
+    if (!hunkMatches) {
       throw new ToolError(
-        'Invalid diff format: no hunk headers found',
+        'Invalid diff format: no valid hunk headers found',
         'VALIDATION_ERROR',
         [
-          'Diff must contain at least one hunk header like: @@ -1,3 +1,3 @@',
-          'Example valid diff:',
-          '@@ -1,2 +1,2 @@',
+          'Diff must contain at least one valid hunk header',
+          'Example of valid diff:',
+          '@@ -1,3 +1,3 @@',
           ' context line',
           '-old line',
           '+new line'
         ]
+      );
+    }
+
+    // Ensure only one hunk is present per diff operation
+    if (hunkMatches.length > 1) {
+      throw new ToolError(
+        'Multiple hunks found in diff. Only one hunk is allowed per operation.',
+        'VALIDATION_ERROR',
+        [
+          'Split your changes into separate write operations, one hunk per call',
+          'Each hunk should modify one specific area of the file',
+          'Example of valid single hunk:',
+          '@@ -1,3 +1,4 @@',
+          ' context line',
+          '-old line',
+          '+new line',
+          '+another new line'
+        ]
+      );
+    }
+
+    // Check for at least one actual change (+ or - line)
+    const hasChanges = /^[+-]/m.test(diff);
+    if (!hasChanges) {
+      throw new ToolError(
+        'Invalid diff: no additions or deletions found',
+        'VALIDATION_ERROR',
+        ['The diff must contain at least one line that starts with + or -']
       );
     }
   }

@@ -120,6 +120,7 @@ export async function runSetupWizard() {
       console.log(chalk.red('❌ Setup completed but connection test failed.'));
       console.log(chalk.yellow('Please check your API key and try again.'));
     }
+    process.exit(0);
   } catch (error) {
     console.error(chalk.red('Setup failed:'), error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
@@ -250,6 +251,7 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
 
     // Exit message
     console.log(chalk.yellow('👋 Goodbye! Thanks for using Coding Agent.'));
+    process.exit(0);
 
   } catch (error) {
     console.error(chalk.red('Failed to start interactive mode:'), error instanceof Error ? error.message : 'Unknown error');

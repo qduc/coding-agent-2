@@ -151,7 +151,7 @@ export class ToolLogger {
 
         // Output detailed failure information to console for immediate visibility
         const config = configManager.getConfig();
-        if (config.enableToolConsole) {
+        if (config.enableToolConsoleLogging) {
           console.error(chalk.red('\n━━━ WRITE TOOL FAILURE ━━━'));
           console.error(chalk.red(`Tool: ${toolName}`));
           console.error(chalk.red(`Error: ${error?.message || (typeof result === 'string' ? result : 'Unknown error')}`));
@@ -188,21 +188,394 @@ export class ToolLogger {
   }
 
   /**
-   * Format tool call for UI display
+   * Format tool call for UI display with full details
    */
   static formatToolCallForUI(toolName: string, args: any): string {
-    return this.formatToolOperationCondensed(toolName, args);
+    return this.formatToolOperationFull(toolName, args);
   }
 
   /**
-   * Format tool result for UI display
+   * Format tool result for UI display with full details
    */
   static formatToolResultForUI(toolName: string, success: boolean, result?: any, args?: any): string {
-    return this.formatToolOperationCondensed(toolName, args, success, result);
+    return this.formatToolOperationFull(toolName, args, success, result);
   }
 
   /**
-   * Format tool operation as a single condensed line
+   * Format tool operation with full details
+   */
+  static formatToolOperationFull(toolName: string, args: any, success?: boolean, result?: any): string {
+    const fullContext = this.getFullContext(toolName, args);
+    const outcome = success !== undefined ? this.getFullOutcome(toolName, success, result, args) : '';
+
+    if (success === undefined) {
+      // Tool call only - show full arguments
+      return `🔧 ${toolName}\n${fullContext}`;
+    } else {
+      // Complete operation with full details
+      const status = success ? '✅' : '❌';
+      const statusText = success ? 'SUCCESS' : 'FAILED';
+      let output = `${status} ${toolName} - ${statusText}\n`;
+      
+      if (fullContext.trim()) {
+        output += `Arguments:\n${fullContext}\n`;
+      }
+      
+      if (outcome.trim()) {
+        output += `Result:\n${outcome}`;
+      }
+      
+      return output;
+    }
+  }
+
+  /**
+   * Get full context for a tool call (all arguments with detailed formatting)
+   */
+  private static getFullContext(toolName: string, args: any): string {
+    if (!args || typeof args !== 'object') {
+      return args ? `  ${String(args)}` : '';
+    }
+
+    const toolLower = toolName.toLowerCase();
+    const parts: string[] = [];
+
+    // Tool-specific detailed formatting
+    if (toolLower.includes('read')) {
+      if (args.path) parts.push(`  📁 Path: ${args.path}`);
+      if (args.startLine) parts.push(`  📝 Lines: ${args.startLine}-${args.endLine || 'end'}`);
+      if (args.maxLines) parts.push(`  📊 Max Lines: ${args.maxLines}`);
+      if (args.encoding && args.encoding !== 'utf8') parts.push(`  🔤 Encoding: ${args.encoding}`);
+    } else if (toolLower.includes('write')) {
+      if (args.path) parts.push(`  📁 Path: ${args.path}`);
+      if (args.content) {
+        const lines = args.content.split('\n').length;
+        const chars = args.content.length;
+        parts.push(`  📝 Content: ${lines} lines, ${chars} characters`);
+        // Show first few lines as preview
+        const preview = args.content.split('\n').slice(0, 3).join('\n');
+        const truncated = preview.length > 200 ? preview.substring(0, 200) + '...' : preview;
+        parts.push(`  👀 Preview:\n    ${truncated.replace(/\n/g, '\n    ')}`);
+      }
+      if (args.diff) {
+        const lines = args.diff.split('\n').length;
+        parts.push(`  🔄 Diff: ${lines} lines`);
+        // Show diff preview
+        const diffPreview = args.diff.split('\n').slice(0, 5).join('\n');
+        parts.push(`  👀 Diff Preview:\n    ${diffPreview.replace(/\n/g, '\n    ')}`);
+      }
+      if (args.encoding && args.encoding !== 'utf8') parts.push(`  🔤 Encoding: ${args.encoding}`);
+      if (args.backup === false) parts.push(`  💾 Backup: disabled`);
+    } else if (toolLower.includes('ls')) {
+      if (args.path) parts.push(`  📁 Path: ${args.path}`);
+      if (args.recursive) parts.push(`  🔄 Recursive: enabled`);
+      if (args.includeHidden) parts.push(`  👁️ Include Hidden: enabled`);
+    } else if (toolLower.includes('glob')) {
+      if (args.pattern) parts.push(`  🔍 Pattern: ${args.pattern}`);
+      if (args.cwd) parts.push(`  📁 Working Dir: ${args.cwd}`);
+    } else if (toolLower.includes('grep') || toolLower.includes('search')) {
+      if (args.pattern) parts.push(`  🔍 Pattern: ${args.pattern}`);
+      if (args.path) parts.push(`  📁 Path: ${args.path}`);
+      if (args.filePattern) parts.push(`  📄 File Pattern: ${args.filePattern}`);
+    } else if (toolLower.includes('bash')) {
+      if (args.command) parts.push(`  ⚡ Command: ${args.command}`);
+      if (args.cwd) parts.push(`  📁 Working Dir: ${args.cwd}`);
+      if (args.timeout) parts.push(`  ⏱️ Timeout: ${args.timeout}ms`);
+    } else {
+      // Generic formatting for other tools
+      for (const [key, value] of Object.entries(args)) {
+        if (typeof value === 'string') {
+          if (value.length > 500) {
+            parts.push(`  ${key}: [${value.length} characters]`);
+            // Show preview for long strings
+            const preview = value.substring(0, 200) + '...';
+            parts.push(`    Preview: ${preview}`);
+          } else {
+            parts.push(`  ${key}: ${value}`);
+          }
+        } else if (typeof value === 'object' && value !== null) {
+          parts.push(`  ${key}: ${JSON.stringify(value, null, 2).replace(/\n/g, '\n  ')}`);
+        } else {
+          parts.push(`  ${key}: ${value}`);
+        }
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Get full outcome for tool result (detailed information)
+   */
+  private static getFullOutcome(toolName: string, success: boolean, result?: any, args?: any): string {
+    const parts: string[] = [];
+    const toolLower = toolName.toLowerCase();
+
+    if (!success) {
+      // Detailed error display
+      parts.push('  ❌ Status: FAILED');
+      
+      let errorMsg = 'Unknown error';
+      if (result instanceof Error) {
+        errorMsg = result.message;
+        parts.push(`  🚨 Error Type: ${result.name || 'Error'}`);
+        if (result.stack) {
+          const stackLines = result.stack.split('\n').slice(1, 4); // Show first 3 stack lines
+          parts.push(`  📍 Stack Trace:\n    ${stackLines.join('\n    ')}`);
+        }
+      } else if (typeof result === 'string' && result.trim()) {
+        errorMsg = result;
+      } else if (typeof result === 'object' && result !== null && result.message) {
+        errorMsg = result.message;
+      }
+      
+      parts.push(`  💥 Error Message: ${errorMsg}`);
+      
+      // Add context about what was being attempted
+      if (toolLower.includes('write') && args) {
+        if (args.path) parts.push(`  📁 Target File: ${args.path}`);
+        if (args.content !== undefined) {
+          const lines = typeof args.content === 'string' ? args.content.split('\n').length : 0;
+          parts.push(`  📝 Content Size: ${lines} lines`);
+        }
+        if (args.diff !== undefined) {
+          const lines = typeof args.diff === 'string' ? args.diff.split('\n').length : 0;
+          parts.push(`  🔄 Diff Size: ${lines} lines`);
+        }
+      }
+
+      return parts.join('\n');
+    }
+
+    // Success outcomes with detailed information
+    parts.push('  ✅ Status: SUCCESS');
+
+    if (toolLower.includes('write')) {
+      if (typeof result === 'object' && result?.linesChanged) {
+        const action = result.created ? '✨ Created new file' : '📝 Modified existing file';
+        parts.push(`  ${action}`);
+        parts.push(`  📊 Lines Changed: ${result.linesChanged}`);
+        parts.push(`  🔧 Operation Mode: ${result.mode || 'write'}`);
+        
+        if (result.backupPath) {
+          parts.push(`  💾 Backup Created: ${result.backupPath}`);
+        }
+      } else {
+        parts.push('  📝 File written successfully');
+        if (args?.content) {
+          const lines = args.content.split('\n').length;
+          const chars = args.content.length;
+          parts.push(`  📊 Content: ${lines} lines, ${chars} characters`);
+        }
+      }
+      
+      // Show content preview
+      if (args?.content && typeof args.content === 'string') {
+        const preview = args.content.split('\n')
+          .slice(0, 5)
+          .map((line: string, index: number) => `    ${index + 1}: ${line}`)
+          .join('\n');
+        const truncated = preview.length > 500 ? preview.substring(0, 500) + '\n    ...' : preview;
+        parts.push(`  👀 Content Preview:\n${truncated}`);
+      }
+      
+    } else if (toolLower.includes('read')) {
+      if (typeof result === 'object' && result?.lineCount) {
+        parts.push(`  📊 Lines Read: ${result.lineCount}`);
+        if (result.content) {
+          parts.push(`  📏 Characters: ${result.content.length}`);
+        }
+        if (result.partialRead) {
+          parts.push(`  ⚠️ Partial Read: File was truncated`);
+        }
+        if (result.encoding) {
+          parts.push(`  🔤 Encoding: ${result.encoding}`);
+        }
+      } else if (typeof result === 'string') {
+        const lines = result.split('\n').length;
+        const chars = result.length;
+        parts.push(`  📊 Content: ${lines} lines, ${chars} characters`);
+        
+        // Show content preview
+        const preview = result.split('\n')
+          .slice(0, 5)
+          .map((line: string, index: number) => `    ${index + 1}: ${line}`)
+          .join('\n');
+        const truncated = preview.length > 500 ? preview.substring(0, 500) + '\n    ...' : preview;
+        parts.push(`  👀 Content Preview:\n${truncated}`);
+      }
+      
+    } else if (toolLower.includes('bash')) {
+      if (typeof result === 'object' && result?.exitCode !== undefined) {
+        parts.push(`  🚀 Exit Code: ${result.exitCode}`);
+        
+        if (result.executionTime) {
+          parts.push(`  ⏱️ Execution Time: ${result.executionTime}ms`);
+        }
+        
+        const stdout = result.stdout || '';
+        const stderr = result.stderr || '';
+        
+        if (stdout) {
+          const outputLines = stdout.split('\n').filter((line: string) => line.trim()).length;
+          parts.push(`  📤 Stdout: ${outputLines} lines`);
+          
+          // Show stdout preview
+          const stdoutPreview = stdout.split('\n')
+            .slice(0, 10)
+            .map((line: string) => `    ${line}`)
+            .join('\n');
+          const truncated = stdoutPreview.length > 1000 ? stdoutPreview.substring(0, 1000) + '\n    ...' : stdoutPreview;
+          parts.push(`  👀 Output Preview:\n${truncated}`);
+        }
+        
+        if (stderr) {
+          const errorLines = stderr.split('\n').filter((line: string) => line.trim()).length;
+          parts.push(`  ⚠️ Stderr: ${errorLines} lines`);
+          
+          // Show stderr preview
+          const stderrPreview = stderr.split('\n')
+            .slice(0, 5)
+            .map((line: string) => `    ${line}`)
+            .join('\n');
+          parts.push(`  🚨 Error Output:\n${stderrPreview}`);
+        }
+      } else {
+        parts.push('  🚀 Command executed successfully');
+      }
+      
+    } else if (toolLower.includes('glob') || toolLower.includes('ls')) {
+      // Handle GlobResult object format
+      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
+        const matches = result.matches;
+        const files = matches.filter((item: any) => item.type === 'file');
+        const dirs = matches.filter((item: any) => item.type === 'directory');
+        
+        parts.push(`  📊 Total Items: ${matches.length}`);
+        parts.push(`  📄 Files: ${files.length}`);
+        parts.push(`  📁 Directories: ${dirs.length}`);
+        
+        // Show file listing
+        if (matches.length > 0) {
+          const listing = matches
+            .slice(0, 20) // Show first 20 items
+            .map((item: any) => `    ${item.type === 'directory' ? '📁' : '📄'} ${item.path}`)
+            .join('\n');
+          const more = matches.length > 20 ? `\n    ... and ${matches.length - 20} more items` : '';
+          parts.push(`  📋 Items Found:\n${listing}${more}`);
+        }
+        
+      } else if (Array.isArray(result)) {
+        const files = result.filter(item => !item.endsWith('/'));
+        const dirs = result.filter(item => item.endsWith('/'));
+        
+        parts.push(`  📊 Total Items: ${result.length}`);
+        parts.push(`  📄 Files: ${files.length}`);
+        parts.push(`  📁 Directories: ${dirs.length}`);
+        
+        // Show listing
+        if (result.length > 0) {
+          const listing = result
+            .slice(0, 20)
+            .map((item: string) => `    ${item.endsWith('/') ? '📁' : '📄'} ${item}`)
+            .join('\n');
+          const more = result.length > 20 ? `\n    ... and ${result.length - 20} more items` : '';
+          parts.push(`  📋 Items Found:\n${listing}${more}`);
+        }
+      }
+      
+    } else if (toolLower.includes('grep')) {
+      // Handle RipgrepResult object format
+      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
+        const matches = result.matches;
+        const files = new Set(matches.map((match: any) => match.file));
+        
+        parts.push(`  📊 Total Matches: ${matches.length}`);
+        parts.push(`  📄 Files with Matches: ${files.size}`);
+        
+        // Show match details
+        if (matches.length > 0) {
+          const matchDetails = matches
+            .slice(0, 10) // Show first 10 matches
+            .map((match: any) => `    📍 ${match.file}:${match.line}: ${match.text?.trim() || ''}`)
+            .join('\n');
+          const more = matches.length > 10 ? `\n    ... and ${matches.length - 10} more matches` : '';
+          parts.push(`  🔍 Matches Found:\n${matchDetails}${more}`);
+        }
+        
+      } else if (typeof result === 'string') {
+        const lines = result.trim() ? result.split('\n').filter(line => line.trim()) : [];
+        const files = result.trim() ? new Set(lines.map(line => line.split(':')[0])) : new Set();
+        
+        parts.push(`  📊 Total Matches: ${lines.length}`);
+        parts.push(`  📄 Files with Matches: ${files.size}`);
+        
+        if (lines.length > 0) {
+          const preview = lines
+            .slice(0, 10)
+            .map((line: string) => `    📍 ${line}`)
+            .join('\n');
+          const more = lines.length > 10 ? `\n    ... and ${lines.length - 10} more matches` : '';
+          parts.push(`  🔍 Matches Found:\n${preview}${more}`);
+        }
+      }
+      
+    } else {
+      // Generic result handling
+      if (typeof result === 'string') {
+        const lines = result.split('\n').length;
+        const chars = result.length;
+        parts.push(`  📝 Output: ${lines} lines, ${chars} characters`);
+        
+        if (result.trim()) {
+          const preview = result.split('\n')
+            .slice(0, 10)
+            .map((line: string) => `    ${line}`)
+            .join('\n');
+          const truncated = preview.length > 1000 ? preview.substring(0, 1000) + '\n    ...' : preview;
+          parts.push(`  👀 Content:\n${truncated}`);
+        }
+        
+      } else if (Array.isArray(result)) {
+        parts.push(`  📊 Array Length: ${result.length}`);
+        
+        if (result.length > 0) {
+          const preview = result
+            .slice(0, 10)
+            .map((item: any, index: number) => `    [${index}]: ${typeof item === 'string' ? item : JSON.stringify(item)}`)
+            .join('\n');
+          const more = result.length > 10 ? `\n    ... and ${result.length - 10} more items` : '';
+          parts.push(`  📋 Array Contents:\n${preview}${more}`);
+        }
+        
+      } else if (typeof result === 'object' && result !== null) {
+        const keys = Object.keys(result);
+        parts.push(`  📦 Object Properties: ${keys.length}`);
+        
+        if (keys.length > 0) {
+          const preview = keys
+            .slice(0, 10)
+            .map((key: string) => {
+              const value = result[key];
+              const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
+              const truncated = valueStr.length > 100 ? valueStr.substring(0, 100) + '...' : valueStr;
+              return `    ${key}: ${truncated}`;
+            })
+            .join('\n');
+          const more = keys.length > 10 ? `\n    ... and ${keys.length - 10} more properties` : '';
+          parts.push(`  🔍 Object Contents:\n${preview}${more}`);
+        }
+        
+      } else {
+        parts.push(`  📤 Result: ${String(result)}`);
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Format tool operation as a single condensed line (legacy support)
    */
   static formatToolOperationCondensed(toolName: string, args: any, success?: boolean, result?: any): string {
     const essentialContext = this.getEssentialContext(toolName, args);
@@ -219,7 +592,7 @@ export class ToolLogger {
   }
 
   /**
-   * Get essential context for a tool call (most important args only)
+   * Get essential context for a tool call (most important args only) - legacy support
    */
   private static getEssentialContext(toolName: string, args: any): string {
     if (!args || typeof args !== 'object') {
@@ -234,7 +607,6 @@ export class ToolLogger {
     } else if (toolLower.includes('write') && args.path) {
       return ` ${args.path}`;
     } else if (toolLower.includes('bash') && args.command) {
-      // Don't truncate bash commands - they are important for debugging
       return ` "${args.command}"`;
     } else if ((toolLower.includes('glob') || toolLower.includes('grep')) && args.pattern) {
       return ` "${args.pattern}"`;
@@ -247,10 +619,6 @@ export class ToolLogger {
     for (const key of importantKeys) {
       if (args[key]) {
         const value = typeof args[key] === 'string' ? args[key] : String(args[key]);
-        // Don't truncate bash commands
-        if (key === 'command' && toolLower.includes('bash')) {
-          return ` ${value}`;
-        }
         const truncated = value.length > 30 ? value.substring(0, 30) + '…' : value;
         return ` ${truncated}`;
       }
@@ -260,51 +628,16 @@ export class ToolLogger {
   }
 
   /**
-   * Get condensed outcome for tool result (most important info only)
+   * Get condensed outcome for tool result (most important info only) - legacy support
    */
   private static getCondensedOutcome(toolName: string, success: boolean, result?: any, args?: any): string {
     if (!success) {
-      // Enhanced error display for write tool failures
-      if (toolName.toLowerCase().includes('write')) {
-        let errorMsg = 'failed';
-
-        if (result instanceof Error) {
-          errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
-        } else if (typeof result === 'string' && result.trim()) {
-          errorMsg = result.length > 100 ? result.substring(0, 100) + '…' : result;
-        } else if (typeof result === 'object' && result !== null && result.message) {
-          errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
-        }
-
-        // Add context about what was being written
-        let context = '';
-        if (args) {
-          if (args.path) {
-            context += ` to ${args.path}`;
-          }
-          if (args.content !== undefined) {
-            const lines = typeof args.content === 'string' ? args.content.split('\n').length : 0;
-            context += ` (${lines} lines)`;
-          } else if (args.diff !== undefined) {
-            const lines = typeof args.diff === 'string' ? args.diff.split('\n').length : 0;
-            context += ` (diff: ${lines} lines)`;
-          }
-        }
-
-        return ` failed${context}: ${errorMsg}`;
-      }
-
-      // Standard error handling for other tools
       if (result instanceof Error) {
-        const errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
+        const errorMsg = result.message.length > 50 ? result.message.substring(0, 50) + '…' : result.message;
         return ` failed: ${errorMsg}`;
       }
       if (typeof result === 'string' && result.trim()) {
-        const errorMsg = result.length > 100 ? result.substring(0, 100) + '…' : result;
-        return ` failed: ${errorMsg}`;
-      }
-      if (typeof result === 'object' && result !== null && result.message) {
-        const errorMsg = result.message.length > 100 ? result.message.substring(0, 100) + '…' : result.message;
+        const errorMsg = result.length > 50 ? result.substring(0, 50) + '…' : result;
         return ` failed: ${errorMsg}`;
       }
       return ' failed';
@@ -312,121 +645,23 @@ export class ToolLogger {
 
     const toolLower = toolName.toLowerCase();
 
-    // Return meaningful outcome with detailed information
     if (toolLower.includes('write')) {
-      if (typeof result === 'object' && result?.linesChanged) {
-        const action = result.created ? 'created' : 'modified';
-        let outcome = ` (${action}, ${result.linesChanged} lines changed`;
-
-        // Show preview of what was written
-        if (args?.content && typeof args.content === 'string') {
-          const preview = args.content.split('\n')
-            .slice(0, 3)
-            .map((line: string) => line.trim())
-            .filter((line: string) => line.length > 0);
-          if (preview.length > 0) {
-            const previewText = preview.join('\n');
-            const truncated = previewText.length > 80 ? previewText.substring(0, 80) + '…' : previewText;
-            outcome += `:\n${truncated}`;
-          }
-        }
-
-        return outcome + ')';
-      }
-
       const lines = args?.content ? args.content.split('\n').length : 0;
-      let outcome = lines > 0 ? ` (written, ${lines} lines` : ' (written';
-
-      // Show preview of what was written
-      if (args?.content && typeof args.content === 'string') {
-        const preview = args.content.split('\n')
-          .slice(0, 3)
-          .map((line: string) => line.trim())
-          .filter((line: string) => line.length > 0);
-        if (preview.length > 0) {
-          const previewText = preview.join('\n');
-          const truncated = previewText.length > 80 ? previewText.substring(0, 80) + '…' : previewText;
-          outcome += `:\n${truncated}`;
-        }
-      }
-
-      return outcome + ')';
+      return lines > 0 ? ` (${lines} lines written)` : ' (written)';
     } else if (toolLower.includes('read')) {
-      if (typeof result === 'object' && result?.lineCount) {
-        const partial = result.partialRead ? ', truncated' : '';
-        return ` (${result.lineCount} lines${partial})`;
-      } else if (typeof result === 'string') {
+      if (typeof result === 'string') {
         const lines = result.split('\n').length;
-        const chars = result.length;
-        return ` (${lines} lines, ${chars} chars)`;
+        return ` (${lines} lines)`;
       }
     } else if (toolLower.includes('bash')) {
       if (typeof result === 'object' && result?.exitCode !== undefined) {
-        const stdout = result.stdout || '';
-        const stderr = result.stderr || '';
-        const outputLines = stdout ? stdout.split('\n').filter((line: string) => line.trim()).length : 0;
-        const hasStderr = stderr && stderr.trim();
-
-        let outcome = `exit ${result.exitCode}`;
-        if (outputLines > 0) {
-          outcome += `, ${outputLines} lines output`;
-          // Show first 5 lines of output for user awareness
-          const firstLines = stdout.split('\n')
-            .filter((line: string) => line.trim())
-            .slice(0, 5)
-            .map((line: string) => line.trim());
-          if (firstLines.length > 0) {
-            const preview = firstLines.join('\n');
-            const truncated = preview.length > 100 ? preview.substring(0, 100) + '…' : preview;
-            outcome += `:\n${truncated}`;
-          }
-        }
-        if (hasStderr) outcome += ', warnings';
-        if (result.executionTime > 1000) outcome += `, ${Math.round(result.executionTime)}ms`;
-
-        return ` (${outcome})`;
+        return ` (exit ${result.exitCode})`;
       }
       return ' (executed)';
     } else if (toolLower.includes('glob') || toolLower.includes('ls')) {
-      // Handle GlobResult object format (has matches array)
-      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
-        const matches = result.matches;
-        const files = matches.filter((item: any) => item.type === 'file').length;
-        const dirs = matches.filter((item: any) => item.type === 'directory').length;
-        if (dirs > 0) {
-          return ` (${files} files, ${dirs} dirs)`;
-        }
-        return ` (${matches.length} items)`;
-      }
-      // Handle direct array format (for backward compatibility)
       if (Array.isArray(result)) {
-        const files = result.filter(item => !item.endsWith('/')).length;
-        const dirs = result.length - files;
-        if (dirs > 0) {
-          return ` (${files} files, ${dirs} dirs)`;
-        }
         return ` (${result.length} items)`;
       }
-    } else if (toolLower.includes('grep')) {
-      // Handle RipgrepResult object format
-      if (typeof result === 'object' && result !== null && 'matches' in result && Array.isArray(result.matches)) {
-        const matches = result.matches.length;
-        const files = new Set(result.matches.map((match: any) => match.file)).size;
-        if (files > 1) {
-          return ` (${matches} matches in ${files} files)`;
-        }
-        return ` (${matches} matches)`;
-      }
-      // Handle string format (for other grep tools)
-      if (typeof result === 'string') {
-        const matches = result.trim() ? result.split('\n').filter(line => line.trim()).length : 0;
-        const files = result.trim() ? new Set(result.split('\n').map(line => line.split(':')[0])).size : 0;
-        if (files > 1) {
-          return ` (${matches} matches in ${files} files)`;
-        }
-        return ` (${matches} matches)`;
-      }
-      return ' (0 matches)';
     }
 
     return '';

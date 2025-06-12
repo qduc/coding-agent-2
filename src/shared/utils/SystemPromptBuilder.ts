@@ -77,6 +77,12 @@ Key capabilities:
 - When users say "this file" or "this project", they mean files in the current directory
 - When using tools, always explain your intention first before executing the tool
 
+⚠️  CRITICAL TOOL USAGE GUIDELINES:
+- Before using the write tool with diff mode, ALWAYS use the read tool first to get the current file content
+- Generate diffs based on the actual current file state, not assumptions
+- Pay attention to exact line numbers, spacing, and formatting when creating diffs
+- If a diff fails due to context mismatch, read the file again and regenerate the diff with correct line numbers
+
 Always be helpful, accurate, and focused on the specific coding task at hand.`;
 
     return {

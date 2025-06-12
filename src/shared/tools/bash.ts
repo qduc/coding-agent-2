@@ -14,6 +14,7 @@ import * as path from 'path';
 import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError } from './types';
 import { validatePath } from './validation';
+import { toolContextManager } from '../utils/ToolContextManager';
 
 /**
  * Parameters for the Bash tool
@@ -119,6 +120,9 @@ export class BashTool extends BaseTool {
       };
 
       if (result.exitCode !== 0) {
+        // Track failed bash execution
+        toolContextManager.recordToolCall('bash', false);
+        
         return {
           success: false,
           error: new ToolError(
@@ -134,6 +138,9 @@ export class BashTool extends BaseTool {
         };
       }
 
+      // Track successful bash execution
+      toolContextManager.recordToolCall('bash', true);
+
       return this.createSuccessResult(bashResult, {
         commandExecuted: command,
         exitCode: result.exitCode,
@@ -141,6 +148,9 @@ export class BashTool extends BaseTool {
       });
 
     } catch (error) {
+      // Track failed bash execution due to exception
+      toolContextManager.recordToolCall('bash', false);
+      
       if (error instanceof ToolError) {
         throw error;
       }
