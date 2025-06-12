@@ -34,8 +34,6 @@ export class Agent {
   private toolContext?: IToolExecutionContext;
   public addAgentInfo?: (info: string) => void;
   public clearAgentInfo?: () => void;
-  private pendingAgentInfo: string[] = [];
-  private uiReady: boolean = false;
 
   constructor(options: AgentOptions = {}) {
     this.inputHandler = options.inputHandler;
@@ -69,15 +67,14 @@ export class Agent {
     if (ripgrepAvailable) {
       tools.push(ripgrepTool);
     } else {
-      // Store messages for later display when UI is ready
+      // Use UI display if available, otherwise fall back to console
       const warnMessage1 = '⚠️ System ripgrep (rg) command not found. Ripgrep tool will not be available.';
       const warnMessage2 = '💡 For better search capabilities, install ripgrep: https://github.com/BurntSushi/ripgrep#installation';
       
-      this.pendingAgentInfo.push(warnMessage1);
-      this.pendingAgentInfo.push(warnMessage2);
-      
-      // Only output to console if UI is not ready
-      if (!this.uiReady) {
+      if (this.addAgentInfo) {
+        this.addAgentInfo(warnMessage1);
+        this.addAgentInfo(warnMessage2);
+      } else {
         console.warn('System ripgrep (rg) command not found. Ripgrep tool will not be available.');
         console.warn('For better search capabilities, install ripgrep: https://github.com/BurntSushi/ripgrep#installation');
       }
@@ -122,14 +119,19 @@ export class Agent {
         modelName = this.llmService.getModelName();
       } catch (error) {
         const warnMessage = '⚠️ Could not get model name, showing provider only';
-        this.pendingAgentInfo.push(warnMessage);
-        if (!this.uiReady) {
+        if (this.addAgentInfo) {
+          this.addAgentInfo(warnMessage);
+        } else {
           console.warn('Could not get model name, showing provider only');
         }
       }
       
       const initMessage = `✅ Initialized with provider: ${providerName}${modelName !== 'unknown' ? `, model: ${modelName}` : ''}`;
-      this.pendingAgentInfo.push(initMessage);
+      if (this.addAgentInfo) {
+        this.addAgentInfo(initMessage);
+      } else {
+        console.log(`Initialized with provider: ${providerName}${modelName !== 'unknown' ? `, model: ${modelName}` : ''}`);
+      }
 
       // Initialize the orchestrator's provider strategy now that LLM service is ready
       this.orchestrator.initializeProviderStrategy();
@@ -225,16 +227,5 @@ export class Agent {
       throw new Error('Agent not initialized. Call initialize() first.');
     }
     return this.llmService.getModelName();
-  }
-
-  /**
-   * Flush pending agent info messages to UI (called when UI is ready)
-   */
-  flushPendingAgentInfo(): void {
-    this.uiReady = true;
-    if (this.addAgentInfo && this.pendingAgentInfo.length > 0) {
-      this.pendingAgentInfo.forEach(info => this.addAgentInfo!(info));
-      this.pendingAgentInfo = [];
-    }
   }
 }
