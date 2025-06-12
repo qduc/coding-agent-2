@@ -150,4 +150,5 @@ npm run dev:fullstack
 
 ## License
 
-MIT
+This project is licensed under the GNU General Public License v3.0 (GPL v3).  
+See the [LICENSE](./LICENSE) file for details.
