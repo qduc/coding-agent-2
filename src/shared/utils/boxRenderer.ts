@@ -13,34 +13,21 @@ export class BoxRenderer {
   private static readonly BOX_PADDING = 4;
   private static readonly HEADER_PADDING = 6;
   
-  // Width calculation cache
-  private static readonly widthCache = new Map<string, number>();
-  
   /**
    * Check if a Unicode code point represents a wide character
+   * Simplified to focus on most common wide characters (emojis and CJK)
    */
   private static isWideCharacter(code: number): boolean {
     return (
       (code >= 0x1F300 && code <= 0x1FAFF) || // Emoji range
-      (code >= 0x1100 && code <= 0x115F) || // Hangul Jamo init. consonants
-      (code >= 0x2E80 && code <= 0xA4CF) || // CJK ... Yi
-      (code >= 0xAC00 && code <= 0xD7A3) || // Hangul Syllables
-      (code >= 0xF900 && code <= 0xFAFF) || // CJK Compatibility Ideographs
-      (code >= 0xFE10 && code <= 0xFE19) || // Vertical forms
-      (code >= 0xFE30 && code <= 0xFE6F) || // CJK Compatibility Forms
-      (code >= 0xFF00 && code <= 0xFF60) || // Fullwidth Forms
-      (code >= 0xFFE0 && code <= 0xFFE6)
+      (code >= 0x4E00 && code <= 0x9FFF)    // CJK Unified Ideographs
     );
   }
 
   /**
-   * Calculate display width of text (handles Unicode/emojis) with memoization
+   * Calculate display width of text (handles Unicode/emojis)
    */
   private static getDisplayWidth(text: string): number {
-    if (this.widthCache.has(text)) {
-      return this.widthCache.get(text)!;
-    }
-
     // Remove ANSI escape codes for width calculation
     const cleanText = text.replace(this.ANSI_REGEX, '');
     let width = 0;
@@ -52,8 +39,7 @@ export class BoxRenderer {
         width += 1;
       }
     }
-    
-    this.widthCache.set(text, width);
+
     return width;
   }
 
@@ -135,6 +121,7 @@ export class BoxRenderer {
 
   /**
    * Format a single code line
+   * Simplified to reduce character-level operations
    */
   private static formatCodeLine(
     line: string, 
@@ -147,15 +134,14 @@ export class BoxRenderer {
     const displayWidth = this.getDisplayWidth(line);
     const padding = Math.max(0, contentWidth - displayWidth);
     const lineContent = line + ' '.repeat(padding);
-    
+
     if (showLineNumbers) {
       const lineNumDisplay = isFirstChunk 
         ? (sourceLineIndex + 1).toString().padStart(maxLineNumWidth, ' ')
         : ' '.repeat(maxLineNumWidth);
-      const lineNumFormatted = chalk.gray.dim(lineNumDisplay + ' │ ');
-      return chalk.gray('│ ') + lineNumFormatted + lineContent + chalk.gray(' │');
+      return chalk.gray(`│ ${lineNumDisplay} │ ${lineContent} │`);
     } else {
-      return chalk.gray('│ ') + lineContent + chalk.gray(' │');
+      return chalk.gray(`│ ${lineContent} │`);
     }
   }
 
@@ -335,86 +321,63 @@ export class BoxRenderer {
 
   /**
    * Wrap text considering ANSI escape codes and cursor position
+   * Simplified implementation with basic wrapping
    */
   private static wrapTextWithCursor(text: string, maxWidth: number): string[] {
     const lines = text.split('\n');
     const wrappedLines: string[] = [];
-    
-    lines.forEach(line => {
+
+    for (const line of lines) {
+      // If line fits, use it as is
       if (this.getDisplayWidth(line) <= maxWidth) {
         wrappedLines.push(line);
-      } else {
-        wrappedLines.push(...this.splitLongLine(line, maxWidth));
-      }
-    });
-    
-    return wrappedLines;
-  }
-
-  /**
-   * Split a long line while preserving ANSI codes and wide characters
-   */
-  private static splitLongLine(line: string, maxWidth: number): string[] {
-    const chunks: string[] = [];
-    let remaining = line;
-    
-    while (remaining.length > 0) {
-      const chunk = this.extractChunk(remaining, maxWidth);
-      chunks.push(chunk.text);
-      remaining = remaining.substring(chunk.length);
-    }
-    
-    return chunks;
-  }
-
-  /**
-   * Extract a chunk of text that fits within maxWidth
-   */
-  private static extractChunk(text: string, maxWidth: number): { text: string; length: number } {
-    let chunkEnd = 0;
-    let displayWidth = 0;
-    
-    while (chunkEnd < text.length && displayWidth < maxWidth) {
-      const char = text[chunkEnd];
-      
-      // Handle ANSI escape sequences
-      if (char === '\u001b' && text[chunkEnd + 1] === '[') {
-        const ansiLength = this.skipAnsiSequence(text, chunkEnd);
-        chunkEnd += ansiLength;
         continue;
       }
-      
-      // Calculate character display width
-      const code = char.codePointAt(0);
-      const charWidth = code && this.isWideCharacter(code) ? 2 : 1;
-      
-      if (displayWidth + charWidth > maxWidth) {
-        break;
-      }
-      
-      displayWidth += charWidth;
-      chunkEnd++;
-    }
-    
-    // Ensure we take at least one character if nothing fits
-    if (chunkEnd === 0) {
-      chunkEnd = 1;
-    }
-    
-    return {
-      text: text.substring(0, chunkEnd),
-      length: chunkEnd
-    };
-  }
 
-  /**
-   * Skip over an ANSI escape sequence and return its length
-   */
-  private static skipAnsiSequence(text: string, startIndex: number): number {
-    let index = startIndex + 2; // Skip '\u001b['
-    while (index < text.length && !/[a-zA-Z]/.test(text[index])) {
-      index++;
+      // Basic wrapping implementation
+      let current = '';
+      let currentWidth = 0;
+      let inAnsiSequence = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        // Handle ANSI sequences
+        if (char === '\u001b' && line[i + 1] === '[') {
+          inAnsiSequence = true;
+          current += char;
+          continue;
+        }
+
+        if (inAnsiSequence) {
+          current += char;
+          if (/[a-zA-Z]/.test(char)) {
+            inAnsiSequence = false;
+          }
+          continue;
+        }
+
+        // Calculate character width
+        const code = char.codePointAt(0);
+        const charWidth = code && this.isWideCharacter(code) ? 2 : 1;
+
+        // If adding this char would exceed maxWidth, start a new line
+        if (currentWidth + charWidth > maxWidth) {
+          wrappedLines.push(current);
+          current = '';
+          currentWidth = 0;
+        }
+
+        current += char;
+        currentWidth += charWidth;
+      }
+
+      // Add the last line if there's anything left
+      if (current) {
+        wrappedLines.push(current);
+      }
     }
-    return index - startIndex + 1; // Include the final character
+
+    return wrappedLines;
   }
 }

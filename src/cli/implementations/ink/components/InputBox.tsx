@@ -13,17 +13,13 @@ export const InputBox: React.FC<InputBoxProps> = ({ state, options = {} }) => {
     maxWidth = (process.stdout.columns || 80) - 2,
     minHeight = state.isMultilineMode ? 4 : 2,
     placeholder = state.value === '' ?
-      'Type your message... (@ for files, / for commands)' :
+      '(@ for files, / for commands)' :
       undefined,
     showCursor = !options.disabled,
     disabled = false,
   } = options;
 
   const getTitle = () => {
-    if (disabled) {
-      return options.prompt || '🤖 Processing...';
-    }
-
     if (state.pasteIndicator) {
       return '📋 Pasted!';
     }
