@@ -348,6 +348,11 @@ Example Questions:
   useEffect(() => {
     (agent as any).addAgentInfo = addAgentInfo;
     (agent as any).clearAgentInfo = clearAgentInfo;
+    
+    // Flush any pending agent info messages that were collected during initialization
+    if (typeof (agent as any).flushPendingAgentInfo === 'function') {
+      (agent as any).flushPendingAgentInfo();
+    }
   }, [agent, addAgentInfo, clearAgentInfo]);
 
   // Set up tool event listener
