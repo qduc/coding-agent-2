@@ -76,7 +76,18 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
 
   if (!success) {
     if (toolLower.includes('bash')) {
-      errorMsg =  result.message;
+      // For bash errors, result is a BashResult object
+      if (result?.stderr) {
+        errorMsg = `Command failed (exit ${result.exitCode || 'unknown'}): ${result.stderr}`;
+      } else if (result?.error?.message) {
+        errorMsg = result.error.message;
+      } else if (result?.message) {
+        errorMsg = result.message;
+      } else if (result instanceof Error) {
+        errorMsg = result.message;
+      } else if (result?.exitCode !== 0) {
+        errorMsg = `Command failed with exit code ${result.exitCode}`;
+      }
     } else if (result instanceof Error) {
       errorMsg = result.message;
     } else if (typeof result === 'string' && result.trim()) {
