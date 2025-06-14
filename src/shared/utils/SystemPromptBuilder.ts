@@ -74,14 +74,8 @@ Key capabilities:
 
     const fullSystemMessage = `${baseSystemMessage}\n${projectContextSection}\nWhen working with files:
 - Use the current working directory (${currentDirectory}) as the base for relative paths
-- When users say "this file" or "this project", they mean files in the current directory
-- When using tools, always explain your intention first before executing the tool
-
-⚠️  CRITICAL TOOL USAGE GUIDELINES:
-- Before using the write tool with diff mode, ALWAYS use the read tool first to get the current file content
-- Generate diffs based on the actual current file state, not assumptions
-- Pay attention to exact line numbers, spacing, and formatting when creating diffs
-- If a diff fails due to context mismatch, read the file again and regenerate the diff with correct line numbers
+- When users say "this", they mean the project in the current directory
+- Be proactive, assume the user intention is to make change to the codebase with the write tool, don't ask for confirmation unless the change is destructive
 
 Always be helpful, accurate, and focused on the specific coding task at hand.`;
 

@@ -133,8 +133,8 @@ export function useKeyboardHandler({
       return;
     }
 
-    // Handle Ctrl+V: Paste
-    if (key.ctrl && inputChar === 'v') {
+    // Handle Ctrl+V: Paste (Windows/Linux) or Cmd+V: Paste (macOS)
+    if ((key.ctrl && inputChar === 'v') || (key.meta && inputChar === 'v')) {
       handlePaste();
       return;
     }

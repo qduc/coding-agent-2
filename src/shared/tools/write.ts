@@ -32,13 +32,13 @@ export interface WriteResult {
 
 export class WriteTool extends BaseTool {
   readonly name = 'write';
-  readonly description = 'Write content to files with safety features. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a unified diff to selectively modify parts of an existing file';
+  readonly description = 'Write content to files with safety features. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a diff to selectively modify parts of an existing file';
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
-      diff: { type: 'string', description: 'Unified diff to apply to an existing file. Format uses standard git-style unified diff notation with context. IMPORTANT: Only one hunk (section starting with @@ line) is allowed per tool call.\n\nExample:\n@@ -2,3 +2,4 @@\n  line of context\n-line to remove\n+line to replace it with\n+another line to add\n  more context\n\nContext lines (starting with space) help verify the location. Lines to remove start with - and lines to add start with +.' },
+      diff: { type: 'string', description: 'Diff to apply to an existing file. Supports multiple formats:\n\n1. Simple diff format:\n  line of context before\n-line to remove\n+line to replace it with\n+another line to add\n  line of context after\n\n2. Segmented diff format (for distant changes):\n  first context line\n-old line 1\n+new line 1\n...\n  second context line\n-old line 2\n+new line 2\n\nContext lines (starting with space) help locate where changes should be applied. Lines to remove start with - and lines to add start with +. The context must be unique in the file - if multiple matches are found, an error is returned.\n\nSegmented diff format:\n- Use "..." on its own line to separate distant sections\n- Each segment must have unique context within the file\n- Segments must appear in the same order as they appear in the file\n- Segments cannot overlap\n\nIMPORTANT: If you need to change the same text in multiple locations (e.g., changing "Old Title" in both <title> and <h1> tags), you can:\n1. Use segmented diff format with "..." separators\n2. Make separate write operations for each location\n3. Provide enough unique surrounding context to distinguish each location\n4. Use full content replacement instead of diff mode' },
       encoding: {
         type: 'string',
         description: 'File encoding',
@@ -404,11 +404,11 @@ export class WriteTool extends BaseTool {
   /**
    * Apply a unified diff to existing content
    * 
-   * The diff parser has been simplified to be more forgiving while maintaining safety:
-   * - Improved context matching with multiple normalization strategies
-   * - Clearer error messages when problems occur
-   * - More robust handling of common diff format variations
-   * - Maintains safety checks to prevent corruption
+   * The diff parser supports both traditional unified diff format and a simpler format:
+   * - Traditional: Uses @@ hunk headers for precise line targeting
+   * - Simple: Uses context matching to find the location automatically
+   * - Validates only one matching context exists for safety
+   * - Maintains all safety checks to prevent corruption
    *
    * @param currentContent The current content of the file
    * @param diff The unified diff to apply
@@ -435,6 +435,25 @@ export class WriteTool extends BaseTool {
     // Basic validation of diff format
     this.validateDiffFormat(diff);
 
+    // Check if this is a traditional unified diff with hunk headers
+    const hasHunkHeaders = /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(diff);
+    
+    if (hasHunkHeaders) {
+      return this.applyTraditionalDiff(currentContent, diff);
+    } else {
+      // Check if this is a segmented diff with ... separators
+      if (diff.includes('\n...\n') || diff.includes('\n...\r\n') || diff.startsWith('...') || diff.endsWith('...')) {
+        return this.applySegmentedDiff(currentContent, diff);
+      } else {
+        return this.applySimpleDiff(currentContent, diff);
+      }
+    }
+  }
+
+  /**
+   * Apply traditional unified diff with hunk headers
+   */
+  private applyTraditionalDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     // Split the current content and the diff into lines
     const originalLines = currentContent.split('\n');
     const diffLines = diff.split('\n');
@@ -577,13 +596,292 @@ export class WriteTool extends BaseTool {
     // Create final content
     const finalContent = resultLines.join('\n');
 
-    // Allow empty content if that's the intended result
-    // No validation needed - empty content is acceptable
-
     const linesChanged = linesAdded + linesRemoved;
     return {
       content: finalContent,
       linesChanged
+    };
+  }
+
+  /**
+   * Apply simple diff format without hunk headers - uses context matching
+   */
+  private applySimpleDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
+    const originalLines = currentContent.split('\n');
+    const diffLines = diff.split('\n').filter(line => line.trim() !== '');
+
+    if (diffLines.length === 0) {
+      throw new ToolError(
+        'No valid diff lines found',
+        'VALIDATION_ERROR',
+        ['Diff must contain at least one line']
+      );
+    }
+
+    // Extract context lines to find matching location
+    // Context lines are any lines that represent existing content (not starting with +)
+    const contextLines = diffLines
+      .filter(line => !line.startsWith('+'))
+      .map(line => {
+        if (line.startsWith(' ')) return line.substring(1);
+        if (line.startsWith('-')) return line.substring(1);
+        return line;
+      });
+
+    if (contextLines.length === 0) {
+      throw new ToolError(
+        'Simple diff format requires at least one context line for location matching',
+        'VALIDATION_ERROR',
+        [
+          'Add context lines to help locate where changes should be applied',
+          'Context lines are any lines that represent existing content (not starting with +)',
+          'Example:',
+          'existing line before',
+          '-old line to change',
+          '+new line to add',
+          'existing line after'
+        ]
+      );
+    }
+
+    // Find all possible matching locations
+    const matchingLocations = this.findContextMatches(originalLines, contextLines);
+
+    if (matchingLocations.length === 0) {
+      throw new ToolError(
+        'No matching context found in file',
+        'VALIDATION_ERROR',
+        [
+          'The context lines in the diff do not match any location in the file',
+          'Use the read tool to get current file content',
+          'Ensure context lines match exactly (ignoring whitespace differences)'
+        ]
+      );
+    }
+
+    if (matchingLocations.length > 1) {
+      throw new ToolError(
+        `Multiple matching contexts found at lines: ${matchingLocations.map(loc => loc + 1).join(', ')}`,
+        'VALIDATION_ERROR',
+        [
+          'The context is ambiguous - it matches multiple locations in the file',
+          'Add more specific context lines to uniquely identify the location',
+          'Or use traditional diff format with @@ hunk headers for precise targeting'
+        ]
+      );
+    }
+
+    // Apply the diff at the single matching location
+    const matchLocation = matchingLocations[0];
+    return this.applySimpleDiffAtLocation(originalLines, diffLines, matchLocation);
+  }
+
+  /**
+   * Find all locations where the context lines match
+   */
+  private findContextMatches(originalLines: string[], contextLines: string[]): number[] {
+    const matches: number[] = [];
+    
+    // Search for context pattern in the original file
+    for (let i = 0; i <= originalLines.length - contextLines.length; i++) {
+      let allMatch = true;
+      
+      for (let j = 0; j < contextLines.length; j++) {
+        if (!this.contextMatches(contextLines[j], originalLines[i + j])) {
+          allMatch = false;
+          break;
+        }
+      }
+      
+      if (allMatch) {
+        matches.push(i);
+      }
+    }
+    
+    return matches;
+  }
+
+  /**
+   * Apply simple diff at a specific location
+   */
+  private applySimpleDiffAtLocation(
+    originalLines: string[], 
+    diffLines: string[], 
+    startLocation: number
+  ): { content: string; linesChanged: number } {
+    const resultLines: string[] = [];
+    let linesAdded = 0;
+    let linesRemoved = 0;
+    let originalIndex = 0;
+    let diffIndex = 0;
+
+    // Copy lines before the match location
+    while (originalIndex < startLocation) {
+      resultLines.push(originalLines[originalIndex]);
+      originalIndex++;
+    }
+
+    // Process the diff at the matching location
+    while (diffIndex < diffLines.length) {
+      const diffLine = diffLines[diffIndex];
+      diffIndex++;
+
+      if (diffLine.startsWith('-')) { // Deletion
+        // Skip the original line (delete it)
+        originalIndex++;
+        linesRemoved++;
+      } else if (diffLine.startsWith('+')) { // Addition
+        const addedContent = diffLine.substring(1);
+        resultLines.push(addedContent);
+        linesAdded++;
+      } else { // Context line (anything that doesn't start with + or -)
+        const contextContent = diffLine.startsWith(' ') ? diffLine.substring(1) : diffLine;
+        resultLines.push(contextContent);
+        originalIndex++;
+      }
+    }
+
+    // Copy remaining original lines
+    while (originalIndex < originalLines.length) {
+      resultLines.push(originalLines[originalIndex]);
+      originalIndex++;
+    }
+
+    const finalContent = resultLines.join('\n');
+    const linesChanged = linesAdded + linesRemoved;
+
+    return {
+      content: finalContent,
+      linesChanged
+    };
+  }
+
+  /**
+   * Apply segmented diff format with ... separators between distant sections
+   */
+  private applySegmentedDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
+    const originalLines = currentContent.split('\n');
+    
+    // Split diff into segments by ... separator
+    const segments = diff.split(/\n\.\.\.\n|\n\.\.\.\r\n/).map(segment => segment.trim()).filter(segment => segment.length > 0);
+    
+    if (segments.length === 0) {
+      throw new ToolError(
+        'No valid segments found in segmented diff',
+        'VALIDATION_ERROR',
+        ['Segmented diff must contain at least one segment between ... separators']
+      );
+    }
+
+    // Parse each segment and find its location
+    interface DiffSegment {
+      diffLines: string[];
+      startLocation: number;
+      endLocation: number;
+    }
+
+    const parsedSegments: DiffSegment[] = [];
+    let totalLinesChanged = 0;
+
+    for (let i = 0; i < segments.length; i++) {
+      const segmentDiff = segments[i];
+      const segmentLines = segmentDiff.split('\n').filter(line => line.trim() !== '');
+      
+      if (segmentLines.length === 0) {
+        continue; // Skip empty segments
+      }
+
+      // Extract context lines from this segment (same logic as simple diff)
+      const contextLines = segmentLines
+        .filter(line => !line.startsWith('+'))
+        .map(line => {
+          if (line.startsWith(' ')) return line.substring(1);
+          if (line.startsWith('-')) return line.substring(1);
+          return line;
+        });
+
+      if (contextLines.length === 0) {
+        throw new ToolError(
+          `Segment ${i + 1} has no context lines for location matching`,
+          'VALIDATION_ERROR',
+          ['Each segment must contain at least one context line (line not starting with +)']
+        );
+      }
+
+      // Find matching locations for this segment
+      const matchingLocations = this.findContextMatches(originalLines, contextLines);
+
+      if (matchingLocations.length === 0) {
+        throw new ToolError(
+          `No matching context found for segment ${i + 1}`,
+          'VALIDATION_ERROR',
+          [
+            `Segment ${i + 1} context does not match any location in the file`,
+            'Ensure each segment has correct context lines'
+          ]
+        );
+      }
+
+      if (matchingLocations.length > 1) {
+        throw new ToolError(
+          `Segment ${i + 1} has ambiguous context - matches multiple locations: ${matchingLocations.map(loc => loc + 1).join(', ')}`,
+          'VALIDATION_ERROR',
+          [
+            `Add more specific context to segment ${i + 1} to uniquely identify its location`,
+            'Each segment must have unique context within the file'
+          ]
+        );
+      }
+
+      const startLocation = matchingLocations[0];
+      const endLocation = startLocation + contextLines.length - 1;
+
+      parsedSegments.push({
+        diffLines: segmentLines,
+        startLocation,
+        endLocation
+      });
+    }
+
+    // Validate segments are in order and don't overlap
+    for (let i = 1; i < parsedSegments.length; i++) {
+      const prevSegment = parsedSegments[i - 1];
+      const currentSegment = parsedSegments[i];
+
+      if (currentSegment.startLocation <= prevSegment.endLocation) {
+        throw new ToolError(
+          `Segments ${i} and ${i + 1} overlap or are out of order`,
+          'VALIDATION_ERROR',
+          [
+            'Segments must appear in the same order as they appear in the file',
+            'Segments cannot overlap - they must target different parts of the file'
+          ]
+        );
+      }
+    }
+
+    // Apply all segments in reverse order to avoid offset issues
+    let workingContent = originalLines.slice(); // Copy of original
+    
+    for (let i = parsedSegments.length - 1; i >= 0; i--) {
+      const segment = parsedSegments[i];
+      
+      // Apply this single segment to the working content
+      const segmentResult = this.applySimpleDiffAtLocation(
+        workingContent, 
+        segment.diffLines, 
+        segment.startLocation
+      );
+      
+      workingContent = segmentResult.content.split('\n');
+      totalLinesChanged += segmentResult.linesChanged;
+    }
+
+    const finalContent = workingContent.join('\n');
+
+    return {
+      content: finalContent,
+      linesChanged: totalLinesChanged
     };
   }
 
@@ -675,53 +973,22 @@ export class WriteTool extends BaseTool {
   }
 
   /**
-   * Validate basic diff format
+   * Validate basic diff format - supports both traditional and simple formats
    */
   private validateDiffFormat(diff: string): void {
     if (diff.trim() === '') {
       throw new ToolError(
         'Empty diff provided',
         'VALIDATION_ERROR',
-        ['Please provide a valid unified diff with at least one change']
+        ['Please provide a valid diff with at least one change']
       );
     }
 
-    // Check for at least one hunk header with valid format
+    // Check if this has hunk headers (traditional format)
     const hunkHeaderRegex = /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/g;
     const hunkMatches = diff.match(hunkHeaderRegex);
 
-    if (!hunkMatches) {
-      throw new ToolError(
-        'Invalid diff format: no valid hunk headers found',
-        'VALIDATION_ERROR',
-        [
-          'Diff must contain at least one valid hunk header',
-          'Example of valid diff:',
-          '@@ -1,3 +1,3 @@',
-          ' context line',
-          '-old line',
-          '+new line'
-        ]
-      );
-    }
-
-    // Ensure only one hunk is present per diff operation
-    if (hunkMatches.length > 1) {
-      throw new ToolError(
-        'Multiple hunks found in diff. Only one hunk is allowed per operation.',
-        'VALIDATION_ERROR',
-        [
-          'Split your changes into separate write operations, one hunk per call',
-          'Each hunk should modify one specific area of the file',
-          'Example of valid single hunk:',
-          '@@ -1,3 +1,4 @@',
-          ' context line',
-          '-old line',
-          '+new line',
-          '+another new line'
-        ]
-      );
-    }
+    // Traditional format is supported but not validated for multiple hunks
 
     // Check for at least one actual change (+ or - line)
     const hasChanges = /^[+-]/m.test(diff);
@@ -729,7 +996,13 @@ export class WriteTool extends BaseTool {
       throw new ToolError(
         'Invalid diff: no additions or deletions found',
         'VALIDATION_ERROR',
-        ['The diff must contain at least one line that starts with + or -']
+        [
+          'The diff must contain at least one line that starts with + or -',
+          'Example format:',
+          ' context line',
+          '-old line', 
+          '+new line'
+        ]
       );
     }
   }

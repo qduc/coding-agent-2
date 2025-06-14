@@ -212,7 +212,7 @@ describe('WriteTool', () => {
       });
       expect(result.success).toBe(false);
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
-      expect((result.error as ToolError).message).toContain('Invalid diff format');
+      expect((result.error as ToolError).message).toContain('Invalid diff: no additions or deletions found');
     });
   });
 
@@ -473,6 +473,271 @@ describe('WriteTool', () => {
       // Original file should still exist with original content
       const content = await fs.readFile(testFile, 'utf8');
       expect(content).toBe('original content\n');
+    });
+  });
+
+  describe('Segmented Diff Format (... syntax)', () => {
+    it('should apply segmented diff with ... separators', async () => {
+      const testFile = path.join(tempDir, 'segmented-test.txt');
+      const originalContent = `<html>
+<head>
+  <title>Super Fetch</title>
+  <meta charset="utf-8">
+</head>
+<body>
+  <h1>Super Fetch</h1>
+  <p>Welcome to the app</p>
+</body>
+</html>`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      const segmentedDiff = `-  <title>Super Fetch</title>
++  <title>Tetris</title>
+...
+-  <h1>Super Fetch</h1>
++  <h1>Tetris</h1>`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(true);
+      
+      const updatedContent = await fs.readFile(testFile, 'utf8');
+      expect(updatedContent).toContain('<title>Tetris</title>');
+      expect(updatedContent).toContain('<h1>Tetris</h1>');
+      expect(updatedContent).not.toContain('<title>Super Fetch</title>');
+      expect(updatedContent).not.toContain('<h1>Super Fetch</h1>');
+    });
+
+    it('should handle multiple segments in order', async () => {
+      const testFile = path.join(tempDir, 'multi-segment.txt');
+      const originalContent = `line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      const segmentedDiff = `line 1
+-line 2
++modified line 2
+...
+line 5
+-line 6
++modified line 6
+...
+line 7
++new line after 7`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(true);
+      
+      const updatedContent = await fs.readFile(testFile, 'utf8');
+      expect(updatedContent).toBe(`line 1
+modified line 2
+line 3
+line 4
+line 5
+modified line 6
+line 7
+new line after 7
+line 8`);
+    });
+
+    it('should reject segments that are out of order', async () => {
+      const testFile = path.join(tempDir, 'order-test.txt');
+      const originalContent = `line 1
+line 2
+line 3
+line 4`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      // Second segment appears before first segment in file
+      const segmentedDiff = `line 3
++after line 3
+...
+line 1
++after line 1`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect((result.error as ToolError).message).toContain('overlap or are out of order');
+    });
+
+    it('should reject segments with overlapping contexts', async () => {
+      const testFile = path.join(tempDir, 'overlap-test.txt');
+      const originalContent = `line 1
+line 2
+line 3
+line 4`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      // Segments overlap at line 2-3
+      const segmentedDiff = `line 1
+line 2
++after line 2
+...
+line 2
+line 3
++after line 3`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect((result.error as ToolError).message).toContain('overlap or are out of order');
+    });
+
+    it('should handle segment with no matching context', async () => {
+      const testFile = path.join(tempDir, 'no-match.txt');
+      const originalContent = `line 1
+line 2
+line 3`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      const segmentedDiff = `line 1
++after line 1
+...
+nonexistent line
++this should not work`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect((result.error as ToolError).message).toContain('No matching context found for segment 2');
+    });
+
+    it('should handle segment with ambiguous context', async () => {
+      const testFile = path.join(tempDir, 'ambiguous.txt');
+      const originalContent = `duplicate line
+some content
+duplicate line
+other content`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      const segmentedDiff = `duplicate line
++after first duplicate
+...
+duplicate line
++after second duplicate`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect((result.error as ToolError).message).toContain('ambiguous context');
+    });
+
+    it('should require context lines in each segment', async () => {
+      const testFile = path.join(tempDir, 'no-context.txt');
+      const originalContent = `line 1
+line 2`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      const segmentedDiff = `+just addition
+...
++another addition`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
+      expect((result.error as ToolError).message).toContain('no context lines for location matching');
+    });
+
+    it('should handle empty segments gracefully', async () => {
+      const testFile = path.join(tempDir, 'empty-segments.txt');
+      const originalContent = `line 1
+line 2
+line 3`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      const segmentedDiff = `line 1
++after line 1
+...
+
+...
+line 3
++after line 3`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(true);
+      
+      const updatedContent = await fs.readFile(testFile, 'utf8');
+      expect(updatedContent).toBe(`line 1
+after line 1
+line 2
+line 3
+after line 3`);
+    });
+
+    it('should track total lines changed across all segments', async () => {
+      const testFile = path.join(tempDir, 'lines-changed.txt');
+      const originalContent = `line 1
+line 2
+line 3
+line 4`;
+
+      await fs.writeFile(testFile, originalContent);
+
+      const segmentedDiff = `line 1
+-line 2
++modified line 2
++extra line
+...
+line 3
++after line 3`;
+
+      const result = await writeTool.execute({
+        path: testFile,
+        diff: segmentedDiff
+      });
+
+      expect(result.success).toBe(true);
+      
+      if (result.success) {
+        const writeResult = result.output as WriteResult;
+        expect(writeResult.linesChanged).toBe(4); // Segment 1: 1 deletion + 2 additions, Segment 2: 1 addition = 4 changes
+      }
     });
   });
 });
