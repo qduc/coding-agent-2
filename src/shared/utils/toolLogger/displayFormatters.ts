@@ -45,8 +45,7 @@ export function getMinimalContext(toolName: string, args: any): string {
   } else if (toolLower.includes('write') && args.path) {
     const mode = args.search ? 'search-replace' : args.diff ? 'diff' : 'content';
     if (mode === 'search-replace') {
-      const regexFlag = args.regex ? ' (regex)' : '';
-      return ` ${args.path} • "${args.search}" → "${args.replace}"${regexFlag}`;
+      return ` ${args.path} • "${args.search}" → "${args.replace}"`;
     } else if (mode === 'diff') {
       return ` ${args.path}\n${formatDiff(args.diff)}`;
     } else {

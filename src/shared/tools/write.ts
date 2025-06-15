@@ -21,7 +21,6 @@ export interface WriteParams {
   diff?: string;      // For patching existing files
   search?: string;    // For search-and-replace mode
   replace?: string;   // For search-and-replace mode
-  regex?: boolean;    // Whether search string is a regex pattern
   encoding?: 'utf8' | 'binary' | 'base64';
 }
 
@@ -43,16 +42,15 @@ export class WriteTool extends BaseTool {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
       diff: { type: 'string', description: 'DEPRECATED: Diff to apply to an existing file. Use search-replace mode instead for better reliability and simplicity.\n\nDiff format (if absolutely necessary):\n```\nexisting line before\n-old line to remove\n+new line to add\nexisting line after\n```\n\nNote: This mode is complex and error-prone. Consider using search-replace mode instead.' },
-      search: { type: 'string', description: 'PREFERRED: Text or pattern to search for in search-replace mode. Can be a string literal or regex pattern if regex is true. More reliable than diff mode.' },
-      replace: { type: 'string', description: 'PREFERRED: Text to replace matches with in search-replace mode. Supports regex capture groups if regex is true.' },
-      regex: { type: 'boolean', description: 'Whether the search parameter is a regex pattern. Default is false for literal string matching. Use true for advanced pattern matching.' }
+      search: { type: 'string', description: 'PREFERRED: Text to search for in search-replace mode. Uses literal string matching for reliability.' },
+      replace: { type: 'string', description: 'PREFERRED: Text to replace matches with in search-replace mode.' }
     },
     required: ['path'],
     additionalProperties: false
   };
 
   protected async executeImpl(params: WriteParams): Promise<ToolResult> {
-    const { path: filePath, content, diff, search, replace, regex = false, encoding = 'utf8' } = params;
+    const { path: filePath, content, diff, search, replace, encoding = 'utf8' } = params;
 
     // Validate exactly one mode is provided
     const modes = [content, diff, search].filter(x => x !== undefined);
@@ -215,7 +213,7 @@ export class WriteTool extends BaseTool {
         }
 
         const currentContent = await fs.readFile(absolutePath, 'utf8');
-        const replaceResult = this.performSearchReplace(currentContent, search!, replace!, regex);
+        const replaceResult = this.performSearchReplace(currentContent, search!, replace!, false);
         finalContent = replaceResult.content;
         linesChanged = replaceResult.linesChanged;
         replacements = replaceResult.replacements;
