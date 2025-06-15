@@ -32,7 +32,7 @@ export interface WriteResult {
 
 export class WriteTool extends BaseTool {
   readonly name = 'write';
-  readonly description = 'Write content to files with safety features. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a diff to selectively modify parts of an existing file';
+  readonly description = 'Write content to files with safety features. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a diff to selectively modify parts of an existing file with smart indentation handling that forgives minor whitespace differences';
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
@@ -553,6 +553,16 @@ export class WriteTool extends BaseTool {
     let originalIndex = 0;
     let diffIndex = 0;
 
+    // Detect base indentation from the original file at the match location
+    let baseIndentation = '';
+    if (startLocation < originalLines.length) {
+      const originalLine = originalLines[startLocation];
+      const match = originalLine.match(/^(\s*)/);
+      if (match) {
+        baseIndentation = match[1];
+      }
+    }
+
     // Copy lines before the match location
     while (originalIndex < startLocation) {
       resultLines.push(originalLines[originalIndex]);
@@ -569,12 +579,25 @@ export class WriteTool extends BaseTool {
         originalIndex++;
         linesRemoved++;
       } else if (diffLine.startsWith('+')) { // Addition
-        const addedContent = diffLine.substring(1);
+        let addedContent = diffLine.substring(1);
+        
+        // Smart indentation: if the added content has indentation, preserve it
+        // but if it doesn't and we're in an indented context, apply base indentation
+        if (addedContent.trim() !== '' && !addedContent.match(/^\s/)) {
+          addedContent = baseIndentation + addedContent;
+        }
+        
         resultLines.push(addedContent);
         linesAdded++;
       } else { // Context line (anything that doesn't start with + or -)
-        const contextContent = diffLine.startsWith(' ') ? diffLine.substring(1) : diffLine;
-        resultLines.push(contextContent);
+        // For context lines, preserve the original indentation from the file
+        if (originalIndex < originalLines.length) {
+          resultLines.push(originalLines[originalIndex]);
+        } else {
+          // Fallback: use the diff content
+          const contextContent = diffLine.startsWith(' ') ? diffLine.substring(1) : diffLine;
+          resultLines.push(contextContent);
+        }
         originalIndex++;
       }
     }
@@ -742,6 +765,26 @@ export class WriteTool extends BaseTool {
 
     // Try basic whitespace normalization
     if (expected.trim() === actual.trim()) return true;
+
+    // Smart indentation matching - normalize indentation differences
+    const normalizeIndentation = (str: string) => {
+      const trimmed = str.trim();
+      if (trimmed === '') return '';
+      
+      // Detect if this is a code line that should preserve relative indentation
+      // but allow different base indentation levels
+      const leadingWhitespace = str.match(/^(\s*)/)?.[1] || '';
+      const content = str.substring(leadingWhitespace.length);
+      
+      // If both strings have content, compare just the content part
+      if (content.trim() !== '') {
+        return content;
+      }
+      
+      return trimmed;
+    };
+
+    if (normalizeIndentation(expected) === normalizeIndentation(actual)) return true;
 
     // Try more aggressive normalization (collapse all whitespace)
     const normalizeAggressively = (str: string) => str.trim().replace(/\s+/g, ' ');
