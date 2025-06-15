@@ -1,10 +1,9 @@
 /**
- * Write Tool - File creation and modification with safety features
+ * Write Tool - Simplified file creation and modification
  *
  * Provides file writing functionality with support for:
  * - Creating new files with content
  * - Modifying existing files with unified diff patches
- * - Backup creation for safety
  * - Security validation to prevent writing to sensitive paths
  */
 
@@ -46,14 +45,9 @@ export class WriteTool extends BaseTool {
   };
 
   protected async executeImpl(params: WriteParams): Promise<ToolResult> {
-    const {
-      path: filePath,
-      content,
-      diff,
-      encoding = 'utf8'
-    } = params;
+    const { path: filePath, content, diff, encoding = 'utf8' } = params;
 
-    // Validate that exactly one of content or diff is provided
+    // Validate exactly one of content or diff is provided
     if (content === undefined && diff === undefined) {
       return this.createErrorResult(
         'Either content or diff must be provided',
@@ -70,9 +64,9 @@ export class WriteTool extends BaseTool {
       );
     }
 
-    // Explicitly validate encoding
+    // Validate encoding
     const allowedEncodings = ['utf8', 'binary', 'base64'];
-    if (typeof encoding !== 'string' || !allowedEncodings.includes(encoding)) {
+    if (!allowedEncodings.includes(encoding)) {
       return this.createErrorResult(
         `Invalid encoding: ${encoding}. Must be one of: utf8, binary, base64`,
         'VALIDATION_ERROR',
@@ -92,7 +86,7 @@ export class WriteTool extends BaseTool {
       const absolutePath = path.resolve(filePath);
       const parentDir = path.dirname(absolutePath);
 
-      // Handle edge case where parent directory is root (dangerous)
+      // Security checks
       if (parentDir === '/') {
         return this.createErrorResult(
           `Cannot write files to root directory: ${filePath}`,
@@ -101,8 +95,7 @@ export class WriteTool extends BaseTool {
         );
       }
 
-      // Blocked path check (should come before extension and parent dir checks)
-      if (this.isBlockedPath(absolutePath)) {
+      if (this.isBlockedPath(absolutePath) || this.isBlockedPath(parentDir)) {
         return this.createErrorResult(
           `Access to file is restricted: ${filePath}`,
           'PERMISSION_DENIED',
@@ -110,20 +103,9 @@ export class WriteTool extends BaseTool {
         );
       }
 
-      // Also check if parent directory is blocked
-      if (this.isBlockedPath(parentDir)) {
-        return this.createErrorResult(
-          `Access to parent directory is restricted: ${parentDir}`,
-          'PERMISSION_DENIED',
-          ['Choose a different directory that is not in the blocked list']
-        );
-      }
-
-      // Only check extension if path and parent are valid and not blocked
-      if (
-        this.context.allowedExtensions.length > 0 &&
-        !this.context.allowedExtensions.some(ext => absolutePath.endsWith(ext))
-      ) {
+      // Extension validation
+      if (this.context.allowedExtensions.length > 0 &&
+          !this.context.allowedExtensions.some(ext => absolutePath.endsWith(ext))) {
         return this.createErrorResult(
           `File extension not allowed: ${filePath}`,
           'INVALID_FILE_TYPE',
@@ -132,31 +114,21 @@ export class WriteTool extends BaseTool {
       }
 
       // Ensure parent directory exists
-      await this.ensureParentDirectory(parentDir);
+      await fs.ensureDir(parentDir);
 
       const fileExists = await fs.pathExists(absolutePath);
-
-      // Validate write operation based on tool call history (skip in test environment)
-      const isDiffMode = diff !== undefined;
-      const isTestMode = process.env.NODE_ENV === 'test';
-
-      if (!isTestMode) {
+      
+      // Tool context validation (skip in test environment)
+      if (process.env.NODE_ENV !== 'test') {
+        const isDiffMode = diff !== undefined;
         const validation = toolContextManager.validateWriteOperation(absolutePath, isDiffMode);
 
         if (!validation.isValid) {
-          // Create a detailed error with context from validation
           const errorMessage = validation.warnings.join('\n') + '\n\n' + validation.suggestions.join('\n');
-
-          return this.createErrorResult(
-            errorMessage,
-            'VALIDATION_ERROR',
-            validation.suggestions
-          );
+          return this.createErrorResult(errorMessage, 'VALIDATION_ERROR', validation.suggestions);
         }
 
-        // Log warnings even if we proceed
         if (validation.warnings.length > 0) {
-          // Use logger to avoid interfering with Ink rendering
           logger.warn('⚠️ Write operation warnings', {
             warnings: validation.warnings,
             filePath: absolutePath
@@ -165,33 +137,29 @@ export class WriteTool extends BaseTool {
       }
 
       let finalContent: string;
-      let mode: 'create' | 'patch';
-      let contentSize: number;
       let linesChanged: number;
+      let mode: 'create' | 'patch';
 
       if (content !== undefined) {
-        // Full content write
-        mode = 'create';
-        if (fileExists) {
-          mode = 'patch'; // Actually overwriting existing file
-        }
-
+        // Content mode - full file write
+        mode = fileExists ? 'patch' : 'create';
+        
         // Check content size
-        contentSize = Buffer.byteLength(content, encoding as BufferEncoding);
+        const contentSize = Buffer.byteLength(content, encoding as BufferEncoding);
         if (contentSize > this.context.maxFileSize) {
           return this.createErrorResult(
             `Content size (${contentSize} bytes) exceeds maximum allowed size (${this.context.maxFileSize} bytes)`,
             'FILE_TOO_LARGE',
-            [`Reduce content size to under ${this.context.maxFileSize} bytes`, 'Consider writing the content in smaller chunks']
+            [`Reduce content size to under ${this.context.maxFileSize} bytes`]
           );
         }
 
         finalContent = content;
-        // For full content writes, count total lines
         linesChanged = content.split('\n').length;
       } else {
-        // Diff mode
+        // Diff mode - patch existing file
         mode = 'patch';
+        
         if (!fileExists) {
           return this.createErrorResult(
             `File does not exist: ${filePath}. Cannot apply diff to non-existent file.`,
@@ -200,30 +168,13 @@ export class WriteTool extends BaseTool {
           );
         }
 
-        // Apply unified diff
         const currentContent = await fs.readFile(absolutePath, 'utf8');
-        try {
-          const diffResult = this.applyDiff(currentContent, diff!);
-          finalContent = diffResult.content;
-          linesChanged = diffResult.linesChanged;
-        } catch (error) {
-          if (error instanceof ToolError) throw error;
-          throw new ToolError(
-            `Failed to apply diff: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            'VALIDATION_ERROR',
-            [
-              'Ensure diff format is correct. Example:',
-              '@@ -1,3 +1,3 @@',
-              ' unchanged line',
-              '-line to remove',
-              '+line to add',
-              ' another unchanged line'
-            ]
-          );
-        }
+        const patchResult = this.applyDiff(currentContent, diff!);
+        finalContent = patchResult.content;
+        linesChanged = patchResult.linesChanged;
 
-        // Check content size for patched content
-        contentSize = Buffer.byteLength(finalContent, encoding as BufferEncoding);
+        // Check patched content size
+        const contentSize = Buffer.byteLength(finalContent, encoding as BufferEncoding);
         if (contentSize > this.context.maxFileSize) {
           return this.createErrorResult(
             `Patched content size (${contentSize} bytes) exceeds maximum allowed size (${this.context.maxFileSize} bytes)`,
@@ -233,16 +184,29 @@ export class WriteTool extends BaseTool {
         }
       }
 
-      // We always use atomic writes, so no backup is needed
-      const shouldBackup = false;
-      const result = await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, fileExists, linesChanged);
+      // Perform atomic write
+      const tempPath = `${absolutePath}.tmp.${Date.now()}.${process.pid}`;
+      await fs.writeFile(tempPath, finalContent, encoding as BufferEncoding);
+      await fs.move(tempPath, absolutePath, { overwrite: true });
 
-      // Record successful write operation
+      // Record successful operation
       toolContextManager.recordFileWrite(absolutePath, true);
 
-      return result;
+      const result: WriteResult = {
+        filePath: absolutePath,
+        linesChanged,
+        created: !fileExists,
+        mode
+      };
+
+      return this.createSuccessResult(result, {
+        operation: mode,
+        linesChanged,
+        encoding
+      });
+
     } catch (error) {
-      // Record failed write operation
+      // Record failed operation
       toolContextManager.recordFileWrite(filePath, false);
 
       if (error instanceof ToolError) throw error;
@@ -255,170 +219,24 @@ export class WriteTool extends BaseTool {
 
   private isBlockedPath(targetPath: string): boolean {
     const normalizedPath = path.normalize(targetPath);
-    const pathParts = normalizedPath.split(path.sep);
     return this.context.blockedPaths.some(blockedPattern => {
-      return pathParts.some(part => {
-        return (
-          part === blockedPattern ||
-          normalizedPath.includes(blockedPattern) ||
-          normalizedPath.startsWith('/etc/') ||
-          normalizedPath.startsWith('/usr/') ||
-          normalizedPath.startsWith('/bin/') ||
-          normalizedPath.startsWith('/sbin/') ||
-          normalizedPath.includes('node_modules') ||
-          normalizedPath.includes('.git')
-        );
-      });
+      return normalizedPath.includes(blockedPattern) ||
+             normalizedPath.startsWith('/etc/') ||
+             normalizedPath.startsWith('/usr/') ||
+             normalizedPath.startsWith('/bin/') ||
+             normalizedPath.startsWith('/sbin/') ||
+             normalizedPath.includes('node_modules') ||
+             normalizedPath.includes('.git');
     });
   }
 
-  /**
-   * Ensure parent directory exists and create it if needed
-   */
-  private async ensureParentDirectory(parentDir: string): Promise<void> {
-    try {
-      // Use fs.ensureDir which handles both creation and verification
-      await fs.ensureDir(parentDir);
-
-      // Double-check that it's actually a directory (not a file)
-      const parentStats = await fs.stat(parentDir);
-      if (!parentStats.isDirectory()) {
-        throw new ToolError(
-          `Parent path exists but is not a directory: ${parentDir}`,
-          'INVALID_PATH',
-          ['Remove the conflicting file or choose a different path']
-        );
-      }
-    } catch (error) {
-      if (error instanceof ToolError) {
-        throw error;
-      }
-
-      throw new ToolError(
-        `Cannot create or access parent directory: ${parentDir}. ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'INVALID_PATH',
-        [
-          'Check if the path is valid and you have write permissions',
-          'Ensure parent directories are accessible',
-          'Verify there are no conflicting files in the path'
-        ]
-      );
-    }
-  }
-
-  /**
-   * Optimized write operation with atomic writes and intelligent backup handling
-   */
-  private async performWrite(
-    absolutePath: string,
-    content: string,
-    encoding: BufferEncoding,
-    mode: 'create' | 'patch',
-    shouldBackup: boolean,
-    fileExists: boolean,
-    linesChanged: number
-  ): Promise<ToolResult> {
-    let backupPath: string | undefined;
-    let tempPath: string | undefined;
-
-    try {
-      // Create backup only if needed (non-atomic overwrite with backup enabled)
-      if (shouldBackup) {
-        backupPath = `${absolutePath}.backup.${Date.now()}`;
-        try {
-          await fs.copy(absolutePath, backupPath);
-        } catch (error) {
-          // Non-fatal error - continue without backup
-        }
-      }
-
-      const created = !fileExists;
-
-      // Always use atomic write for safety
-      tempPath = `${absolutePath}.tmp.${Date.now()}.${process.pid}`;
-      await fs.writeFile(tempPath, content, encoding);
-      await fs.move(tempPath, absolutePath, { overwrite: true });
-      tempPath = undefined; // Successfully moved, no cleanup needed
-
-      // Clean up backup if everything succeeded and it was temporary
-      if (backupPath && !shouldBackup) {
-        try {
-          await fs.remove(backupPath);
-        } catch (error) {
-          // Non-fatal cleanup error
-        }
-      }
-
-      const result: WriteResult = {
-        filePath: absolutePath,
-        linesChanged,
-        created,
-        mode,
-        ...(backupPath && shouldBackup && { backupPath })
-      };
-
-      return this.createSuccessResult(result, {
-        operation: mode,
-        linesChanged,
-        encoding
-      });
-
-    } catch (error) {
-      // Cleanup on error
-      if (tempPath) {
-        try {
-          await fs.remove(tempPath);
-        } catch (cleanupError) {
-          // Ignore cleanup errors
-        }
-      }
-
-      // Restore from backup if available
-      if (backupPath && await fs.pathExists(backupPath)) {
-        try {
-          await fs.move(backupPath, absolutePath, { overwrite: true });
-        } catch (restoreError) {
-          // Log restore failure but don't mask original error
-        }
-      }
-
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      throw new ToolError(
-        `Failed to write file: ${errorMessage}`,
-        'PERMISSION_DENIED',
-        [
-          'Check write permissions for the file and directory',
-          'Ensure the file is not locked by another process',
-          'Verify there is enough disk space'
-        ]
-      );
-    }
-  }
-
-  /**
-   * Apply unified diff to existing content
-   *
-   * The diff parser supports simple format and segmented format:
-   * - Simple: Uses context matching to find the location automatically
-   * - Segmented: Uses "..." or "@@" separators for distant changes
-   * - Validates only one matching context exists for safety
-   * - Maintains all safety checks to prevent corruption
-   *
-   * @param currentContent The current content of the file
-   * @param diff The unified diff to apply
-   * @returns The patched content and number of lines changed
-   */
   private applyDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
-    // Validate input types
+    // Validate inputs
     if (typeof currentContent !== 'string' || typeof diff !== 'string') {
-      throw new ToolError(
-        'Invalid input: currentContent and diff must be strings',
-        'VALIDATION_ERROR'
-      );
+      throw new ToolError('Invalid input: currentContent and diff must be strings', 'VALIDATION_ERROR');
     }
 
-    // Check if the file appears to be binary
+    // Check for binary content
     if (this.isBinaryContent(currentContent)) {
       throw new ToolError(
         'Cannot apply diff to binary content',
@@ -427,125 +245,153 @@ export class WriteTool extends BaseTool {
       );
     }
 
-    // Basic validation of diff format
+    // Validate diff format
     this.validateDiffFormat(diff);
 
-    // Check if this is a segmented diff with ... or @@ separators
-    if (diff.includes('\n...\n') || diff.includes('\n...\r\n') || diff.startsWith('...') || diff.endsWith('...') ||
-        diff.includes('\n@@\n') || diff.includes('\n@@\r\n') || diff.startsWith('@@') || diff.endsWith('@@')) {
+    // Handle segmented vs simple diff
+    if (this.isSegmentedDiff(diff)) {
       return this.applySegmentedDiff(currentContent, diff);
     } else {
-      // Try simple diff first, but if it fails due to context issues, try auto-segmentation
-      try {
-        return this.applySimpleDiff(currentContent, diff);
-      } catch (error) {
-        if (error instanceof ToolError && error.message.includes('No matching context found')) {
-          // Attempt auto-segmentation for multi-section diffs
-          return this.applyAutoSegmentedDiff(currentContent, diff);
-        }
-        throw error;
-      }
+      return this.applySimpleDiff(currentContent, diff);
     }
   }
 
-  /**
-   * Apply simple diff format without hunk headers - uses context matching
-   */
+  private isSegmentedDiff(diff: string): boolean {
+    return diff.includes('\n...\n') || diff.includes('\n@@\n') || 
+           diff.startsWith('...') || diff.endsWith('...') ||
+           diff.startsWith('@@') || diff.endsWith('@@');
+  }
+
   private applySimpleDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     const originalLines = currentContent.split('\n');
-    const diffLines = diff.split('\n')
-      .filter(line => line.trim() !== '')
-      .filter(line => {
-        // Filter out traditional diff headers and hunk headers
-        return !line.startsWith('--- ') && 
-               !line.startsWith('+++ ') && 
-               !line.startsWith('diff ') &&
-               !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
-      });
+    const diffLines = this.cleanDiffLines(diff);
 
-    if (diffLines.length === 0) {
-      throw new ToolError(
-        'No valid diff lines found',
-        'VALIDATION_ERROR',
-        ['Diff must contain at least one line']
-      );
-    }
-
-    // Extract context lines to find matching location
-    // Context lines are any lines that represent existing content (not starting with +)
-    const contextLines = diffLines
-      .filter(line => !line.startsWith('+'))
-      .map(line => {
-        if (line.startsWith(' ')) return line.substring(1);
-        if (line.startsWith('-')) return line.substring(1);
-        return line;
-      });
-
+    // Extract context for location matching
+    const contextLines = this.extractContextLines(diffLines);
     if (contextLines.length === 0) {
       throw new ToolError(
         'Simple diff format requires at least one context line for location matching',
         'VALIDATION_ERROR',
-        [
-          'Add context lines to help locate where changes should be applied',
-          'Context lines are any lines that represent existing content (not starting with +)',
-          'Example:',
-          'existing line before',
-          '-old line to change',
-          '+new line to add',
-          'existing line after'
-        ]
+        ['Add context lines to help locate where changes should be applied']
       );
     }
 
-    // Find all possible matching locations
+    // Find matching locations
     const matchingLocations = this.findContextMatches(originalLines, contextLines);
-
+    
     if (matchingLocations.length === 0) {
-      throw new ToolError(
-        'No matching context found in file',
-        'VALIDATION_ERROR',
-        [
-          'The context lines in the diff do not match any location in the file',
-          'Use the read tool to get current file content',
-          'Ensure context lines match exactly (ignoring whitespace differences)'
-        ]
-      );
+      // Try auto-segmentation as fallback for complex diffs
+      try {
+        return this.applyAutoSegmentedDiff(currentContent, diff);
+      } catch (autoError) {
+        // If auto-segmentation also fails, throw the original error
+        throw new ToolError(
+          'No matching context found in file',
+          'VALIDATION_ERROR',
+          ['The context lines in the diff do not match any location in the file', 'Use the read tool to get current file content']
+        );
+      }
     }
 
     if (matchingLocations.length > 1) {
       throw new ToolError(
         `Multiple matching contexts found at lines: ${matchingLocations.map(loc => loc + 1).join(', ')}`,
         'VALIDATION_ERROR',
-        [
-          'The context is ambiguous - it matches multiple locations in the file',
-          'Add more specific context lines to uniquely identify the location',
-          'Or use traditional diff format with @@ hunk headers for precise targeting'
-        ]
+        ['The context is ambiguous - it matches multiple locations in the file', 'Add more specific context lines']
       );
     }
 
-    // Apply the diff at the single matching location
-    const matchLocation = matchingLocations[0];
-    return this.applySimpleDiffAtLocation(originalLines, diffLines, matchLocation);
+    return this.applyDiffAtLocation(originalLines, diffLines, matchingLocations[0]);
   }
 
-  /**
-   * Find all locations where the context lines match
-   */
+  private applySegmentedDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
+    const originalLines = currentContent.split('\n');
+    const cleanedDiff = diff.replace(/^(@@|\.\.\.)\s*\n/, '');
+    const segments = cleanedDiff
+      .split(/\n\.\.\.\n|\n@@\n/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && s !== '@@' && s !== '...');
+
+    if (segments.length === 0) {
+      throw new ToolError('No valid segments found in segmented diff', 'VALIDATION_ERROR');
+    }
+
+    // Process each segment
+    const segmentData = segments.map((segment, i) => {
+      const segmentLines = this.cleanDiffLines(segment);
+      const contextLines = this.extractContextLines(segmentLines);
+      
+      if (contextLines.length === 0) {
+        throw new ToolError(`Segment ${i + 1} has no context lines for location matching`, 'VALIDATION_ERROR');
+      }
+
+      const matches = this.findContextMatches(originalLines, contextLines);
+      if (matches.length === 0) {
+        throw new ToolError(`No matching context found for segment ${i + 1}`, 'VALIDATION_ERROR');
+      }
+      if (matches.length > 1) {
+        throw new ToolError(`Segment ${i + 1} has ambiguous context`, 'VALIDATION_ERROR');
+      }
+
+      return {
+        diffLines: segmentLines,
+        startLocation: matches[0],
+        endLocation: matches[0] + contextLines.length - 1
+      };
+    });
+
+    // Validate segments are in order
+    for (let i = 1; i < segmentData.length; i++) {
+      if (segmentData[i].startLocation <= segmentData[i - 1].endLocation) {
+        throw new ToolError('Segments overlap or are out of order', 'VALIDATION_ERROR');
+      }
+    }
+
+    // Apply segments in reverse order
+    let workingContent = originalLines.slice();
+    let totalLinesChanged = 0;
+
+    for (let i = segmentData.length - 1; i >= 0; i--) {
+      const segment = segmentData[i];
+      const result = this.applyDiffAtLocation(workingContent, segment.diffLines, segment.startLocation);
+      workingContent = result.content.split('\n');
+      totalLinesChanged += result.linesChanged;
+    }
+
+    return {
+      content: workingContent.join('\n'),
+      linesChanged: totalLinesChanged
+    };
+  }
+
+  private cleanDiffLines(diff: string): string[] {
+    return diff.split('\n')
+      .filter(line => line.trim() !== '')
+      .filter(line => !line.startsWith('--- ') && !line.startsWith('+++ ') && 
+                     !line.startsWith('diff ') && !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/));
+  }
+
+  private extractContextLines(diffLines: string[]): string[] {
+    return diffLines
+      .filter(line => !line.startsWith('+'))
+      .map(line => {
+        if (line.startsWith(' ')) return line.substring(1);
+        if (line.startsWith('-')) return line.substring(1);
+        return line;
+      });
+  }
+
   private findContextMatches(originalLines: string[], contextLines: string[]): number[] {
     const matches: number[] = [];
 
-    // Search for context pattern in the original file
     for (let i = 0; i <= originalLines.length - contextLines.length; i++) {
       let allMatch = true;
-
       for (let j = 0; j < contextLines.length; j++) {
         if (!this.contextMatches(contextLines[j], originalLines[i + j])) {
           allMatch = false;
           break;
         }
       }
-
       if (allMatch) {
         matches.push(i);
       }
@@ -554,29 +400,21 @@ export class WriteTool extends BaseTool {
     return matches;
   }
 
-  /**
-   * Apply simple diff at a specific location
-   */
-  private applySimpleDiffAtLocation(
-    originalLines: string[],
-    diffLines: string[],
-    startLocation: number
-  ): { content: string; linesChanged: number } {
+  private contextMatches(expected: string, actual: string): boolean {
+    if (expected === actual) return true;
+    if (expected.trim() === actual.trim()) return true;
+    
+    // Normalize whitespace differences
+    const normalize = (str: string) => str.trim().replace(/\s+/g, ' ');
+    return normalize(expected) === normalize(actual);
+  }
+
+  private applyDiffAtLocation(originalLines: string[], diffLines: string[], startLocation: number): { content: string; linesChanged: number } {
     const resultLines: string[] = [];
     let linesAdded = 0;
     let linesRemoved = 0;
     let originalIndex = 0;
     let diffIndex = 0;
-
-    // Detect base indentation from the original file at the match location
-    let baseIndentation = '';
-    if (startLocation < originalLines.length) {
-      const originalLine = originalLines[startLocation];
-      const match = originalLine.match(/^(\s*)/);
-      if (match) {
-        baseIndentation = match[1];
-      }
-    }
 
     // Copy lines before the match location
     while (originalIndex < startLocation) {
@@ -589,20 +427,16 @@ export class WriteTool extends BaseTool {
       const diffLine = diffLines[diffIndex];
       diffIndex++;
 
-      if (diffLine.startsWith('-')) { // Deletion
-        // Skip the original line (delete it)
+      if (diffLine.startsWith('-')) {
+        // Deletion - skip the original line
         originalIndex++;
         linesRemoved++;
-      } else if (diffLine.startsWith('+')) { // Addition
-        let addedContent = diffLine.substring(1);
-        
-        // Smart indentation: only apply base indentation if the diff doesn't already specify indentation
-        // and if we're in a code context that requires consistent indentation
-        // For now, be conservative and use the content as-is from the diff
-        resultLines.push(addedContent);
+      } else if (diffLine.startsWith('+')) {
+        // Addition - add the new line
+        resultLines.push(diffLine.substring(1));
         linesAdded++;
-      } else { // Context line (anything that doesn't start with + or -)
-        // For context lines, use the content from the diff (which represents the desired final state)
+      } else {
+        // Context line - use content from diff and advance original
         const contextContent = diffLine.startsWith(' ') ? diffLine.substring(1) : diffLine;
         resultLines.push(contextContent);
         originalIndex++;
@@ -615,218 +449,40 @@ export class WriteTool extends BaseTool {
       originalIndex++;
     }
 
-    const finalContent = resultLines.join('\n');
-    const linesChanged = linesAdded + linesRemoved;
-
     return {
-      content: finalContent,
-      linesChanged
+      content: resultLines.join('\n'),
+      linesChanged: linesAdded + linesRemoved
     };
   }
 
-  /**
-   * Apply segmented diff format with ... or @@ separators between distant sections
-   */
-  private applySegmentedDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
-    const originalLines = currentContent.split('\n');
+  private isBinaryContent(content: string): boolean {
+    if (content.includes('\0')) return true;
+    
+    const sample = content.substring(0, 1000);
+    const nonPrintableCount = Array.from(sample).filter(char => {
+      const code = char.charCodeAt(0);
+      return (code < 32 && ![9, 10, 13].includes(code)) || code > 126;
+    }).length;
 
-    // First, remove traditional diff headers
-    let cleanedDiff = diff.split('\n')
-      .filter(line => {
-        return !line.startsWith('--- ') && 
-               !line.startsWith('+++ ') && 
-               !line.startsWith('diff ') &&
-               !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
-      })
-      .join('\n');
-
-    // Split diff into segments by ... or @@ separator
-    // Handle cases where separators appear at the beginning/end of diff
-    // Remove leading separators (@@, ...) that might cause empty first segments
-    cleanedDiff = cleanedDiff.replace(/^(@@|\.\.\.)\s*\n/, '');
-
-    const segments = cleanedDiff
-      .split(/\n\.\.\.\n|\n\.\.\.\r\n|\n@@\n|\n@@\r\n/)
-      .map(segment => segment.trim())
-      .filter(segment => segment.length > 0 && segment !== '@@' && segment !== '...');
-
-    if (segments.length === 0) {
-      throw new ToolError(
-        'No valid segments found in segmented diff',
-        'VALIDATION_ERROR',
-        ['Segmented diff must contain at least one segment between ... separators']
-      );
-    }
-
-    // Parse each segment and find its location
-    interface DiffSegment {
-      diffLines: string[];
-      startLocation: number;
-      endLocation: number;
-    }
-
-    const parsedSegments: DiffSegment[] = [];
-    let totalLinesChanged = 0;
-
-    for (let i = 0; i < segments.length; i++) {
-      const segmentDiff = segments[i];
-      const segmentLines = segmentDiff.split('\n')
-        .filter(line => line.trim() !== '')
-        .filter(line => {
-          // Filter out any remaining headers that might be in segments
-          return !line.startsWith('--- ') && 
-                 !line.startsWith('+++ ') && 
-                 !line.startsWith('diff ') &&
-                 !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
-        });
-
-      if (segmentLines.length === 0) {
-        continue; // Skip empty segments
-      }
-
-      // Extract context lines from this segment (same logic as simple diff)
-      const contextLines = segmentLines
-        .filter(line => !line.startsWith('+'))
-        .map(line => {
-          if (line.startsWith(' ')) return line.substring(1);
-          if (line.startsWith('-')) return line.substring(1);
-          return line;
-        });
-
-      if (contextLines.length === 0) {
-        throw new ToolError(
-          `Segment ${i + 1} has no context lines for location matching`,
-          'VALIDATION_ERROR',
-          ['Each segment must contain at least one context line (line not starting with +)']
-        );
-      }
-
-      // Find matching locations for this segment
-      const matchingLocations = this.findContextMatches(originalLines, contextLines);
-
-      if (matchingLocations.length === 0) {
-        throw new ToolError(
-          `No matching context found for segment ${i + 1}`,
-          'VALIDATION_ERROR',
-          [
-            `Segment ${i + 1} context does not match any location in the file`,
-            'Ensure each segment has correct context lines'
-          ]
-        );
-      }
-
-      if (matchingLocations.length > 1) {
-        throw new ToolError(
-          `Segment ${i + 1} has ambiguous context - matches multiple locations: ${matchingLocations.map(loc => loc + 1).join(', ')}`,
-          'VALIDATION_ERROR',
-          [
-            `Add more specific context to segment ${i + 1} to uniquely identify its location`,
-            'Each segment must have unique context within the file',
-            'Use "..." or "@@" on its own line to separate different segments of changes'
-          ]
-        );
-      }
-
-      const startLocation = matchingLocations[0];
-      const endLocation = startLocation + contextLines.length - 1;
-
-      parsedSegments.push({
-        diffLines: segmentLines,
-        startLocation,
-        endLocation
-      });
-    }
-
-    // Validate segments are in order and don't overlap
-    for (let i = 1; i < parsedSegments.length; i++) {
-      const prevSegment = parsedSegments[i - 1];
-      const currentSegment = parsedSegments[i];
-
-      if (currentSegment.startLocation <= prevSegment.endLocation) {
-        throw new ToolError(
-          `Segments ${i} and ${i + 1} overlap or are out of order`,
-          'VALIDATION_ERROR',
-          [
-            'Segments must appear in the same order as they appear in the file',
-            'Segments cannot overlap - they must target different parts of the file'
-          ]
-        );
-      }
-    }
-
-    // Apply all segments in reverse order to avoid offset issues
-    let workingContent = originalLines.slice(); // Copy of original
-
-    for (let i = parsedSegments.length - 1; i >= 0; i--) {
-      const segment = parsedSegments[i];
-
-      // Apply this single segment to the working content
-      const segmentResult = this.applySimpleDiffAtLocation(
-        workingContent,
-        segment.diffLines,
-        segment.startLocation
-      );
-
-      workingContent = segmentResult.content.split('\n');
-      totalLinesChanged += segmentResult.linesChanged;
-    }
-
-    const finalContent = workingContent.join('\n');
-
-    return {
-      content: finalContent,
-      linesChanged: totalLinesChanged
-    };
+    return nonPrintableCount > sample.length * 0.1;
   }
 
-  /**
-   * Auto-segment a diff that appears to contain multiple disconnected sections
-   * 
-   * This method uses a simpler approach: it identifies insertion points where
-   * new content should be added based on context anchors.
-   */
   private applyAutoSegmentedDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     const originalLines = currentContent.split('\n');
-    const diffLines = diff.split('\n')
-      .filter(line => line.trim() !== '')
-      .filter(line => {
-        // Filter out traditional diff headers and hunk headers
-        return !line.startsWith('--- ') && 
-               !line.startsWith('+++ ') && 
-               !line.startsWith('diff ') &&
-               !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
-      });
+    const diffLines = this.cleanDiffLines(diff);
 
     if (diffLines.length === 0) {
-      throw new ToolError(
-        'No valid diff lines found',
-        'VALIDATION_ERROR',
-        ['Diff must contain at least one line']
-      );
+      throw new ToolError('No valid diff lines found', 'VALIDATION_ERROR', ['Diff must contain at least one line']);
     }
 
-    // Use a different approach: find insertion points
+    // Find insertion points
     const insertions = this.findInsertionPoints(diffLines, originalLines);
     
-    // Debug logging (will be removed in production)
-    if (process.env.NODE_ENV === 'test') {
-      console.log('Auto-segmentation found', insertions.length, 'insertion points');
-      insertions.forEach((ins, i) => {
-        console.log(`Insertion ${i}:`, ins.additionLines.slice(0, 2), '... after line', ins.insertAfterLine);
-      });
-    }
-    
     if (insertions.length === 0) {
-      // If we can't find insertion points, fall back to the original error
       throw new ToolError(
         'No matching context found in file',
         'VALIDATION_ERROR',
-        [
-          'The context lines in the diff do not match any location in the file',
-          'Use the read tool to get current file content',
-          'Ensure context lines match exactly (ignoring whitespace differences)',
-          'For multi-section changes, consider using segmented diff format with ... separators'
-        ]
+        ['The context lines in the diff do not match any location in the file']
       );
     }
 
@@ -836,26 +492,16 @@ export class WriteTool extends BaseTool {
 
     for (let i = insertions.length - 1; i >= 0; i--) {
       const insertion = insertions[i];
-      
-      // Insert the new lines after the specified line
       workingContent.splice(insertion.insertAfterLine + 1, 0, ...insertion.additionLines);
       totalLinesChanged += insertion.additionLines.length;
     }
 
-    const finalContent = workingContent.join('\n');
-
     return {
-      content: finalContent,
+      content: workingContent.join('\n'),
       linesChanged: totalLinesChanged
     };
   }
 
-  /**
-   * Find insertion points in a diff - locations where new content should be added
-   * 
-   * This analyzes the diff to find anchor points (context lines) and groups 
-   * of additions that should be inserted after those anchors.
-   */
   private findInsertionPoints(diffLines: string[], originalLines: string[]): Array<{
     insertAfterLine: number;
     additionLines: string[];
@@ -865,9 +511,6 @@ export class WriteTool extends BaseTool {
       additionLines: string[];
     }> = [];
 
-    // Strategy: Look for blocks of context followed by additions
-    // Build context sequences that help us find unique insertion points
-    
     let i = 0;
     while (i < diffLines.length) {
       const line = diffLines[i];
@@ -930,9 +573,6 @@ export class WriteTool extends BaseTool {
     return insertions;
   }
 
-  /**
-   * Find a sequence of context lines in the original file
-   */
   private findSequenceInOriginal(contextSequence: string[], originalLines: string[]): number {
     if (contextSequence.length === 0) return -1;
     
@@ -980,104 +620,17 @@ export class WriteTool extends BaseTool {
     return -1; // No unique match found
   }
 
-
-
-  /**
-   * Improved context matching with multiple normalization strategies
-   */
-  private contextMatches(expected: string, actual: string): boolean {
-    // Try exact match first (fastest)
-    if (expected === actual) return true;
-
-    // Try basic whitespace normalization
-    if (expected.trim() === actual.trim()) return true;
-
-    // Smart indentation matching - normalize indentation differences
-    const normalizeIndentation = (str: string) => {
-      const trimmed = str.trim();
-      if (trimmed === '') return '';
-      
-      // Detect if this is a code line that should preserve relative indentation
-      // but allow different base indentation levels
-      const leadingWhitespace = str.match(/^(\s*)/)?.[1] || '';
-      const content = str.substring(leadingWhitespace.length);
-      
-      // If both strings have content, compare just the content part
-      if (content.trim() !== '') {
-        return content;
-      }
-      
-      return trimmed;
-    };
-
-    if (normalizeIndentation(expected) === normalizeIndentation(actual)) return true;
-
-    // Try more aggressive normalization (collapse all whitespace)
-    const normalizeAggressively = (str: string) => str.trim().replace(/\s+/g, ' ');
-    if (normalizeAggressively(expected) === normalizeAggressively(actual)) return true;
-
-    // Consider partial matching for long lines (useful for long lines with minor changes)
-    if (expected.length > 40 && actual.length > 40) {
-      // Check if most of the content matches using Levenshtein distance or other similarity metric
-      // This is a simplified implementation - just checks if 70% of characters match in order
-      let matchCount = 0;
-      const minLength = Math.min(expected.length, actual.length);
-      for (let i = 0; i < minLength; i++) {
-        if (expected[i] === actual[i]) matchCount++;
-      }
-      if (matchCount / minLength > 0.7) return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Check if content appears to be binary
-   */
-  private isBinaryContent(content: string): boolean {
-    // Quick check: If it contains null bytes, it's definitely binary
-    if (content.includes('\0')) {
-      return true;
-    }
-
-    // Check first 1000 characters for non-printable characters
-    const sample = content.substring(0, 1000);
-
-    // Look for high concentration of control characters (except tabs, newlines, etc)
-    const nonPrintableCount = Array.from(sample).filter(char => {
-      const code = char.charCodeAt(0);
-      return (code < 32 && ![9, 10, 13].includes(code)) || code > 126;
-    }).length;
-
-    // If more than 10% are non-printable, consider it binary
-    return nonPrintableCount > sample.length * 0.1;
-  }
-
-  /**
-   * Validate basic diff format - supports simple and segmented formats
-   */
   private validateDiffFormat(diff: string): void {
     if (diff.trim() === '') {
-      throw new ToolError(
-        'Empty diff provided',
-        'VALIDATION_ERROR',
-        ['Please provide a valid diff with at least one change']
-      );
+      throw new ToolError('Empty diff provided', 'VALIDATION_ERROR', ['Please provide a valid diff with at least one change']);
     }
 
-    // Check for at least one actual change (+ or - line)
     const hasChanges = /^[+-]/m.test(diff);
     if (!hasChanges) {
       throw new ToolError(
         'Invalid diff: no additions or deletions found',
         'VALIDATION_ERROR',
-        [
-          'The diff must contain at least one line that starts with + or -',
-          'Example format:',
-          ' context line',
-          '-old line',
-          '+new line'
-        ]
+        ['The diff must contain at least one line that starts with + or -']
       );
     }
   }

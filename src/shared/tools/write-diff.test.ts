@@ -6,11 +6,11 @@
 import fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
-import { WriteTool } from '../../src/shared/tools/write';
-import { ToolContext, ToolError } from '../../src/shared/tools/types';
+import { WriteTool } from './write';
+import { ToolContext, ToolError } from './types';
 
 // Mock the toolContextManager for isolated testing
-jest.mock('../../src/shared/utils/ToolContextManager', () => ({
+jest.mock('../utils/ToolContextManager', () => ({
   toolContextManager: {
     recordFileWrite: jest.fn(),
     validateWriteOperation: jest.fn(() => ({
