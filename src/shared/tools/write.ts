@@ -19,6 +19,9 @@ export interface WriteParams {
   path: string;
   content?: string;   // For full writes
   diff?: string;      // For patching existing files
+  search?: string;    // For search-and-replace mode
+  replace?: string;   // For search-and-replace mode
+  regex?: boolean;    // Whether search string is a regex pattern
   encoding?: 'utf8' | 'binary' | 'base64';
 }
 
@@ -27,41 +30,57 @@ export interface WriteResult {
   linesChanged: number;
   created: boolean;
   backupPath?: string;
-  mode: 'create' | 'patch';
+  mode: 'create' | 'patch' | 'search-replace';
+  replacements?: number; // Number of replacements made in search-replace mode
 }
 
 export class WriteTool extends BaseTool {
   readonly name = 'write';
-  readonly description = 'Write content to files. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a diff to selectively modify parts of an existing file';
+  readonly description = 'Write content to files. Provides three modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Search-replace mode: Search for a pattern and replace with new content (PREFERRED for modifications)\n3) Diff mode: Provide a diff to selectively modify parts of an existing file (DEPRECATED - use search-replace instead)';
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
-      diff: { type: 'string', description: 'Diff to apply to an existing file. REQUIRES at least one addition (+) or deletion (-) line.\n\nFormat examples:\n\nBasic format:\n```\nexisting line before\n-old line to remove\n+new line to add\nexisting line after\n```\n\nMultiple changes (separate with ... or @@):\n```\nfunction greet(name) {\n-  console.log("Hello, " + name);\n+  console.log("Hi there, " + name + "!");\n  return "greeting complete";\n...\n-  return "greeting complete";\n+  return "greeting sent successfully";\n}\n```\n\nKey requirements:\n- Include context lines (unchanged lines) to locate where changes apply\n- Context must uniquely identify the location in the file\n- Use + for additions, - for deletions\n- Context lines must match existing file content exactly' }
+      diff: { type: 'string', description: 'DEPRECATED: Diff to apply to an existing file. Use search-replace mode instead for better reliability and simplicity.\n\nDiff format (if absolutely necessary):\n```\nexisting line before\n-old line to remove\n+new line to add\nexisting line after\n```\n\nNote: This mode is complex and error-prone. Consider using search-replace mode instead.' },
+      search: { type: 'string', description: 'PREFERRED: Text or pattern to search for in search-replace mode. Can be a string literal or regex pattern if regex is true. More reliable than diff mode.' },
+      replace: { type: 'string', description: 'PREFERRED: Text to replace matches with in search-replace mode. Supports regex capture groups if regex is true.' },
+      regex: { type: 'boolean', description: 'Whether the search parameter is a regex pattern. Default is false for literal string matching. Use true for advanced pattern matching.' }
     },
     required: ['path'],
     additionalProperties: false
   };
 
   protected async executeImpl(params: WriteParams): Promise<ToolResult> {
-    const { path: filePath, content, diff, encoding = 'utf8' } = params;
+    const { path: filePath, content, diff, search, replace, regex = false, encoding = 'utf8' } = params;
 
-    // Validate exactly one of content or diff is provided
-    if (content === undefined && diff === undefined) {
+    // Validate exactly one mode is provided
+    const modes = [content, diff, search].filter(x => x !== undefined);
+    if (modes.length === 0) {
       return this.createErrorResult(
-        'Either content or diff must be provided',
+        'Must provide one of: content, diff, or search',
         'VALIDATION_ERROR',
-        ['Provide either content for full writes or diff for patching existing files']
+        ['Provide content for full writes, diff for patching, or search+replace for search-replace mode']
       );
     }
 
-    if (content !== undefined && diff !== undefined) {
+    if (modes.length > 1) {
       return this.createErrorResult(
-        'Cannot provide both content and diff',
+        'Cannot provide multiple modes - choose one of: content, diff, or search',
         'VALIDATION_ERROR',
-        ['Choose either content for full writes or diff for patching existing files']
+        ['Use only one mode: content, diff, or search-replace']
       );
+    }
+
+    // Validate search-replace mode parameters
+    if (search !== undefined) {
+      if (replace === undefined) {
+        return this.createErrorResult(
+          'Search-replace mode requires both search and replace parameters',
+          'VALIDATION_ERROR',
+          ['Provide both search and replace parameters']
+        );
+      }
     }
 
     // Validate encoding
@@ -138,7 +157,8 @@ export class WriteTool extends BaseTool {
 
       let finalContent: string;
       let linesChanged: number;
-      let mode: 'create' | 'patch';
+      let mode: 'create' | 'patch' | 'search-replace';
+      let replacements = 0;
 
       if (content !== undefined) {
         // Content mode - full file write
@@ -156,7 +176,7 @@ export class WriteTool extends BaseTool {
 
         finalContent = content;
         linesChanged = content.split('\n').length;
-      } else {
+      } else if (diff !== undefined) {
         // Diff mode - patch existing file
         mode = 'patch';
         
@@ -182,6 +202,33 @@ export class WriteTool extends BaseTool {
             [`Reduce patch size to keep content under ${this.context.maxFileSize} bytes`]
           );
         }
+      } else {
+        // Search-replace mode
+        mode = 'search-replace';
+        
+        if (!fileExists) {
+          return this.createErrorResult(
+            `File does not exist: ${filePath}. Cannot perform search-replace on non-existent file.`,
+            'VALIDATION_ERROR',
+            ['Create the file first with a content write', 'Check the file path']
+          );
+        }
+
+        const currentContent = await fs.readFile(absolutePath, 'utf8');
+        const replaceResult = this.performSearchReplace(currentContent, search!, replace!, regex);
+        finalContent = replaceResult.content;
+        linesChanged = replaceResult.linesChanged;
+        replacements = replaceResult.replacements;
+
+        // Check replaced content size
+        const contentSize = Buffer.byteLength(finalContent, encoding as BufferEncoding);
+        if (contentSize > this.context.maxFileSize) {
+          return this.createErrorResult(
+            `Replaced content size (${contentSize} bytes) exceeds maximum allowed size (${this.context.maxFileSize} bytes)`,
+            'FILE_TOO_LARGE',
+            [`Reduce replacement size to keep content under ${this.context.maxFileSize} bytes`]
+          );
+        }
       }
 
       // Perform atomic write
@@ -196,7 +243,8 @@ export class WriteTool extends BaseTool {
         filePath: absolutePath,
         linesChanged,
         created: !fileExists,
-        mode
+        mode,
+        ...(mode === 'search-replace' && { replacements })
       };
 
       return this.createSuccessResult(result, {
@@ -633,5 +681,106 @@ export class WriteTool extends BaseTool {
         ['The diff must contain at least one line that starts with + or -']
       );
     }
+  }
+
+  private performSearchReplace(content: string, search: string, replace: string, useRegex: boolean): {
+    content: string;
+    linesChanged: number;
+    replacements: number;
+  } {
+    if (search.trim() === '') {
+      throw new ToolError('Empty search string provided', 'VALIDATION_ERROR', ['Please provide a non-empty search string']);
+    }
+
+    // Check for binary content
+    if (this.isBinaryContent(content)) {
+      throw new ToolError(
+        'Cannot perform search-replace on binary content',
+        'VALIDATION_ERROR',
+        ['Binary files must be modified using full content replacement']
+      );
+    }
+
+    const originalLines = content.split('\n');
+    let replacements = 0;
+    let resultContent: string;
+
+    try {
+      if (useRegex) {
+        // Regex mode
+        const regex = new RegExp(search, 'g');
+        const beforeReplace = content;
+        resultContent = content.replace(regex, (...args) => {
+          replacements++;
+          return replace;
+        });
+        
+        // If no matches found, throw error
+        if (replacements === 0) {
+          throw new ToolError(
+            `No matches found for regex pattern: ${search}`,
+            'VALIDATION_ERROR',
+            ['Check the regex pattern for accuracy', 'Use the read tool to verify file content']
+          );
+        }
+      } else {
+        // Literal string mode
+        if (!content.includes(search)) {
+          throw new ToolError(
+            `Search string not found: ${search}`,
+            'VALIDATION_ERROR',
+            ['Check the search string for accuracy', 'Use the read tool to verify file content']
+          );
+        }
+        
+        // Count occurrences
+        const searchLength = search.length;
+        let index = 0;
+        while ((index = content.indexOf(search, index)) !== -1) {
+          replacements++;
+          index += searchLength;
+        }
+        
+        resultContent = content.replaceAll(search, replace);
+      }
+    } catch (error) {
+      if (error instanceof ToolError) throw error;
+      
+      // Handle regex compilation errors
+      if (useRegex && error instanceof Error && error.message.includes('Invalid regular expression')) {
+        throw new ToolError(
+          `Invalid regex pattern: ${search}. ${error.message}`,
+          'VALIDATION_ERROR',
+          ['Fix the regex pattern syntax', 'Use literal string mode for simple text replacement']
+        );
+      }
+      
+      throw new ToolError(
+        `Search-replace operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'UNKNOWN_ERROR'
+      );
+    }
+
+    const resultLines = resultContent.split('\n');
+    
+    // Calculate lines changed (lines that contain replacements)
+    let linesChanged = 0;
+    const minLines = Math.min(originalLines.length, resultLines.length);
+    
+    // Count modified lines
+    for (let i = 0; i < minLines; i++) {
+      if (originalLines[i] !== resultLines[i]) {
+        linesChanged++;
+      }
+    }
+    
+    // Add any new lines that were added/removed
+    linesChanged += Math.abs(resultLines.length - originalLines.length);
+
+    return {
+      content: resultContent,
+      linesChanged,
+      replacements
+    };
   }
 }

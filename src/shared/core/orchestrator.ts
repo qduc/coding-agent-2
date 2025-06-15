@@ -188,16 +188,16 @@ export class ToolOrchestrator {
           }
 
           // Check for repetitive patterns that might indicate an infinite loop
-          const loopDetected = this.detectRepetitivePattern(toolCallHistory);
-          if (loopDetected.detected) {
-            if (verbose) {
-              logger.debug(`🔄 Infinite loop detected: ${loopDetected.reason}`, {
-                reason: loopDetected.reason,
-                historyLength: toolCallHistory.length
-              }, 'ORCHESTRATOR');
-            }
-            throw new Error(`Detected repetitive tool call pattern: ${loopDetected.reason}`);
-          }
+          // const loopDetected = this.detectRepetitivePattern(toolCallHistory);
+          // if (loopDetected.detected) {
+          //   if (verbose) {
+          //     logger.debug(`🔄 Infinite loop detected: ${loopDetected.reason}`, {
+          //       reason: loopDetected.reason,
+          //       historyLength: toolCallHistory.length
+          //     }, 'ORCHESTRATOR');
+          //   }
+          //   throw new Error(`Detected repetitive tool call pattern: ${loopDetected.reason}`);
+          // }
 
           continue; // Continue the conversation loop
         } else {

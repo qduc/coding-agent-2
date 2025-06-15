@@ -128,10 +128,10 @@ AVAILABLE TOOLS & USAGE:
   Use: Read source code, config files, documentation; supports partial reading
   Example: read({path: "src/main.ts", startLine: 10, endLine: 50})
 
-• write - Create or modify files with content or diff patches
-  Use: Create new files or apply targeted changes to existing files
-  Modes: Full content replacement or unified diff patches
-  Example: write({path: "file.js", diff: "- old line\\n+ new line"})
+• write - Create or modify files with three modes: content, search-replace (PREFERRED), or diff (deprecated)
+  Use: Create new files, apply targeted changes, or perform search-and-replace operations
+  Modes: Full content, search-replace with regex support (PREFERRED), or diff patches (deprecated)
+  Example: write({path: "file.js", search: "console.log", replace: "logger.info"})
 
 • ls - List directory contents with metadata and filtering
   Use: Explore project structure, find files with optional glob patterns
@@ -167,47 +167,65 @@ AVAILABLE TOOLS & USAGE:
   Use: Find current information, documentation, examples, troubleshooting
   Example: web_search({query: "TypeScript async await best practices"})
 
-WRITE TOOL DIFF MODE - DETAILED GUIDE:
+WRITE TOOL - DETAILED USAGE GUIDE:
 
-The write tool's diff mode is powerful but requires precise formatting. Here are key examples:
+The write tool supports three modes, prioritized by reliability and ease of use:
 
-BASIC DIFF FORMAT:
-existing line before change
--line to remove
-+line to add
-existing line after change
+🥇 1. SEARCH-REPLACE MODE - Pattern-based replacement (PREFERRED):
+   write({path: "file.js", search: "old text", replace: "new text"})
+   write({path: "file.js", search: "function (\\w+)", replace: "const $1 = ", regex: true})
+   
+   ADVANTAGES:
+   ✅ Simple and reliable
+   ✅ Supports regex patterns with capture groups
+   ✅ No complex context matching required
+   ✅ Clear error messages when patterns don't match
+   
+   Use for: Most code modifications, refactoring, renaming, pattern-based changes
 
-MULTIPLE CHANGES (use ... separator):
-function greet(name) {
--  console.log("Hello, " + name);
-+  console.log("Hi there, " + name + "!");
-  return "greeting complete";
-...
-function farewell() {
--  return "goodbye";
-+  return "farewell, friend!";
-}
+🥈 2. CONTENT MODE - Full file replacement:
+   write({path: "file.js", content: "complete file content here"})
+   Use for: Creating new files, complete rewrites
 
-CONTEXT REQUIREMENTS:
-- Include unchanged lines around changes for location matching
-- Context must be unique in the file to avoid ambiguity
-- Use exact indentation and spacing from the original file
-- Include enough context to uniquely identify the location
+🥉 3. DIFF MODE - Precise contextual changes (DEPRECATED):
+   ⚠️ WARNING: This mode is complex, error-prone, and deprecated. Use search-replace instead.
+   
+   BASIC DIFF FORMAT (avoid if possible):
+   existing line before change
+   -line to remove
+   +line to add
+   existing line after change
 
-COMMON PITFALLS TO AVOID:
-- ❌ No context lines: diff with only + and - lines
-- ❌ Ambiguous context: lines that appear multiple times in file
-- ❌ Wrong indentation: spaces/tabs must match exactly
-- ❌ Missing separators: use ... between distant changes
+   PROBLEMS WITH DIFF MODE:
+   ❌ Complex context matching requirements
+   ❌ Ambiguous when context appears multiple times
+   ❌ Sensitive to exact indentation and spacing
+   ❌ Difficult to debug when it fails
+   ❌ Requires perfect knowledge of file structure
+
+**RECOMMENDED APPROACH:**
+Instead of diff mode, use search-replace:
+- WRONG: Complex diff with context lines
+- RIGHT: write({path: "file.js", search: "console.log(msg)", replace: "logger.info(msg)"})
+
+MODE SELECTION GUIDE:
+✅ Use SEARCH-REPLACE for: 95% of file modifications - it's simpler and more reliable
+✅ Use CONTENT for: New files, complete rewrites
+❌ Avoid DIFF: Only use if search-replace absolutely cannot work
 
 TOOL SELECTION STRATEGY:
 - Start with exploration: ls → glob → read to understand codebase structure
 - Use ripgrep for finding specific code patterns or implementations
 - Plan complex tasks with todo before implementation
-- Make changes with write (prefer diff mode for existing files)
+- Make changes with write (prefer search-replace mode for existing files)
 - Validate with bash (run tests, linting, type checking)
 - Delegate specialized work to sub_agent for efficiency
 - Use web_search for external knowledge and current information
+
+PRIORITY ORDER FOR FILE MODIFICATIONS:
+1. 🥇 SEARCH-REPLACE: Simple, reliable, supports regex - use for 95% of changes
+2. 🥈 CONTENT: For new files or complete rewrites
+3. 🥉 DIFF: Only as last resort - complex and error-prone
 `;
   }
 }

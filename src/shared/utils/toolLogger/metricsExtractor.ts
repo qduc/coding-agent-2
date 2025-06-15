@@ -20,8 +20,13 @@ export function getResultMetrics(toolName: string, result: any, args?: any): str
       const linesChanged = result.linesChanged || 0;
       const created = result.created ? 'created' : 'modified';
       const mode = result.mode || 'write';
-
-      return `✏️ File ${created}: ${linesChanged} lines changed (${mode})`;
+      
+      if (mode === 'search-replace') {
+        const replacements = result.replacements || 0;
+        return `✏️ File ${created}: ${replacements} replacements, ${linesChanged} lines changed (${mode})`;
+      } else {
+        return `✏️ File ${created}: ${linesChanged} lines changed (${mode})`;
+      }
     }
 
     // Fallback for string results

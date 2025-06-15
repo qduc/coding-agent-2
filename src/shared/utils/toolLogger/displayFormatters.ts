@@ -34,18 +34,46 @@ export function getMinimalContext(toolName: string, args: any): string {
 
   const toolLower = toolName.toLowerCase();
   
-  // Clean, minimal context - show only the most essential info
-  if (toolLower.includes('read') && args.path) {
-    return ` ${truncatePath(args.path)}`;
+  // Show full context with all arguments (except file content which is too long)
+  if (toolLower.includes('read') && (args.path || args.file_path)) {
+    const path = args.path || args.file_path;
+    let params = [];
+    if (args.offset) params.push(`offset: ${args.offset}`);
+    if (args.limit) params.push(`limit: ${args.limit}`);
+    const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
+    return ` ${path}${paramStr}`;
   } else if (toolLower.includes('write') && args.path) {
-    return ` ${truncatePath(args.path)}\n${formatDiff(args.diff)}`;
+    const mode = args.search ? 'search-replace' : args.diff ? 'diff' : 'content';
+    if (mode === 'search-replace') {
+      const regexFlag = args.regex ? ' (regex)' : '';
+      return ` ${args.path} • "${args.search}" → "${args.replace}"${regexFlag}`;
+    } else if (mode === 'diff') {
+      return ` ${args.path}\n${formatDiff(args.diff)}`;
+    } else {
+      return ` ${args.path}`;
+    }
   } else if (toolLower.includes('bash') && args.command) {
-    const cmd = args.command.length > 40 ? args.command.substring(0, 40) + '…' : args.command;
-    return ` "${cmd}"`;
-  } else if ((toolLower.includes('glob') || toolLower.includes('grep')) && args.pattern) {
-    return ` "pattern: '${args.pattern}' regex: ${args.regex}"`;
+    let params = [];
+    if (args.timeout) params.push(`timeout: ${args.timeout}ms`);
+    if (args.description) params.push(`desc: "${args.description}"`);
+    const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
+    return ` "${args.command}"${paramStr}`;
+  } else if (toolLower.includes('glob') && args.pattern) {
+    let params = [];
+    if (args.path) params.push(`path: ${args.path}`);
+    const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
+    return ` "${args.pattern}"${paramStr}`;
+  } else if (toolLower.includes('grep') && args.pattern) {
+    let params = [];
+    if (args.path) params.push(`path: ${args.path}`);
+    if (args.include) params.push(`include: ${args.include}`);
+    const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
+    return ` "${args.pattern}"${paramStr}`;
   } else if (toolLower.includes('ls') && args.path) {
-    return ` ${truncatePath(args.path)}`;
+    let params = [];
+    if (args.ignore && args.ignore.length > 0) params.push(`ignore: [${args.ignore.join(', ')}]`);
+    const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
+    return ` ${args.path}${paramStr}`;
   }
 
   return '';
@@ -99,8 +127,15 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
   }
 
   if (toolLower.includes('write')) {
-    if (typeof result === 'object' && result?.linesChanged) {
-      return ` • ${result.linesChanged}L changed`;
+    if (typeof result === 'object' && result !== null) {
+      const mode = result.mode || 'unknown';
+      if (mode === 'search-replace') {
+        const replacements = result.replacements || 0;
+        const linesChanged = result.linesChanged || 0;
+        return ` • ${replacements} replacements, ${linesChanged}L changed`;
+      } else if (result.linesChanged) {
+        return ` • ${result.linesChanged}L changed`;
+      }
     } else if (args?.content) {
       const lines = args.content.split('\n').length;
       return ` • ${lines}L written`;
@@ -118,11 +153,20 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
     if (typeof result === 'object' && result?.exitCode !== undefined) {
       const time = result.executionTime ? ` ${result.executionTime}ms` : '';
       if (result.exitCode === 0) {
-        // For successful commands, show stdout if available
-        const output = result.stdout ? `\n${result.stdout}` : '';
+        // For successful commands, show stdout if available and not too long
+        let output = '';
+        if (result.stdout && result.stdout.length < 500) {
+          output = `\n${result.stdout}`;
+        } else if (result.stdout && result.stdout.length >= 500) {
+          output = `\n${result.stdout.substring(0, 500)}...`;
+        }
         return ` • ok${time}${output}`;
       } else {
-        return ` • exit ${result.exitCode}${time}\n${result.stdout}\n\n${result.stderr}`;
+        let stderr = result.stderr || '';
+        if (stderr.length > 500) {
+          stderr = stderr.substring(0, 500) + '...';
+        }
+        return ` • exit ${result.exitCode}${time}\n${stderr}`;
       }
     }
     return ` • executed`;
@@ -130,11 +174,11 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
     if (typeof result === 'object' && result?.matches) {
       const files = result.matches.filter((item: any) => item.type === 'file').length;
       const dirs = result.matches.filter((item: any) => item.type === 'directory').length;
-      return ` • ${files}F ${dirs}D`;
+      return ` • ${files} files, ${dirs} directories`;
     } else if (Array.isArray(result)) {
       const files = result.filter(item => !item.endsWith('/')).length;
       const dirs = result.length - files;
-      return ` • ${files}F ${dirs}D`;
+      return ` • ${files} files, ${dirs} directories`;
     }
     return ` • listed`;
   } else if (toolLower.includes('grep')) {
