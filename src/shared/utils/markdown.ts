@@ -42,11 +42,15 @@ export class MarkdownRenderer {
     });
 
     // Now apply all other markdown formatting (code is protected)
-    // Headers with enhanced visual hierarchy
-    output = output.replace(/^### (.*$)/gm, '\n' + chalk.yellow.bold('▸ $1') + '\n');
+    // Headers with corrected visual hierarchy (h1=1 arrow, h3=3 arrows)
+    output = output.replace(/^# (.*$)/gm, '\n' + chalk.blue.bold('▸ $1') + '\n');
     output = output.replace(/^## (.*$)/gm, '\n' + chalk.cyan.bold('▸▸ $1') + '\n');
-    output = output.replace(/^# (.*$)/gm, '\n' + chalk.blue.bold('▸▸▸ $1') + '\n');
+    output = output.replace(/^### (.*$)/gm, '\n' + chalk.yellow.bold('▸▸▸ $1') + '\n');
 
+    // Bold + Italic (must come first to avoid conflicts)
+    output = output.replace(/\*\*\*(.*?)\*\*\*/g, chalk.bold.italic('$1'));
+    output = output.replace(/__(.*?)__/g, chalk.bold.italic('$1'));
+    
     // Bold text
     output = output.replace(/\*\*(.*?)\*\*/g, chalk.bold('$1'));
     output = output.replace(/__(.*?)__/g, chalk.bold('$1'));
@@ -55,19 +59,20 @@ export class MarkdownRenderer {
     output = output.replace(/(?<!\*)\*(?!\*)(.*?)\*(?!\*)/g, chalk.italic('$1'));
     output = output.replace(/(?<!_)_(?!_)(.*?)_(?!_)/g, chalk.italic('$1'));
 
-    // Links with better formatting
-    output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, chalk.blue.underline('$1') + chalk.gray.dim(' ↗ $2'));
+    // Links with better terminal compatibility
+    output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, chalk.blue.underline('$1') + chalk.gray.dim(' -> $2'));
 
-    // Enhanced unordered lists with better indentation
-    output = output.replace(/^[\s]*[-*+] (.*)$/gm, '  ' + chalk.green('●') + '  $1');
-    // Enhanced ordered lists with better formatting
-    output = output.replace(/^[\s]*(\d+)\. (.*)$/gm, '  ' + chalk.green('$1.') + '  $2');
+    // Enhanced unordered lists with consistent spacing
+    output = output.replace(/^[\s]*[-*+] (.*)$/gm, '  ' + chalk.cyan('•') + ' $1');
+    
+    // Enhanced ordered lists with consistent formatting
+    output = output.replace(/^[\s]*(\d+)\. (.*)$/gm, '  ' + chalk.cyan('$1.') + ' $2');
 
-    // Enhanced blockquotes with left border
-    output = output.replace(/^> (.*)$/gm, chalk.blue('┃ ') + chalk.italic.gray('$1'));
+    // Enhanced blockquotes with consistent styling
+    output = output.replace(/^> (.*)$/gm, chalk.blue('│ ') + chalk.italic.gray('$1'));
 
-    // Enhanced horizontal rules
-    output = output.replace(/^---$/gm, '\n' + chalk.gray('─'.repeat(Math.min(56, process.stdout.columns - 4 || 56))) + '\n');
+    // Enhanced horizontal rules with consistent width
+    output = output.replace(/^---$/gm, '\n' + chalk.gray('─'.repeat(Math.min(60, process.stdout.columns - 4 || 60))) + '\n');
 
     // Restore inline code blocks
     output = output.replace(/§§§INLINECODE(\d+)§§§/g, (match, index) => {
@@ -122,16 +127,14 @@ export class MarkdownRenderer {
       header.padEnd(colWidths[i])
     ).join(' │ ')) + '\n';
 
-    // Separator
-    const sepGroups = headers.map((_, i) => i === 0 ? colWidths[i] : colWidths[i] + 2);
-    output += chalk.gray(sepGroups.map(len => '─'.repeat(len)).join('┼')) + '\n';
+    // Separator with simplified logic
+    output += chalk.gray(colWidths.map(width => '─'.repeat(width)).join('─┼─')) + '\n';
 
-    // Rows
+    // Rows with consistent formatting
     rows.forEach(row => {
       output += headers.map((_, i) => {
         const cell = row[i] || '';
-        if (!cell) return ''.padEnd(colWidths[i]);
-        return i === 0 ? cell : cell.padEnd(colWidths[i]);
+        return cell.padEnd(colWidths[i]);
       }).join(' │ ') + '\n';
     });
 
