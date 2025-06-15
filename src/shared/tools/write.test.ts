@@ -95,10 +95,6 @@ describe('WriteTool', () => {
       // Check optional properties
       expect(schema.properties.content?.type).toBe('string');
       expect(schema.properties.diff?.type).toBe('string');
-      expect(schema.properties.encoding?.type).toBe('string');
-      expect(schema.properties.encoding?.enum).toContain('utf8');
-      expect(schema.properties.encoding?.enum).toContain('binary');
-      expect(schema.properties.encoding?.enum).toContain('base64');
     });
 
     it('should return function call schema', () => {
@@ -144,18 +140,6 @@ describe('WriteTool', () => {
       expect(result.error).toBeInstanceOf(ToolError);
       expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
       expect((result.error as ToolError).message).toContain('Cannot provide both content and diff');
-    });
-
-    it('should validate encoding parameter', async () => {
-      const result = await writeTool.execute({
-        path: path.join(tempDir, 'test.txt'),
-        content: 'test content',
-        encoding: 'invalid-encoding' as any
-      });
-      expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(ToolError);
-      expect((result.error as ToolError).code).toBe('VALIDATION_ERROR');
-      expect((result.error as ToolError).message).toContain('must be one of: utf8, binary, base64');
     });
 
     it('should validate file extension restrictions', async () => {

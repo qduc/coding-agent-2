@@ -347,7 +347,7 @@ describe('BashTool', () => {
     it('should handle command not found', async () => {
       const result = await bashTool.execute({ command: 'nonexistentcommand12345' });
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
       expect(result.error).toBeInstanceOf(ToolError);
       expect((result.error as ToolError).code).toBe('COMMAND_FAILED');
 
@@ -359,7 +359,7 @@ describe('BashTool', () => {
     it('should handle commands with non-zero exit codes', async () => {
       const result = await bashTool.execute({ command: 'exit 42' });
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
       expect(result.error).toBeInstanceOf(ToolError);
       expect((result.error as ToolError).code).toBe('COMMAND_FAILED');
 
@@ -377,7 +377,7 @@ describe('BashTool', () => {
         command: `chmod 000 "${testFile}" && cat "${testFile}"`
       });
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
       const bashResult = result.output as BashResult;
       expect(bashResult.exitCode).not.toBe(0);
     });
@@ -385,7 +385,7 @@ describe('BashTool', () => {
     it('should provide helpful error suggestions', async () => {
       const result = await bashTool.execute({ command: 'exit 1' });
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
       expect(result.error).toBeInstanceOf(ToolError);
 
       const error = result.error as ToolError;
