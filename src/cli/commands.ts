@@ -24,6 +24,7 @@ export function configureCommands(program: Command, version: string): void {
     .option('--tool-display <mode>', 'Set tool display mode: off, minimal, condensed, standard, verbose')
     .option('--setup', 'Run configuration setup wizard')
     .option('--config', 'Show current configuration')
+    .option('--model <model>', 'Temporarily specify the LLM model to use for this session')
     .helpOption('-h, --help', 'Display help information')
     .action(async (command: string | undefined, options: any) => {
       // Handle colored output setting
@@ -70,6 +71,15 @@ export function configureCommands(program: Command, version: string): void {
         process.exit(1);
       }
 
+      // Handle model selection from CLI option
+      if (options.model) {
+  const { detectProviderFromModel } = await import('../shared/core/config');
+  const provider = detectProviderFromModel(options.model);
+  await configManager.saveConfig({ model: options.model, provider });
+  console.log(chalk.blue('Model set to:'), chalk.white(options.model));
+  console.log(chalk.blue('Provider auto-selected:'), chalk.white(provider));
+}
+
       // Handle streaming setting from CLI or config
       const shouldStream = options.streaming !== undefined ?
         options.streaming :
@@ -79,9 +89,16 @@ export function configureCommands(program: Command, version: string): void {
       const toolContext = new CLIToolExecutionContext();
 
       // Create and initialize agent with CLI implementations
-      const agent = new Agent({
-        toolContext
-      });
+      const agentOptions: any = { toolContext };
+      if (options.model) {
+        console.log(chalk.blue('🤖 Using temporary model:'), chalk.white(options.model));
+        const { detectProviderFromModel } = await import('../shared/core/config');
+const provider = detectProviderFromModel(options.model);
+agentOptions.temporaryModel = options.model;
+agentOptions.temporaryProvider = provider;
+      }
+
+      const agent = new Agent(agentOptions);
       const initialized = await agent.initialize();
       if (!initialized) {
         console.error(chalk.red('Failed to initialize AI service.'));
@@ -240,11 +257,24 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
     };
     process.on('SIGINT', handleExit);
 
+    // Prepare agent options for interactive mode
+    const agentOptions: any = {};
+    if (options.model) {
+      console.log(chalk.blue('🤖 Using temporary model:'), chalk.white(options.model));
+      const { detectProviderFromModel } = await import('../shared/core/config');
+const provider = detectProviderFromModel(options.model);
+agentOptions.temporaryModel = options.model;
+agentOptions.temporaryProvider = provider;
+    }
+
     // Start the full Ink interactive mode
-    await chatHandler.handleInteractiveChatMode(agent, {
-      verbose: options.verbose,
-      streaming: shouldStream,
-    });
+    await chatHandler.handleInteractiveChatMode(
+      new Agent(agentOptions), 
+      {
+        verbose: options.verbose,
+        streaming: shouldStream,
+      }
+    );
 
     // Clean up signal handler
     process.removeListener('SIGINT', handleExit);

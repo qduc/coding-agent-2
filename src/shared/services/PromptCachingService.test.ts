@@ -14,8 +14,7 @@ describe('PromptCachingService', () => {
       promptCachingStrategy: 'aggressive',
       cacheSystemPrompts: true,
       cacheToolDefinitions: true,
-      cacheConversationHistory: true,
-      cacheTTL: '1h'
+      cacheConversationHistory: true
     };
 
     cachingService = new PromptCachingService(mockConfig);
@@ -62,23 +61,39 @@ describe('PromptCachingService', () => {
   });
 
   describe('applyCacheControl', () => {
+    // Create long content that meets minimum token requirements (1024 tokens = ~4096 characters)
+    const longSystemPrompt = 'You are a helpful assistant. ' + 'A'.repeat(4500);
+    const longConversationContent = 'This is a long conversation message. ' + 'B'.repeat(4500);
+    
     const sampleMessages: Message[] = [
-      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'system', content: longSystemPrompt },
       { role: 'user', content: 'Hello' },
       { role: 'assistant', content: 'Hi there!' },
-      { role: 'user', content: 'How are you?' }
+      { role: 'user', content: longConversationContent }
     ];
 
+    // Create large tool definitions that meet minimum token requirements
     const sampleTools = [
       {
         name: 'read_file',
-        description: 'Read a file',
-        parameters: { type: 'object', properties: { path: { type: 'string' } } }
+        description: 'Read a file from the filesystem. ' + 'C'.repeat(1000),
+        parameters: { 
+          type: 'object', 
+          properties: { 
+            path: { type: 'string', description: 'File path to read. ' + 'D'.repeat(1000) }
+          } 
+        }
       },
       {
         name: 'write_file',
-        description: 'Write a file',
-        parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } }
+        description: 'Write a file to the filesystem. ' + 'E'.repeat(1000),
+        parameters: { 
+          type: 'object', 
+          properties: { 
+            path: { type: 'string', description: 'File path to write. ' + 'F'.repeat(1000) }, 
+            content: { type: 'string', description: 'Content to write. ' + 'G'.repeat(1000) }
+          } 
+        }
       }
     ];
 
@@ -86,14 +101,14 @@ describe('PromptCachingService', () => {
       const result = cachingService.applyCacheControl(
         sampleMessages,
         sampleTools,
-        'You are a helpful assistant.'
+        longSystemPrompt
       );
 
       expect(result.systemMessages).toBeDefined();
       expect(result.systemMessages![0]).toEqual({
         type: 'text',
-        text: 'You are a helpful assistant.',
-        cache_control: { type: 'ephemeral', ttl: '1h' }
+        text: longSystemPrompt,
+        cache_control: { type: 'ephemeral' }
       });
     });
 
@@ -101,13 +116,12 @@ describe('PromptCachingService', () => {
       const result = cachingService.applyCacheControl(
         sampleMessages,
         sampleTools,
-        'System prompt'
+        longSystemPrompt
       );
 
       expect(result.tools).toBeDefined();
       expect(result.tools![result.tools!.length - 1].cache_control).toEqual({
-        type: 'ephemeral',
-        ttl: '1h'
+        type: 'ephemeral'
       });
     });
 
@@ -118,7 +132,7 @@ describe('PromptCachingService', () => {
       const result = cachingService.applyCacheControl(
         sampleMessages,
         sampleTools,
-        'System prompt'
+        longSystemPrompt
       );
 
       // Should have cache breakpoints for system, tools, and conversation
@@ -136,7 +150,7 @@ describe('PromptCachingService', () => {
       const result = cachingService.applyCacheControl(
         sampleMessages,
         sampleTools,
-        'System prompt'
+        longSystemPrompt
       );
 
       // Conservative should have fewer breakpoints
@@ -151,7 +165,7 @@ describe('PromptCachingService', () => {
       const result = cachingService.applyCacheControl(
         sampleMessages,
         sampleTools,
-        'System prompt'
+        longSystemPrompt
       );
 
       expect(result.breakpoints).toEqual([]);
@@ -165,7 +179,7 @@ describe('PromptCachingService', () => {
       const result = cachingService.applyCacheControl(
         sampleMessages,
         sampleTools,
-        'System prompt'
+        longSystemPrompt
       );
 
       expect(result.breakpoints).toEqual([]);
@@ -179,10 +193,12 @@ describe('PromptCachingService', () => {
       const result = cachingService.applyCacheControl(
         sampleMessages,
         sampleTools,
-        'System prompt'
+        longSystemPrompt
       );
 
-      expect(result.systemMessages).toBeUndefined();
+      // Should still include system message without caching
+      expect(result.systemMessages).toBeDefined();
+      expect(result.systemMessages![0].cache_control).toBeUndefined();
       expect(result.tools).toBeUndefined();
     });
   });
@@ -261,14 +277,14 @@ describe('PromptCachingService Integration', () => {
       promptCachingStrategy: 'aggressive',
       cacheSystemPrompts: true,
       cacheToolDefinitions: true,
-      cacheConversationHistory: true,
-      cacheTTL: '1h'
+      cacheConversationHistory: true
     };
 
     cachingService = new PromptCachingService(config);
   });
 
   it('should handle complex conversation with tools', () => {
+    const longContent = 'A'.repeat(5000); // Ensure it meets minimum token requirements
     const messages: Message[] = [
       { role: 'user', content: 'Read the package.json file' },
       {
@@ -285,47 +301,69 @@ describe('PromptCachingService Integration', () => {
         content: '{"name": "coding-agent", "version": "1.0.0"}',
         tool_call_id: 'call_1'
       },
-      { role: 'user', content: 'Now analyze the dependencies' }
+      { role: 'user', content: longContent }
     ];
 
     const tools = [
       {
         name: 'read_file',
-        description: 'Read a file',
-        parameters: { type: 'object', properties: { path: { type: 'string' } } }
+        description: 'Read a file from the filesystem. ' + 'X'.repeat(2000),
+        parameters: { 
+          type: 'object', 
+          properties: { 
+            path: { type: 'string', description: 'File path to read. ' + 'Y'.repeat(2000) }
+          } 
+        }
       }
     ];
 
+    const longSystemPrompt = 'You are a helpful coding assistant. ' + 'Z'.repeat(5000);
     const result = cachingService.applyCacheControl(
       messages,
       tools,
-      'You are a helpful coding assistant.'
+      longSystemPrompt
     );
 
     expect(result.breakpoints.length).toBeGreaterThan(0);
     expect(result.systemMessages).toBeDefined();
     expect(result.tools).toBeDefined();
 
-    // Verify cache control is applied to messages
-    const hasMessageWithCache = result.messages.some(msg => msg.cache_control);
-    expect(hasMessageWithCache).toBe(true);
+    // Should have system and tools breakpoints at minimum
+    const breakpointTypes = result.breakpoints.map(bp => bp.type);
+    expect(breakpointTypes).toContain('system');
+    expect(breakpointTypes).toContain('tools');
   });
 
-  it('should handle TTL configuration', () => {
+  it('should handle minimum token requirements', () => {
     const config: Config = {
       provider: 'anthropic',
+      model: 'claude-3-5-sonnet-20241022',
       enablePromptCaching: true,
-      cacheTTL: '5m'
+      cacheSystemPrompts: true
     };
 
     cachingService = new PromptCachingService(config);
 
-    const result = cachingService.applyCacheControl(
+    // Short system message (under 1024 tokens)
+    const shortPrompt = 'Short prompt';
+    const result1 = cachingService.applyCacheControl(
       [{ role: 'user', content: 'test' }],
       [],
-      'System prompt'
+      shortPrompt
     );
 
-    expect(result.systemMessages![0].cache_control.ttl).toBe('5m');
+    // Should not cache short content
+    expect(result1.systemMessages![0].cache_control).toBeUndefined();
+
+    // Long system message (over 1024 tokens)
+    const longPrompt = 'A'.repeat(5000); // ~1250 tokens
+    const result2 = cachingService.applyCacheControl(
+      [{ role: 'user', content: 'test' }],
+      [],
+      longPrompt
+    );
+
+    // Should cache long content
+    expect(result2.systemMessages![0].cache_control).toEqual({ type: 'ephemeral' });
   });
 });

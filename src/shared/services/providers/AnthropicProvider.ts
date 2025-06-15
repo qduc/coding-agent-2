@@ -32,7 +32,10 @@ export class AnthropicProvider extends BaseLLMProvider {
       }
 
       this.anthropic = new Anthropic({
-        apiKey: this.config.anthropicApiKey!
+        apiKey: this.config.anthropicApiKey!,
+        defaultHeaders: {
+          'anthropic-beta': 'prompt-caching-2024-07-31'
+        }
       });
 
       // Test the connection by making a simple request

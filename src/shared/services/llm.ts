@@ -5,7 +5,7 @@ export type { LLMProvider, Message, StreamingResponse, FunctionCallResponse } fr
 import { MessageUtils } from '../utils/messageUtils';
 import { ToolLoopHandler } from '../handlers/ToolLoopHandler';
 import { logger } from '../utils/logger';
-import { configManager } from '../core/config';
+import { configManager, detectProviderFromModel } from '../core/config';
 
 export class LLMService implements LLMProvider {
   private provider: LLMProvider | null = null;
@@ -18,7 +18,10 @@ export class LLMService implements LLMProvider {
   async initialize(): Promise<boolean> {
     try {
       const config = configManager.getConfig();
-      const providerName = config.provider || 'openai';
+      
+      // If provider is not set, try to detect from model
+      const providerName = config.provider || detectProviderFromModel(config.model || 'gpt-4o-2024-11-20');
+      
       this.provider = await createProvider(providerName);
       return true;
     } catch (error) {

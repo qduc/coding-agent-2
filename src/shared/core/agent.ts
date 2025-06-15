@@ -24,6 +24,7 @@ import { IInputHandler, IToolExecutionContext } from '../interfaces';
 export interface AgentOptions {
   inputHandler?: IInputHandler;
   toolContext?: IToolExecutionContext;
+  temporaryModel?: string;
 }
 
 export class Agent {
@@ -34,7 +35,10 @@ export class Agent {
   private inputHandler?: IInputHandler;
   private toolContext?: IToolExecutionContext;
 
+  private options?: AgentOptions;
+
   constructor(options: AgentOptions = {}) {
+    this.options = options;
     this.inputHandler = options.inputHandler;
     this.toolContext = options.toolContext;
     this.llmService = new LLMService();
@@ -97,6 +101,16 @@ export class Agent {
 
     // Set project context in orchestrator
     this.orchestrator.setProjectContext(this.discoveryResult);
+
+    // If a temporary model is provided, temporarily override the config
+    if (this.options?.temporaryModel) {
+  const config = configManager.getConfig();
+  config.model = this.options.temporaryModel;
+}
+if (this.options?.temporaryProvider) {
+  const config = configManager.getConfig();
+  config.provider = this.options.temporaryProvider;
+    }
 
     // Initialize LLM service
     const initialized = await this.llmService.initialize();

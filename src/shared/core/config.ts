@@ -4,6 +4,30 @@ import * as os from 'os';
 import chalk from 'chalk';
 import { Logger, LogLevel } from '../utils/logger';
 
+export function detectProviderFromModel(model: string): 'openai' | 'anthropic' | 'gemini' {
+  const modelLower = model.toLowerCase();
+  
+  // OpenAI models
+  if (modelLower.includes('gpt') || modelLower.includes('davinci') || modelLower.includes('curie') || 
+      modelLower.includes('babbage') || modelLower.includes('ada') || modelLower.startsWith('org-') || 
+      modelLower.startsWith('openai/')) {
+    return 'openai';
+  }
+  
+  // Anthropic models
+  if (modelLower.includes('claude') || modelLower.startsWith('anthropic/')) {
+    return 'anthropic';
+  }
+  
+  // Gemini models
+  if (modelLower.includes('gemini') || modelLower.includes('bard') || modelLower.startsWith('google/')) {
+    return 'gemini';
+  }
+  
+  // Default to OpenAI if no clear match
+  return 'openai';
+}
+
 export interface Config {
   openaiApiKey?: string;
   openaiApiBaseUrl?: string; // Custom OpenAI-compatible endpoint
@@ -33,7 +57,6 @@ export interface Config {
   cacheSystemPrompts?: boolean;
   cacheToolDefinitions?: boolean;
   cacheConversationHistory?: boolean;
-  cacheTTL?: '5m' | '1h';
 }
 
 export { LogLevel }; // Re-export LogLevel
@@ -55,7 +78,6 @@ export class ConfigManager {
     const defaultConfig: Config = {
       maxTokens: 8000,
       model: 'gpt-4o-2024-11-20',
-      provider: 'openai',
       verbose: false,
       logToolUsage: true,
       streaming: false,
@@ -72,7 +94,6 @@ export class ConfigManager {
       cacheSystemPrompts: true,
       cacheToolDefinitions: true,
       cacheConversationHistory: true,
-      cacheTTL: '5m',
     };
 
     let fileConfig: Partial<Config> = {};
@@ -180,6 +201,11 @@ export class ConfigManager {
    * Save configuration to file
    */
   async saveConfig(newConfig: Partial<Config>): Promise<void> {
+    // If a model is provided but no provider, detect the provider
+    if (newConfig.model && !newConfig.provider) {
+      newConfig.provider = detectProviderFromModel(newConfig.model);
+    }
+    
     this.config = { ...this.config, ...newConfig };
 
     // Ensure config directory exists
@@ -199,7 +225,28 @@ export class ConfigManager {
    * Get current configuration
    */
   getConfig(): Config {
-    return { ...this.config };
+    // Clone the current config and dynamically determine provider if not set
+    const config = { ...this.config };
+    
+    // If provider is not explicitly set, detect it from the model
+    if (!config.provider && config.model) {
+      config.provider = detectProviderFromModel(config.model);
+    }
+    
+    return config;
+  }
+  
+  /**
+   * Get the current provider, detecting it from the model if necessary
+   */
+  getCurrentProvider(): 'openai' | 'anthropic' | 'gemini' {
+    // If provider is explicitly set, use it
+    if (this.config.provider) {
+      return this.config.provider;
+    }
+    
+    // If not set, detect from the model
+    return detectProviderFromModel(this.config.model || 'gpt-4o-2024-11-20');
   }
 
   /**
@@ -344,7 +391,8 @@ export class ConfigManager {
    */
   validate(): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
-    const provider = this.config.provider || 'openai';
+    // Dynamically detect provider based on model if not explicitly set
+    const provider = this.getCurrentProvider();
 
     if (!this.hasValidProviderKey()) {
       if (provider === 'openai') {

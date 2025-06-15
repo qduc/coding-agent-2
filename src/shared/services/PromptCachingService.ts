@@ -5,7 +5,6 @@ import { Logger } from '../utils/logger';
 export interface CacheBreakpoint {
   position: number;
   type: 'tools' | 'system' | 'conversation' | 'custom';
-  ttl?: '5m' | '1h';
 }
 
 export interface CachingStrategy {
@@ -46,25 +45,40 @@ export class PromptCachingService {
     let systemMessages: Array<{ type: 'text'; text: string; cache_control?: any }> | undefined;
 
     // Handle system message caching
-    if (systemMessage && this.config.cacheSystemPrompts) {
+    if (systemMessage && this.config.cacheSystemPrompts && this.meetsMinimumTokens(systemMessage)) {
       systemMessages = [
         {
           type: 'text',
           text: systemMessage,
-          cache_control: { type: 'ephemeral', ttl: this.config.cacheTTL }
+          cache_control: { type: 'ephemeral' }
         }
       ];
-      breakpoints.push({ position: 0, type: 'system', ttl: this.config.cacheTTL });
+      breakpoints.push({ position: 0, type: 'system' });
+    } else if (systemMessage) {
+      // Include system message without caching if it doesn't meet requirements
+      systemMessages = [
+        {
+          type: 'text',
+          text: systemMessage
+        }
+      ];
     }
 
     // Handle tool definition caching
     if (processedTools && this.config.cacheToolDefinitions && processedTools.length > 0) {
-      const lastToolIndex = processedTools.length - 1;
-      processedTools[lastToolIndex] = {
-        ...processedTools[lastToolIndex],
-        cache_control: { type: 'ephemeral', ttl: this.config.cacheTTL }
-      };
-      breakpoints.push({ position: 1, type: 'tools', ttl: this.config.cacheTTL });
+      // Estimate tokens for all tools combined
+      const toolsText = JSON.stringify(processedTools);
+      if (this.meetsMinimumTokens(toolsText)) {
+        const lastToolIndex = processedTools.length - 1;
+        processedTools[lastToolIndex] = {
+          ...processedTools[lastToolIndex],
+          cache_control: { type: 'ephemeral' }
+        };
+        breakpoints.push({ position: 1, type: 'tools' });
+      }
+    } else if (!this.config.cacheToolDefinitions && processedTools) {
+      // Don't modify tools if caching is disabled for them
+      processedTools = undefined;
     }
 
     // Apply caching strategy to messages
@@ -76,8 +90,7 @@ export class PromptCachingService {
         if (msg.cache_control) {
           breakpoints.push({
             position: index + 2, // After tools and system
-            type: 'conversation',
-            ttl: msg.cache_control.ttl
+            type: 'conversation'
           });
         }
       });
@@ -144,13 +157,15 @@ export class PromptCachingService {
       if (breakpoint.type === 'conversation') {
         const index = this.resolveMessageIndex(breakpoint.position, processed.length);
         if (index >= 0 && index < processed.length) {
-          processed[index] = {
-            ...processed[index],
-            cache_control: {
-              type: 'ephemeral' as const,
-              ttl: breakpoint.ttl || this.config.cacheTTL
-            }
-          };
+          const messageContent = processed[index].content || '';
+          if (typeof messageContent === 'string' && this.meetsMinimumTokens(messageContent)) {
+            processed[index] = {
+              ...processed[index],
+              cache_control: {
+                type: 'ephemeral' as const
+              }
+            };
+          }
         }
       }
     }
@@ -227,8 +242,7 @@ export class PromptCachingService {
         strategy: this.config.promptCachingStrategy,
         breakpoints: breakpoints.map(bp => ({
           position: bp.position,
-          type: bp.type,
-          ttl: bp.ttl
+          type: bp.type
         }))
       });
     }
@@ -239,6 +253,37 @@ export class PromptCachingService {
    */
   isAvailable(): boolean {
     return this.config.provider === 'anthropic' && this.config.enablePromptCaching === true;
+  }
+
+  /**
+   * Get minimum token requirement for current model
+   */
+  getMinimumTokens(): number {
+    if (!this.config.model) return 1024;
+    
+    // Haiku models require 2048 tokens minimum
+    if (this.config.model.includes('haiku')) {
+      return 2048;
+    }
+    
+    // All other Claude models require 1024 tokens minimum
+    return 1024;
+  }
+
+  /**
+   * Estimate token count for text (rough approximation: 1 token ≈ 4 characters)
+   */
+  private estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Check if content meets minimum token requirements for caching
+   */
+  private meetsMinimumTokens(content: string): boolean {
+    const estimatedTokens = this.estimateTokens(content);
+    const minimumTokens = this.getMinimumTokens();
+    return estimatedTokens >= minimumTokens;
   }
 
   /**
