@@ -435,7 +435,16 @@ export class WriteTool extends BaseTool {
         diff.includes('\n@@\n') || diff.includes('\n@@\r\n') || diff.startsWith('@@') || diff.endsWith('@@')) {
       return this.applySegmentedDiff(currentContent, diff);
     } else {
-      return this.applySimpleDiff(currentContent, diff);
+      // Try simple diff first, but if it fails due to context issues, try auto-segmentation
+      try {
+        return this.applySimpleDiff(currentContent, diff);
+      } catch (error) {
+        if (error instanceof ToolError && error.message.includes('No matching context found')) {
+          // Attempt auto-segmentation for multi-section diffs
+          return this.applyAutoSegmentedDiff(currentContent, diff);
+        }
+        throw error;
+      }
     }
   }
 
@@ -769,6 +778,209 @@ export class WriteTool extends BaseTool {
       linesChanged: totalLinesChanged
     };
   }
+
+  /**
+   * Auto-segment a diff that appears to contain multiple disconnected sections
+   * 
+   * This method uses a simpler approach: it identifies insertion points where
+   * new content should be added based on context anchors.
+   */
+  private applyAutoSegmentedDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
+    const originalLines = currentContent.split('\n');
+    const diffLines = diff.split('\n')
+      .filter(line => line.trim() !== '')
+      .filter(line => {
+        // Filter out traditional diff headers and hunk headers
+        return !line.startsWith('--- ') && 
+               !line.startsWith('+++ ') && 
+               !line.startsWith('diff ') &&
+               !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
+      });
+
+    if (diffLines.length === 0) {
+      throw new ToolError(
+        'No valid diff lines found',
+        'VALIDATION_ERROR',
+        ['Diff must contain at least one line']
+      );
+    }
+
+    // Use a different approach: find insertion points
+    const insertions = this.findInsertionPoints(diffLines, originalLines);
+    
+    // Debug logging (will be removed in production)
+    if (process.env.NODE_ENV === 'test') {
+      console.log('Auto-segmentation found', insertions.length, 'insertion points');
+      insertions.forEach((ins, i) => {
+        console.log(`Insertion ${i}:`, ins.additionLines.slice(0, 2), '... after line', ins.insertAfterLine);
+      });
+    }
+    
+    if (insertions.length === 0) {
+      // If we can't find insertion points, fall back to the original error
+      throw new ToolError(
+        'No matching context found in file',
+        'VALIDATION_ERROR',
+        [
+          'The context lines in the diff do not match any location in the file',
+          'Use the read tool to get current file content',
+          'Ensure context lines match exactly (ignoring whitespace differences)',
+          'For multi-section changes, consider using segmented diff format with ... separators'
+        ]
+      );
+    }
+
+    // Apply insertions in reverse order to maintain line numbers
+    let workingContent = originalLines.slice();
+    let totalLinesChanged = 0;
+
+    for (let i = insertions.length - 1; i >= 0; i--) {
+      const insertion = insertions[i];
+      
+      // Insert the new lines after the specified line
+      workingContent.splice(insertion.insertAfterLine + 1, 0, ...insertion.additionLines);
+      totalLinesChanged += insertion.additionLines.length;
+    }
+
+    const finalContent = workingContent.join('\n');
+
+    return {
+      content: finalContent,
+      linesChanged: totalLinesChanged
+    };
+  }
+
+  /**
+   * Find insertion points in a diff - locations where new content should be added
+   * 
+   * This analyzes the diff to find anchor points (context lines) and groups 
+   * of additions that should be inserted after those anchors.
+   */
+  private findInsertionPoints(diffLines: string[], originalLines: string[]): Array<{
+    insertAfterLine: number;
+    additionLines: string[];
+  }> {
+    const insertions: Array<{
+      insertAfterLine: number;
+      additionLines: string[];
+    }> = [];
+
+    // Strategy: Look for blocks of context followed by additions
+    // Build context sequences that help us find unique insertion points
+    
+    let i = 0;
+    while (i < diffLines.length) {
+      const line = diffLines[i];
+      
+      // Look for context lines followed by additions
+      if (!line.startsWith('+') && !line.startsWith('-')) {
+        // Collect context leading up to this point
+        let contextStart = i;
+        while (contextStart > 0 && 
+               !diffLines[contextStart - 1].startsWith('+') && 
+               !diffLines[contextStart - 1].startsWith('-')) {
+          contextStart--;
+        }
+        
+        // Look ahead for additions after this context line
+        let j = i + 1;
+        const additionLines = [];
+        while (j < diffLines.length && diffLines[j].startsWith('+')) {
+          additionLines.push(diffLines[j].substring(1)); // Remove the + prefix
+          j++;
+        }
+        
+        // If we found additions, find the insertion point
+        if (additionLines.length > 0) {
+          // Build a context sequence for better matching
+          const contextSequence = [];
+          for (let k = contextStart; k <= i; k++) {
+            const contextLine = diffLines[k];
+            if (!contextLine.startsWith('+') && !contextLine.startsWith('-')) {
+              const cleanLine = contextLine.startsWith(' ') ? contextLine.substring(1) : contextLine;
+              contextSequence.push(cleanLine);
+            }
+          }
+          
+          if (contextSequence.length > 0) {
+            // Find where this context sequence appears in the original file
+            const insertionPoint = this.findSequenceInOriginal(contextSequence, originalLines);
+            
+            if (insertionPoint >= 0) {
+              // Insert after the last line of the matched sequence
+              const insertAfterLine = insertionPoint + contextSequence.length - 1;
+              insertions.push({
+                insertAfterLine,
+                additionLines: additionLines
+              });
+            }
+          }
+        }
+        
+        // Move past the additions we just processed
+        i = j;
+      } else {
+        i++;
+      }
+    }
+
+    // Sort insertions by line number (reverse order for processing)
+    insertions.sort((a, b) => b.insertAfterLine - a.insertAfterLine);
+    
+    return insertions;
+  }
+
+  /**
+   * Find a sequence of context lines in the original file
+   */
+  private findSequenceInOriginal(contextSequence: string[], originalLines: string[]): number {
+    if (contextSequence.length === 0) return -1;
+    
+    // Look for the sequence in the original file
+    for (let i = 0; i <= originalLines.length - contextSequence.length; i++) {
+      let allMatch = true;
+      
+      for (let j = 0; j < contextSequence.length; j++) {
+        if (!this.contextMatches(contextSequence[j], originalLines[i + j])) {
+          allMatch = false;
+          break;
+        }
+      }
+      
+      if (allMatch) {
+        return i; // Return the starting position of the match
+      }
+    }
+    
+    // If exact sequence not found, try to match just the last line with additional context
+    const lastLine = contextSequence[contextSequence.length - 1];
+    const matchingLines = [];
+    
+    for (let i = 0; i < originalLines.length; i++) {
+      if (this.contextMatches(lastLine, originalLines[i])) {
+        matchingLines.push(i);
+      }
+    }
+    
+    if (matchingLines.length === 1) {
+      return matchingLines[0] - contextSequence.length + 1;
+    }
+    
+    // Use additional context to disambiguate if possible
+    if (matchingLines.length > 1 && contextSequence.length > 1) {
+      const prevContextLine = contextSequence[contextSequence.length - 2];
+      
+      for (const lineIndex of matchingLines) {
+        if (lineIndex > 0 && this.contextMatches(prevContextLine, originalLines[lineIndex - 1])) {
+          return lineIndex - contextSequence.length + 1;
+        }
+      }
+    }
+    
+    return -1; // No unique match found
+  }
+
+
 
   /**
    * Improved context matching with multiple normalization strategies

@@ -47,7 +47,7 @@ describe('WriteTool', () => {
       maxFileSize: 10 * 1024 * 1024, // 10MB
       timeout: 30000,
       allowHidden: false,
-      allowedExtensions: ['.txt', '.js', '.ts', '.json', '.md'],
+      allowedExtensions: ['.txt', '.js', '.ts', '.json', '.md', '.css'],
       blockedPaths: ['node_modules', '.git', '.env']
     };
 
@@ -853,6 +853,159 @@ describe('WriteTool', () => {
       expect(await fs.pathExists(filePath)).toBe(true);
       const finalContent = await fs.readFile(filePath, 'utf8');
       expect(finalContent).toBe('Content from write 2');
+    });
+  });
+
+  describe('CSS Multi-Section Diff Test', () => {
+    it('should handle CSS diff with interspersed additions across multiple sections', async () => {
+      // Create initial CSS file content - realistic CSS structure
+      const initialCssContent = `body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #1a1a1a;
+    color: #eee;
+    font-family: monospace;
+}
+
+h1 {
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+}
+
+.game-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.game-area {
+    background-color: #222;
+    background-image:
+        repeating-linear-gradient(#333 0 1px, transparent 1px 20px),
+        repeating-linear-gradient(90deg, #333 0 1px, transparent 1px 20px);
+}
+
+canvas {
+    border: 2px solid #666;
+    background-color: #000;
+}
+
+.next-piece-box,
+.score-box {
+    background-color: #333;
+    border: 1px solid #666;
+}
+
+#nextPieceCanvas {
+    background-color: #000;
+    border: 1px solid #666;
+}`;
+
+      const cssFile = await createTestFile('styles.css', initialCssContent);
+
+      // Apply the CSS diff with interspersed additions - matching the exact user's diff format
+      const cssDiff = `body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #1a1a1a;
+    color: #eee;
+    font-family: monospace;
+}
+
++body.light-mode {
++    background-color: #f0f0f0;
++    color: #333;
++}
++
++body.light-mode .game-area {
++    background-color: #ddd;
++    background-image:
++        repeating-linear-gradient(#ccc 0 1px, transparent 1px 20px),
++        repeating-linear-gradient(90deg, #ccc 0 1px, transparent 1px 20px);
++}
++
++body.light-mode canvas {
++    border: 2px solid #333;
++    background-color: #fff;
++}
++
++body.light-mode .next-piece-box,
++body.light-mode .score-box {
++    background-color: #e0e0e0;
++    border: 1px solid #999;
++}
++
++body.light-mode #nextPieceCanvas {
++    background-color: #fff;
++    border: 1px solid #999;
++}
+
+h1 {
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+}
+
++body.light-mode h1 {
++    text-shadow: 2px 2px 4px rgba(255,255,255,0.7);
++}
+
+.game-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}`;
+
+      const result = await writeTool.execute({ path: cssFile, diff: cssDiff });
+      
+      // Verify the diff was applied successfully
+      expect(result.success).toBe(true);
+      expect(result.error).toBeUndefined();
+
+      const updatedContent = await fs.readFile(cssFile, 'utf8');
+      
+      // Verify all light-mode styles were added successfully
+      expect(updatedContent).toContain('body.light-mode {');
+      expect(updatedContent).toContain('background-color: #f0f0f0;');
+      expect(updatedContent).toContain('color: #333;');
+      expect(updatedContent).toContain('body.light-mode .game-area {');
+      expect(updatedContent).toContain('body.light-mode canvas {');
+      expect(updatedContent).toContain('body.light-mode .next-piece-box,');
+      expect(updatedContent).toContain('body.light-mode .score-box {');
+      expect(updatedContent).toContain('body.light-mode #nextPieceCanvas {');
+      expect(updatedContent).toContain('body.light-mode h1 {');
+      expect(updatedContent).toContain('text-shadow: 2px 2px 4px rgba(255,255,255,0.7);');
+      
+      // Verify original content is preserved
+      expect(updatedContent).toContain('font-family: monospace;');
+      expect(updatedContent).toContain('margin-bottom: 20px;');
+      expect(updatedContent).toContain('position: relative;');
+      
+      // Verify that the core structure is maintained (body before h1 before game-container)
+      const bodyIndex = updatedContent.indexOf('body {');
+      const h1Index = updatedContent.indexOf('h1 {');
+      const gameContainerIndex = updatedContent.indexOf('.game-container {');
+      
+      expect(bodyIndex).toBeLessThan(h1Index);
+      expect(h1Index).toBeLessThan(gameContainerIndex);
+      
+      // Verify all light-mode styles are present (order may vary due to auto-segmentation)
+      expect(updatedContent).toContain('body.light-mode {');
+      expect(updatedContent).toContain('body.light-mode h1 {');
+      
+      // Additional verification: check line count changes
+      const outputResult = result.output as WriteResult;
+      expect(outputResult.linesChanged).toBeGreaterThan(20); // Many lines were added
+      expect(outputResult.mode).toBe('patch');
     });
   });
 });
