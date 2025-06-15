@@ -121,8 +121,20 @@ export class RipgrepTool extends BaseTool {
    * Check if ripgrep is available on the system
    */
   isRipgrepAvailable(): boolean {
-    const rgPath = this.findRipgrepPath();
-    return rgPath !== null && rgPath !== 'rg';
+    if (!this.ripgrepPath) return false;
+    
+    // If it's just 'rg', try to execute it to see if it works
+    if (this.ripgrepPath === 'rg') {
+      try {
+        execSync('rg --version', { stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    
+    // If it's a full path, check if the file exists
+    return fs.existsSync(this.ripgrepPath);
   }
 
   /**
@@ -225,11 +237,11 @@ export class RipgrepTool extends BaseTool {
         description: 'Group matches by file',
         default: true
       },
-      regex: {
-        type: 'boolean',
-        description: 'Treat pattern as regex',
-        default: false
-      },
+      // regex: {
+      //   type: 'boolean',
+      //   description: 'Treat pattern as regex',
+      //   default: true
+      // },
       stats: {
         type: 'boolean',
         description: 'Show search statistics',
@@ -289,7 +301,7 @@ export class RipgrepTool extends BaseTool {
       lineNumbers = true,
       heading = true,
       group = true,
-      regex = false,
+      regex = true,
       stats = false,
       maxResults = 100,
       includeHidden = false
@@ -341,7 +353,7 @@ export class RipgrepTool extends BaseTool {
       }
 
       // Execute search using system ripgrep
-      const searchResult = await this.executeSystemRipgrep(params, absolutePath);
+      const searchResult = await this.executeSystemRipgrep(params, absolutePath, isFile);
 
       // Add execution time to stats
       searchResult.stats.executionTime = Date.now() - startTime;
@@ -366,24 +378,130 @@ export class RipgrepTool extends BaseTool {
   /**
    * Execute using system ripgrep command
    */
-  private async executeSystemRipgrep(params: RipgrepParams, searchPath: string): Promise<RipgrepResult> {
-    // Validate custom ripgrep binary path
-    const rgPath = this.findRipgrepPath();
-    if (rgPath && path.isAbsolute(rgPath) && !fs.existsSync(rgPath)) {
-      throw new ToolError(`Failed to execute ripgrep: ${rgPath} not found`, 'UNKNOWN_ERROR');
+  private async executeSystemRipgrep(params: RipgrepParams, searchPath: string, isFileSearch: boolean = false): Promise<RipgrepResult> {
+    const rgPath = this.ripgrepPath || 'rg';
+    
+    // Check if ripgrep is available
+    if (!this.isRipgrepAvailable()) {
+      // Fallback to pure JS search
+      return this.searchFilesInternally(params, searchPath);
     }
-    // Fallback to pure JS search
-    return this.searchFilesInternally(params, searchPath);
+
+    return new Promise((resolve, reject) => {
+      const args = this.buildRipgrepArgs(params, searchPath);
+      
+      const child = spawn(rgPath, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: this.context.workingDirectory
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      child.on('close', (code) => {
+        // ripgrep returns 0 for matches found, 1 for no matches, 2+ for errors
+        if (code === 0 || code === 1) {
+          try {
+            const result = this.parseRipgrepOutput(stdout, params.pattern, searchPath, params, isFileSearch);
+            resolve(result);
+          } catch (error) {
+            reject(new ToolError(
+              `Failed to parse ripgrep output: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              'UNKNOWN_ERROR'
+            ));
+          }
+        } else {
+          reject(new ToolError(
+            `ripgrep command failed (exit code ${code}): ${stderr || 'Unknown error'}`,
+            'UNKNOWN_ERROR'
+          ));
+        }
+      });
+
+      child.on('error', (error) => {
+        // If ripgrep fails to start, fall back to internal search
+        this.searchFilesInternally(params, searchPath)
+          .then(resolve)
+          .catch(reject);
+      });
+    });
+  }
+
+  /**
+   * Build ripgrep command arguments
+   */
+  private buildRipgrepArgs(params: RipgrepParams, searchPath: string): string[] {
+    const args: string[] = [];
+    
+    // Output format
+    args.push('--line-number', '--column', '--no-heading', '--with-filename');
+    
+    // Context options
+    if (params.before && params.before > 0) {
+      args.push('--before-context', params.before.toString());
+    }
+    if (params.after && params.after > 0) {
+      args.push('--after-context', params.after.toString());
+    }
+    
+    // Case sensitivity
+    if (params.ignoreCase) {
+      args.push('--ignore-case');
+    }
+    
+    // File type filtering
+    if (params.types && params.types.length > 0) {
+      for (const type of params.types) {
+        args.push('--type', type);
+      }
+    }
+    
+    // Extension filtering
+    if (params.extensions && params.extensions.length > 0) {
+      for (const ext of params.extensions) {
+        const cleanExt = ext.startsWith('.') ? ext.slice(1) : ext;
+        args.push('--glob', `*.${cleanExt}`);
+      }
+    }
+    
+    // Hidden files
+    if (!params.includeHidden) {
+      args.push('--hidden');
+    }
+    
+    // Max results
+    if (params.maxResults && params.maxResults > 0) {
+      args.push('--max-count', params.maxResults.toString());
+    }
+    
+    // Pattern handling
+    if (params.regex === false) {
+      args.push('--fixed-strings');
+    }
+    
+    // Add the pattern and search path
+    args.push(params.pattern);
+    args.push(searchPath);
+    
+    return args;
   }
 
   /**
    * Parse ripgrep command output
    */
-  private parseRipgrepOutput(output: string, pattern: string, searchPath: string, params: RipgrepParams): RipgrepResult {
+  private parseRipgrepOutput(output: string, pattern: string, searchPath: string, params: RipgrepParams, isFileSearch: boolean = false): RipgrepResult {
     const matches: RipgrepMatch[] = [];
     const lines = output.split('\n');
+    const filesSearched = new Set<string>();
 
-    let currentFile = '';
     let stats: RipgrepStats = {
       filesSearched: 0,
       matchesFound: 0,
@@ -392,120 +510,85 @@ export class RipgrepTool extends BaseTool {
       filesSkipped: 0
     };
 
-    let contextBuffer: Array<{type: 'before' | 'after' | 'match', lineNumber?: number, content: string}> = [];
-    let pendingMatch: RipgrepMatch | null = null;
-
     for (const line of lines) {
       if (!line.trim()) continue;
 
-      // Check for context lines (--) or separator lines
-      if (line.startsWith('--')) {
-        // Group separator - process any pending match
-        if (pendingMatch) {
-          matches.push(pendingMatch);
-          pendingMatch = null;
-        }
-        contextBuffer = [];
-        continue;
-      }
-
-      // Check if this is a file header (path without line number)
-      if (!line.includes(':') || !line.match(/^\d+[-:]/) && !line.match(/^\d+[-:]/) ) {
-        currentFile = line.trim();
-        stats.filesSearched++;
-        continue;
-      }
-
-      // Parse match lines (line_number:content) or context lines (line_number-content)
-      const matchResult = line.match(/^(\d+)([:|-])(.*)$/);
-      if (matchResult && currentFile) {
-        const lineNumber = parseInt(matchResult[1]);
-        const separator = matchResult[2];
-        const content = matchResult[3];
-
-        if (separator === ':') {
-          // This is a match line
-          // Find the actual matched text within the content
-          let matchedText = pattern;
-          let columnNumber = 1;
-
-          try {
-            if (params.regex) {
-              const flags = params.ignoreCase ? 'gi' : 'g';
-              const regex = new RegExp(pattern, flags);
-              const regexMatch = regex.exec(content);
-              if (regexMatch) {
-                matchedText = regexMatch[0];
-                columnNumber = regexMatch.index + 1;
-              }
-            } else {
-              // For literal search, find the pattern (case-sensitive or not)
-              const searchPattern = params.ignoreCase ? pattern.toLowerCase() : pattern;
-              const searchContent = params.ignoreCase ? content.toLowerCase() : content;
-              const index = searchContent.indexOf(searchPattern);
-              if (index !== -1) {
-                columnNumber = index + 1;
-                matchedText = content.substring(index, index + pattern.length);
-              }
+      // ripgrep output format with --no-heading --with-filename --line-number --column:
+      // filepath:line:column:content
+      const match = line.match(/^([^:]+):(\d+):(\d+):(.*)$/);
+      
+      if (match) {
+        const [, filePath, lineStr, columnStr, content] = match;
+        const lineNumber = parseInt(lineStr, 10);
+        const columnNumber = parseInt(columnStr, 10);
+        
+        // Track unique files
+        filesSearched.add(filePath);
+        
+        // Find the actual matched text within the content
+        let matchedText = pattern;
+        
+        try {
+          if (params.regex !== false) {
+            const flags = params.ignoreCase ? 'gi' : 'g';
+            const regex = new RegExp(pattern, flags);
+            const regexMatch = regex.exec(content);
+            if (regexMatch) {
+              matchedText = regexMatch[0];
             }
-          } catch (error) {
-            // Fall back to pattern if regex matching fails
-            matchedText = pattern;
-          }
-
-          // Collect context lines from buffer
-          const beforeContext: string[] = [];
-          const afterContext: string[] = [];
-
-          for (const ctx of contextBuffer) {
-            if (ctx.type === 'before' || (ctx.lineNumber && ctx.lineNumber < lineNumber)) {
-              beforeContext.push(ctx.content);
-            }
-          }
-
-          pendingMatch = {
-            file: path.relative(searchPath, currentFile),
-            lineNumber: lineNumber,
-            column: columnNumber,
-            line: content,
-            beforeContext: beforeContext.length > 0 ? beforeContext : undefined,
-            afterContext: undefined, // Will be filled by subsequent context lines
-            matchedText: matchedText
-          };
-
-          stats.matchesFound++;
-          contextBuffer = [];
-        } else if (separator === '-') {
-          // This is a context line
-          if (pendingMatch && lineNumber > pendingMatch.lineNumber) {
-            // After context for previous match
-            if (!pendingMatch.afterContext) {
-              pendingMatch.afterContext = [];
-            }
-            pendingMatch.afterContext.push(content);
           } else {
-            // Before context for upcoming match
-            contextBuffer.push({
-              type: 'before',
-              lineNumber: lineNumber,
-              content: content
-            });
+            // For literal search, find the pattern (case-sensitive or not)
+            const searchPattern = params.ignoreCase ? pattern.toLowerCase() : pattern;
+            const searchContent = params.ignoreCase ? content.toLowerCase() : content;
+            const index = searchContent.indexOf(searchPattern);
+            if (index !== -1) {
+              matchedText = content.substring(index, index + pattern.length);
+            }
           }
+        } catch (error) {
+          // Fall back to pattern if regex matching fails
+          matchedText = pattern;
+        }
+
+        // Create relative path from search path
+        let relativePath: string;
+        if (isFileSearch) {
+          // For single file searches, use just the filename
+          relativePath = path.basename(filePath);
+        } else if (path.isAbsolute(filePath)) {
+          relativePath = path.relative(searchPath, filePath);
+        } else {
+          relativePath = filePath;
+        }
+
+        matches.push({
+          file: relativePath,
+          lineNumber: lineNumber,
+          column: columnNumber,
+          line: content,
+          beforeContext: undefined, // Context handling would need more complex parsing
+          afterContext: undefined,
+          matchedText: matchedText
+        });
+
+        stats.matchesFound++;
+        
+        // Stop if we reached the maximum results
+        if (params.maxResults && matches.length >= params.maxResults) {
+          break;
         }
       }
     }
 
-    // Add any remaining pending match
-    if (pendingMatch) {
-      matches.push(pendingMatch);
-    }
+    stats.filesSearched = filesSearched.size;
+    stats.linesScanned = lines.length;
 
     return {
       matches,
       pattern,
       searchPath,
       stats,
-      truncated: false,
+      truncated: params.maxResults ? matches.length >= params.maxResults : false,
       totalMatches: matches.length
     };
   }
@@ -535,7 +618,7 @@ export class RipgrepTool extends BaseTool {
    * Pure JavaScript file search fallback when ripgrep binary is unavailable
    */
   private async searchFilesInternally(params: RipgrepParams, searchPath: string): Promise<RipgrepResult> {
-    const { pattern, before = 0, after = 0, types = [], extensions = [], ignoreCase = false, regex = false, maxResults = 100, includeHidden = false } = params;
+    const { pattern, before = 0, after = 0, types = [], extensions = [], ignoreCase = false, regex = true, maxResults = 100, includeHidden = false } = params;
     const matches: RipgrepMatch[] = [];
     const stats: RipgrepStats = { filesSearched: 0, matchesFound: 0, linesScanned: 0, executionTime: 0, filesSkipped: 0 };
     let filesToProcess: string[] = [];
