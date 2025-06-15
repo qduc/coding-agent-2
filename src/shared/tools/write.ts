@@ -38,7 +38,7 @@ export class WriteTool extends BaseTool {
     properties: {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
-      diff: { type: 'string', description: 'Diff to apply to an existing file. Supports multiple formats:\n\n1. Simple diff format:\n  line of context before\n-line to remove\n+line to replace it with\n+another line to add\n  line of context after\n\n2. Segmented diff format (for distant changes):\n  first context line\n-old line 1\n+new line 1\n...\n  second context line\n-old line 2\n+new line 2\n\nContext lines (starting with space) help locate where changes should be applied. Lines to remove start with - and lines to add start with +. The context must be unique in the file - if multiple matches are found, an error is returned.\n\nSegmented diff format:\n- Use "..." on its own line to separate distant sections\n- Each segment must have unique context within the file\n- Segments must appear in the same order as they appear in the file\n- Segments cannot overlap\n\nIMPORTANT: If you need to change the same text in multiple locations (e.g., changing "Old Title" in both <title> and <h1> tags), you can:\n1. Use segmented diff format with "..." separators\n2. Make separate write operations for each location\n3. Provide enough unique surrounding context to distinguish each location\n4. Use full content replacement instead of diff mode' },
+      diff: { type: 'string', description: 'Diff to apply to an existing file. REQUIRES at least one addition (+) or deletion (-) line. Supports multiple formats:\n\n1. Simple diff format:\n  line of context before\n-line to remove\n+line to replace it with\n+another line to add\n  line of context after\n\n2. Segmented diff format (for distant changes):\n  first context line\n-old line 1\n+new line 1\n...\n  second context line\n-old line 2\n+new line 2\n\nREQUIRED: At least one line must start with + (addition) or - (deletion).\nContext lines (starting with space or no prefix) help locate where changes should be applied.\nThe context must be unique in the file - if multiple matches are found, an error is returned.\n\nSegmented diff format:\n- Use "..." on its own line to separate distant sections\n- Each segment must have unique context within the file\n- Segments must appear in the same order as they appear in the file\n- Segments cannot overlap\n\nIMPORTANT: If you need to change the same text in multiple locations (e.g., changing "Old Title" in both <title> and <h1> tags), you can:\n1. Use segmented diff format with "..." separators\n2. Make separate write operations for each location\n3. Provide enough unique surrounding context to distinguish each location\n4. Use full content replacement instead of diff mode' },
       encoding: {
         type: 'string',
         description: 'File encoding',
@@ -441,8 +441,9 @@ export class WriteTool extends BaseTool {
     if (hasHunkHeaders) {
       return this.applyTraditionalDiff(currentContent, diff);
     } else {
-      // Check if this is a segmented diff with ... separators
-      if (diff.includes('\n...\n') || diff.includes('\n...\r\n') || diff.startsWith('...') || diff.endsWith('...')) {
+          // Check if this is a segmented diff with ... or @@ separators
+      if (diff.includes('\n...\n') || diff.includes('\n...\r\n') || diff.startsWith('...') || diff.endsWith('...') ||
+          diff.includes('\n@@\n') || diff.includes('\n@@\r\n') || diff.startsWith('@@') || diff.endsWith('@@')) {
         return this.applySegmentedDiff(currentContent, diff);
       } else {
         return this.applySimpleDiff(currentContent, diff);
@@ -480,24 +481,9 @@ export class WriteTool extends BaseTool {
         const origStart = parseInt(hunkHeaderMatch[1], 10);
         const origCount = parseInt(hunkHeaderMatch[2] || '1', 10);
 
-        // Validate hunk header line numbers
-        if (isNaN(origStart) || origStart < 1) {
-          throw new ToolError(
-            `Invalid hunk header: ${line}`,
-            'VALIDATION_ERROR',
-            ['Hunk header must have valid line numbers']
-          );
-        }
 
         // Copy lines from current position to hunk start
-        while (currentLineIndex < origStart - 1) {
-          if (currentLineIndex >= originalLines.length) {
-            throw new ToolError(
-              `Hunk starts beyond end of file at line ${origStart}`,
-              'VALIDATION_ERROR',
-              ['The diff references a line that does not exist in the file']
-            );
-          }
+        while (currentLineIndex < origStart - 1 && currentLineIndex < originalLines.length) {
           resultLines.push(originalLines[currentLineIndex]);
           currentLineIndex++;
         }
@@ -525,57 +511,17 @@ export class WriteTool extends BaseTool {
           }
 
           if (hunkLine.startsWith(' ')) { // Context line
-            if (currentLineIndex >= originalLines.length) {
-              throw new ToolError(
-                `Context line references line ${currentLineIndex + 1} which is beyond the end of file`,
-                'VALIDATION_ERROR',
-                ['The diff references a line that does not exist in the file']
-              );
+            if (currentLineIndex < originalLines.length) {
+              const actualLine = originalLines[currentLineIndex];
+              resultLines.push(actualLine);
             }
-
-            const contextLine = hunkLine.substring(1);
-            const actualLine = originalLines[currentLineIndex];
-
-            // Improved forgiving matching - normalize whitespace completely
-            if (!this.contextMatches(contextLine, actualLine)) {
-              throw new ToolError(
-                `Context mismatch at line ${currentLineIndex + 1}. Diff is out of sync with file content.`,
-                'VALIDATION_ERROR',
-                [
-                  'Use the read tool to get current file content before creating a diff',
-                  'Verify line numbers match the current file structure'
-                ]
-              );
-            }
-
-            resultLines.push(contextLine);
             currentLineIndex++;
           } else if (hunkLine.startsWith('-')) { // Deletion
-            if (currentLineIndex >= originalLines.length) {
-              throw new ToolError(
-                `Cannot delete line ${currentLineIndex + 1} - beyond end of file`,
-                'VALIDATION_ERROR',
-                ['The diff attempts to delete a line that does not exist']
-              );
+            // Skip deletion if beyond end of file, otherwise just advance index
+            if (currentLineIndex < originalLines.length) {
+              currentLineIndex++;
+              linesRemoved++;
             }
-
-            const deletionLine = hunkLine.substring(1);
-            const actualLine = originalLines[currentLineIndex];
-
-            // Use same matching logic as context lines for consistency
-            if (!this.contextMatches(deletionLine, actualLine)) {
-              throw new ToolError(
-                `Deletion mismatch at line ${currentLineIndex + 1}. Diff is out of sync with file content.`,
-                'VALIDATION_ERROR',
-                [
-                  'Use the read tool to get current file content before creating a diff',
-                  'Verify line numbers match the current file structure'
-                ]
-              );
-            }
-
-            currentLineIndex++;
-            linesRemoved++;
           } else if (hunkLine.startsWith('+')) { // Addition
             resultLines.push(hunkLine.substring(1));
             linesAdded++;
@@ -757,13 +703,22 @@ export class WriteTool extends BaseTool {
   }
 
   /**
-   * Apply segmented diff format with ... separators between distant sections
+   * Apply segmented diff format with ... or @@ separators between distant sections
    */
   private applySegmentedDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     const originalLines = currentContent.split('\n');
+
+    // Split diff into segments by ... or @@ separator
+    // Handle cases where separators appear at the beginning/end of diff
+    let cleanedDiff = diff;
     
-    // Split diff into segments by ... separator
-    const segments = diff.split(/\n\.\.\.\n|\n\.\.\.\r\n/).map(segment => segment.trim()).filter(segment => segment.length > 0);
+    // Remove leading separators (@@, ...) that might cause empty first segments
+    cleanedDiff = cleanedDiff.replace(/^(@@|\.\.\.)\s*\n/, '');
+    
+    const segments = cleanedDiff
+      .split(/\n\.\.\.\n|\n\.\.\.\r\n|\n@@\n|\n@@\r\n/)
+      .map(segment => segment.trim())
+      .filter(segment => segment.length > 0 && segment !== '@@' && segment !== '...');
     
     if (segments.length === 0) {
       throw new ToolError(
@@ -828,7 +783,8 @@ export class WriteTool extends BaseTool {
           'VALIDATION_ERROR',
           [
             `Add more specific context to segment ${i + 1} to uniquely identify its location`,
-            'Each segment must have unique context within the file'
+            'Each segment must have unique context within the file',
+            'Use "..." or "@@" on its own line to separate different segments of changes'
           ]
         );
       }
@@ -920,36 +876,6 @@ export class WriteTool extends BaseTool {
   private isKnownMetadata(line: string): boolean {
     return !!line.match(/^(index |diff |new |deleted |old mode |new mode |similarity index |rename |copy |Binary files |---|\\ No newline)/);
   }
-
-  /**
-   * Get comprehensive diff format examples for error messages
-   */
-  private getDiffExamples(): string[] {
-    return [
-      'Unified diff format examples:',
-      '',
-      'Simple replacement:',
-      '@@ -1,1 +1,1 @@',
-      '-old line',
-      '+new line',
-      '',
-      'Multi-line change with context:',
-      '@@ -1,5 +1,5 @@',
-      ' context line 1',
-      ' context line 2',
-      '-old line to change',
-      '+new line replacement',
-      ' context line 4',
-      ' context line 5',
-      '',
-      'Key rules:',
-      '- Lines starting with " " are context (unchanged)',
-      '- Lines starting with "-" are removed',
-      '- Lines starting with "+" are added',
-      '- Hunk header format: @@ -oldStart,oldCount +newStart,newCount @@'
-    ];
-  }
-
   /**
    * Check if content appears to be binary
    */
@@ -981,6 +907,19 @@ export class WriteTool extends BaseTool {
         'Empty diff provided',
         'VALIDATION_ERROR',
         ['Please provide a valid diff with at least one change']
+      );
+    }
+
+    // Validate that the diff doesn't use @@ both as hunk header and separator
+    // This could lead to ambiguity in parsing
+    const hasHunkHeaders = /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(diff);
+    const hasAtSeparators = /^@@\s*$/m.test(diff);
+
+    if (hasHunkHeaders && hasAtSeparators) {
+      throw new ToolError(
+        'Ambiguous diff format: Cannot use @@ as both hunk headers and segment separators',
+        'VALIDATION_ERROR',
+        ['Use "..." as segment separators when using traditional unified diff format with @@ hunk headers']
       );
     }
 
