@@ -144,14 +144,14 @@ export class WriteTool extends BaseTool {
       // Validate write operation based on tool call history (skip in test environment)
       const isDiffMode = diff !== undefined;
       const isTestMode = process.env.NODE_ENV === 'test';
-      
+
       if (!isTestMode) {
         const validation = toolContextManager.validateWriteOperation(absolutePath, isDiffMode);
-        
+
         if (!validation.isValid) {
           // Create a detailed error with context from validation
           const errorMessage = validation.warnings.join('\n') + '\n\n' + validation.suggestions.join('\n');
-          
+
           return this.createErrorResult(
             errorMessage,
             'VALIDATION_ERROR',
@@ -238,15 +238,15 @@ export class WriteTool extends BaseTool {
       // We always use atomic writes, so no backup is needed
       const shouldBackup = false;
       const result = await this.performWrite(absolutePath, finalContent, encoding as BufferEncoding, mode, shouldBackup, fileExists, linesChanged);
-      
+
       // Record successful write operation
       toolContextManager.recordFileWrite(absolutePath, true);
-      
+
       return result;
     } catch (error) {
       // Record failed write operation
       toolContextManager.recordFileWrite(filePath, false);
-      
+
       if (error instanceof ToolError) throw error;
       throw new ToolError(
         `Failed to write file: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -400,13 +400,10 @@ export class WriteTool extends BaseTool {
 
   /**
    * Apply unified diff to existing content
-   */
-  /**
-   * Apply a unified diff to existing content
-   * 
-   * The diff parser supports both traditional unified diff format and a simpler format:
-   * - Traditional: Uses @@ hunk headers for precise line targeting
+   *
+   * The diff parser supports simple format and segmented format:
    * - Simple: Uses context matching to find the location automatically
+   * - Segmented: Uses "..." or "@@" separators for distant changes
    * - Validates only one matching context exists for safety
    * - Maintains all safety checks to prevent corruption
    *
@@ -435,118 +432,13 @@ export class WriteTool extends BaseTool {
     // Basic validation of diff format
     this.validateDiffFormat(diff);
 
-    // Check if this is a traditional unified diff with hunk headers
-    const hasHunkHeaders = /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(diff);
-    
-    if (hasHunkHeaders) {
-      return this.applyTraditionalDiff(currentContent, diff);
+    // Check if this is a segmented diff with ... or @@ separators
+    if (diff.includes('\n...\n') || diff.includes('\n...\r\n') || diff.startsWith('...') || diff.endsWith('...') ||
+        diff.includes('\n@@\n') || diff.includes('\n@@\r\n') || diff.startsWith('@@') || diff.endsWith('@@')) {
+      return this.applySegmentedDiff(currentContent, diff);
     } else {
-          // Check if this is a segmented diff with ... or @@ separators
-      if (diff.includes('\n...\n') || diff.includes('\n...\r\n') || diff.startsWith('...') || diff.endsWith('...') ||
-          diff.includes('\n@@\n') || diff.includes('\n@@\r\n') || diff.startsWith('@@') || diff.endsWith('@@')) {
-        return this.applySegmentedDiff(currentContent, diff);
-      } else {
-        return this.applySimpleDiff(currentContent, diff);
-      }
+      return this.applySimpleDiff(currentContent, diff);
     }
-  }
-
-  /**
-   * Apply traditional unified diff with hunk headers
-   */
-  private applyTraditionalDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
-    // Split the current content and the diff into lines
-    const originalLines = currentContent.split('\n');
-    const diffLines = diff.split('\n');
-
-    const resultLines: string[] = [];
-    let currentLineIndex = 0;  // current position in originalLines
-    let linesAdded = 0;
-    let linesRemoved = 0;
-
-    let i = 0;
-    while (i < diffLines.length) {
-      const line = diffLines[i];
-      i++;
-
-      // Skip file headers and known metadata
-      if (line.startsWith('--- ') || line.startsWith('+++ ') || 
-          this.isKnownMetadata(line)) {
-        continue;
-      }
-
-      // Check for hunk header
-      const hunkHeaderMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-      if (hunkHeaderMatch) {
-        const origStart = parseInt(hunkHeaderMatch[1], 10);
-        const origCount = parseInt(hunkHeaderMatch[2] || '1', 10);
-
-
-        // Copy lines from current position to hunk start
-        while (currentLineIndex < origStart - 1 && currentLineIndex < originalLines.length) {
-          resultLines.push(originalLines[currentLineIndex]);
-          currentLineIndex++;
-        }
-
-        // Process the hunk lines
-        // Collect all lines until next hunk header or end of diff
-        let j = i;
-        while (j < diffLines.length && !diffLines[j].startsWith('@@')) {
-          j++;
-        }
-        const hunkLines = diffLines.slice(i, j);
-        i = j;  // move outer index to next hunk
-
-        if (hunkLines.length === 0) continue; // Skip empty hunks
-
-        for (const hunkLine of hunkLines) {
-          // Skip newline markers
-          if (hunkLine === '\\ No newline at end of file') {
-            continue;
-          }
-
-          // Skip invalid lines
-          if (hunkLine.length === 0 || ![' ', '+', '-'].includes(hunkLine[0])) {
-            continue;
-          }
-
-          if (hunkLine.startsWith(' ')) { // Context line
-            if (currentLineIndex < originalLines.length) {
-              const actualLine = originalLines[currentLineIndex];
-              resultLines.push(actualLine);
-            }
-            currentLineIndex++;
-          } else if (hunkLine.startsWith('-')) { // Deletion
-            // Skip deletion if beyond end of file, otherwise just advance index
-            if (currentLineIndex < originalLines.length) {
-              currentLineIndex++;
-              linesRemoved++;
-            }
-          } else if (hunkLine.startsWith('+')) { // Addition
-            resultLines.push(hunkLine.substring(1));
-            linesAdded++;
-          }
-        }
-      } else if (line.trim() !== '') {
-        // Silently ignore unknown non-empty lines outside of hunks
-        continue;
-      }
-    }
-
-    // Copy remaining original lines
-    while (currentLineIndex < originalLines.length) {
-      resultLines.push(originalLines[currentLineIndex]);
-      currentLineIndex++;
-    }
-
-    // Create final content
-    const finalContent = resultLines.join('\n');
-
-    const linesChanged = linesAdded + linesRemoved;
-    return {
-      content: finalContent,
-      linesChanged
-    };
   }
 
   /**
@@ -627,23 +519,23 @@ export class WriteTool extends BaseTool {
    */
   private findContextMatches(originalLines: string[], contextLines: string[]): number[] {
     const matches: number[] = [];
-    
+
     // Search for context pattern in the original file
     for (let i = 0; i <= originalLines.length - contextLines.length; i++) {
       let allMatch = true;
-      
+
       for (let j = 0; j < contextLines.length; j++) {
         if (!this.contextMatches(contextLines[j], originalLines[i + j])) {
           allMatch = false;
           break;
         }
       }
-      
+
       if (allMatch) {
         matches.push(i);
       }
     }
-    
+
     return matches;
   }
 
@@ -651,8 +543,8 @@ export class WriteTool extends BaseTool {
    * Apply simple diff at a specific location
    */
   private applySimpleDiffAtLocation(
-    originalLines: string[], 
-    diffLines: string[], 
+    originalLines: string[],
+    diffLines: string[],
     startLocation: number
   ): { content: string; linesChanged: number } {
     const resultLines: string[] = [];
@@ -711,15 +603,15 @@ export class WriteTool extends BaseTool {
     // Split diff into segments by ... or @@ separator
     // Handle cases where separators appear at the beginning/end of diff
     let cleanedDiff = diff;
-    
+
     // Remove leading separators (@@, ...) that might cause empty first segments
     cleanedDiff = cleanedDiff.replace(/^(@@|\.\.\.)\s*\n/, '');
-    
+
     const segments = cleanedDiff
       .split(/\n\.\.\.\n|\n\.\.\.\r\n|\n@@\n|\n@@\r\n/)
       .map(segment => segment.trim())
       .filter(segment => segment.length > 0 && segment !== '@@' && segment !== '...');
-    
+
     if (segments.length === 0) {
       throw new ToolError(
         'No valid segments found in segmented diff',
@@ -741,7 +633,7 @@ export class WriteTool extends BaseTool {
     for (let i = 0; i < segments.length; i++) {
       const segmentDiff = segments[i];
       const segmentLines = segmentDiff.split('\n').filter(line => line.trim() !== '');
-      
+
       if (segmentLines.length === 0) {
         continue; // Skip empty segments
       }
@@ -818,17 +710,17 @@ export class WriteTool extends BaseTool {
 
     // Apply all segments in reverse order to avoid offset issues
     let workingContent = originalLines.slice(); // Copy of original
-    
+
     for (let i = parsedSegments.length - 1; i >= 0; i--) {
       const segment = parsedSegments[i];
-      
+
       // Apply this single segment to the working content
       const segmentResult = this.applySimpleDiffAtLocation(
-        workingContent, 
-        segment.diffLines, 
+        workingContent,
+        segment.diffLines,
         segment.startLocation
       );
-      
+
       workingContent = segmentResult.content.split('\n');
       totalLinesChanged += segmentResult.linesChanged;
     }
@@ -871,12 +763,6 @@ export class WriteTool extends BaseTool {
   }
 
   /**
-   * Check if a line is known git diff metadata
-   */
-  private isKnownMetadata(line: string): boolean {
-    return !!line.match(/^(index |diff |new |deleted |old mode |new mode |similarity index |rename |copy |Binary files |---|\\ No newline)/);
-  }
-  /**
    * Check if content appears to be binary
    */
   private isBinaryContent(content: string): boolean {
@@ -899,7 +785,7 @@ export class WriteTool extends BaseTool {
   }
 
   /**
-   * Validate basic diff format - supports both traditional and simple formats
+   * Validate basic diff format - supports simple and segmented formats
    */
   private validateDiffFormat(diff: string): void {
     if (diff.trim() === '') {
@@ -909,25 +795,6 @@ export class WriteTool extends BaseTool {
         ['Please provide a valid diff with at least one change']
       );
     }
-
-    // Validate that the diff doesn't use @@ both as hunk header and separator
-    // This could lead to ambiguity in parsing
-    const hasHunkHeaders = /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(diff);
-    const hasAtSeparators = /^@@\s*$/m.test(diff);
-
-    if (hasHunkHeaders && hasAtSeparators) {
-      throw new ToolError(
-        'Ambiguous diff format: Cannot use @@ as both hunk headers and segment separators',
-        'VALIDATION_ERROR',
-        ['Use "..." as segment separators when using traditional unified diff format with @@ hunk headers']
-      );
-    }
-
-    // Check if this has hunk headers (traditional format)
-    const hunkHeaderRegex = /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/g;
-    const hunkMatches = diff.match(hunkHeaderRegex);
-
-    // Traditional format is supported but not validated for multiple hunks
 
     // Check for at least one actual change (+ or - line)
     const hasChanges = /^[+-]/m.test(diff);
@@ -939,7 +806,7 @@ export class WriteTool extends BaseTool {
           'The diff must contain at least one line that starts with + or -',
           'Example format:',
           ' context line',
-          '-old line', 
+          '-old line',
           '+new line'
         ]
       );
