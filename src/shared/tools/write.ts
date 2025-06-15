@@ -32,19 +32,13 @@ export interface WriteResult {
 
 export class WriteTool extends BaseTool {
   readonly name = 'write';
-  readonly description = 'Write content to files with safety features. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a diff to selectively modify parts of an existing file with smart indentation handling that forgives minor whitespace differences';
+  readonly description = 'Write content to files. Provides two modes:\n\n1) Content mode: Provide full file content to create new files or replace existing ones\n2) Diff mode: Provide a diff to selectively modify parts of an existing file';
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
-      diff: { type: 'string', description: 'Diff to apply to an existing file. REQUIRES at least one addition (+) or deletion (-) line. Supports multiple formats:\n\n1. Simple diff format:\n  line of context before\n-line to remove\n+line to replace it with\n+another line to add\n  line of context after\n\n2. Segmented diff format (for distant changes):\n  first context line\n-old line 1\n+new line 1\n...\n  second context line\n-old line 2\n+new line 2\n\nREQUIRED: At least one line must start with + (addition) or - (deletion).\nContext lines (starting with space or no prefix) help locate where changes should be applied.\nThe context must be unique in the file - if multiple matches are found, an error is returned.\n\nSegmented diff format:\n- Use "..." on its own line to separate distant sections\n- Each segment must have unique context within the file\n- Segments must appear in the same order as they appear in the file\n- Segments cannot overlap\n\nIMPORTANT: If you need to change the same text in multiple locations (e.g., changing "Old Title" in both <title> and <h1> tags), you can:\n1. Use segmented diff format with "..." separators\n2. Make separate write operations for each location\n3. Provide enough unique surrounding context to distinguish each location\n4. Use full content replacement instead of diff mode' },
-      encoding: {
-        type: 'string',
-        description: 'File encoding',
-        enum: ['utf8', 'binary', 'base64'],
-        default: 'utf8'
-      }
+      diff: { type: 'string', description: 'Diff to apply to an existing file. REQUIRES at least one addition (+) or deletion (-) line.\n\nFormat examples:\n\nBasic format:\n```\nexisting line before\n-old line to remove\n+new line to add\nexisting line after\n```\n\nMultiple changes (separate with ... or @@):\n```\nfunction greet(name) {\n-  console.log("Hello, " + name);\n+  console.log("Hi there, " + name + "!");\n  return "greeting complete";\n...\n-  return "greeting complete";\n+  return "greeting sent successfully";\n}\n```\n\nKey requirements:\n- Include context lines (unchanged lines) to locate where changes apply\n- Context must uniquely identify the location in the file\n- Use + for additions, - for deletions\n- Context lines must match existing file content exactly' }
     },
     required: ['path'],
     additionalProperties: false
@@ -446,7 +440,15 @@ export class WriteTool extends BaseTool {
    */
   private applySimpleDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     const originalLines = currentContent.split('\n');
-    const diffLines = diff.split('\n').filter(line => line.trim() !== '');
+    const diffLines = diff.split('\n')
+      .filter(line => line.trim() !== '')
+      .filter(line => {
+        // Filter out traditional diff headers and hunk headers
+        return !line.startsWith('--- ') && 
+               !line.startsWith('+++ ') && 
+               !line.startsWith('diff ') &&
+               !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
+      });
 
     if (diffLines.length === 0) {
       throw new ToolError(
@@ -581,23 +583,15 @@ export class WriteTool extends BaseTool {
       } else if (diffLine.startsWith('+')) { // Addition
         let addedContent = diffLine.substring(1);
         
-        // Smart indentation: if the added content has indentation, preserve it
-        // but if it doesn't and we're in an indented context, apply base indentation
-        if (addedContent.trim() !== '' && !addedContent.match(/^\s/)) {
-          addedContent = baseIndentation + addedContent;
-        }
-        
+        // Smart indentation: only apply base indentation if the diff doesn't already specify indentation
+        // and if we're in a code context that requires consistent indentation
+        // For now, be conservative and use the content as-is from the diff
         resultLines.push(addedContent);
         linesAdded++;
       } else { // Context line (anything that doesn't start with + or -)
-        // For context lines, preserve the original indentation from the file
-        if (originalIndex < originalLines.length) {
-          resultLines.push(originalLines[originalIndex]);
-        } else {
-          // Fallback: use the diff content
-          const contextContent = diffLine.startsWith(' ') ? diffLine.substring(1) : diffLine;
-          resultLines.push(contextContent);
-        }
+        // For context lines, use the content from the diff (which represents the desired final state)
+        const contextContent = diffLine.startsWith(' ') ? diffLine.substring(1) : diffLine;
+        resultLines.push(contextContent);
         originalIndex++;
       }
     }
@@ -623,10 +617,18 @@ export class WriteTool extends BaseTool {
   private applySegmentedDiff(currentContent: string, diff: string): { content: string; linesChanged: number } {
     const originalLines = currentContent.split('\n');
 
+    // First, remove traditional diff headers
+    let cleanedDiff = diff.split('\n')
+      .filter(line => {
+        return !line.startsWith('--- ') && 
+               !line.startsWith('+++ ') && 
+               !line.startsWith('diff ') &&
+               !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
+      })
+      .join('\n');
+
     // Split diff into segments by ... or @@ separator
     // Handle cases where separators appear at the beginning/end of diff
-    let cleanedDiff = diff;
-
     // Remove leading separators (@@, ...) that might cause empty first segments
     cleanedDiff = cleanedDiff.replace(/^(@@|\.\.\.)\s*\n/, '');
 
@@ -655,7 +657,15 @@ export class WriteTool extends BaseTool {
 
     for (let i = 0; i < segments.length; i++) {
       const segmentDiff = segments[i];
-      const segmentLines = segmentDiff.split('\n').filter(line => line.trim() !== '');
+      const segmentLines = segmentDiff.split('\n')
+        .filter(line => line.trim() !== '')
+        .filter(line => {
+          // Filter out any remaining headers that might be in segments
+          return !line.startsWith('--- ') && 
+                 !line.startsWith('+++ ') && 
+                 !line.startsWith('diff ') &&
+                 !line.match(/^@@ -\d+,\d+ \+\d+,\d+ @@/);
+        });
 
       if (segmentLines.length === 0) {
         continue; // Skip empty segments

@@ -453,14 +453,26 @@ export class OpenAIProvider extends BaseLLMProvider {
 
   // Helper methods for OpenAI Responses API
   protected shouldUseResponsesApi(model: string): boolean {
-    // Determine if this model should use the Responses API instead of Chat Completions
-    // For now, we're considering only certain models as "reasoning models"
+    // Force using Responses API if configured, regardless of model
+    if (this.config.useResponsesApi) {
+      return true;
+    }
+
+    // Otherwise, use Responses API only for reasoning models
     return this.isReasoningModel(model);
   }
 
   protected isReasoningModel(model: string): boolean {
     // Identify models that support or benefit from the Responses API with reasoning
-    return model.includes('reasoning');
+    const modelLower = model.toLowerCase();
+
+    // Check for all known reasoning model series (o1, o3, o4)
+    if (modelLower.startsWith('codex') || modelLower.startsWith('o1') || modelLower.startsWith('o3') || modelLower.startsWith('o4')) {
+      return true;
+    }
+
+    // Legacy support for models with 'reasoning' in the name
+    return modelLower.includes('reasoning');
   }
 
   protected convertMessagesToResponsesInput(messages: Message[]): ResponsesInput[] {

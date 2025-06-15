@@ -119,25 +119,6 @@ export class BashTool extends BaseTool {
         success: result.exitCode === 0
       };
 
-      if (result.exitCode !== 0) {
-        // Track failed bash execution
-        toolContextManager.recordToolCall('bash', false);
-        
-        return {
-          success: false,
-          error: new ToolError(
-            `Command failed with exit code ${result.exitCode}`,
-            'COMMAND_FAILED',
-            ['Check the command syntax', 'Verify the command exists and is executable']
-          ),
-          output: bashResult,
-          metadata: {
-            executionTime: executionTime,
-            errorCode: 'COMMAND_FAILED'
-          }
-        };
-      }
-
       // Track successful bash execution
       toolContextManager.recordToolCall('bash', true);
 

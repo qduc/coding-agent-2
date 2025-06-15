@@ -123,7 +123,7 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
         const output = result.stdout ? `\n${result.stdout}` : '';
         return ` • ok${time}${output}`;
       } else {
-        return ` • exit ${result.exitCode}${time}\n${result.stdout}`;
+        return ` • exit ${result.exitCode}${time}\n${result.stdout}\n\n${result.stderr}`;
       }
     }
     return ` • executed`;
