@@ -11,6 +11,7 @@ import { SubAgentTool } from '../tools/subAgent';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 import { toolContextManager } from '../utils/ToolContextManager';
+import { logger } from '../utils/logger';
 
 /**
  * Core Agent - Primary interface for AI programming assistant

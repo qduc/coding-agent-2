@@ -62,37 +62,9 @@ export class ToolLogger {
           }
         }, 'TOOL');
 
-        // Output detailed failure information to console for immediate visibility
-        const config = configManager.getConfig();
-        if (config.enableToolConsoleLogging) {
-          console.error(chalk.red('\n━━━ WRITE TOOL FAILURE ━━━'));
-          console.error(chalk.red(`Tool: ${toolName}`));
-          console.error(chalk.red(`Error: ${error?.message || (typeof result === 'string' ? result : 'Unknown error')}`));
-
-          if (args) {
-            console.error(chalk.yellow('Arguments passed to tool:'));
-            const formattedArgs = formatArgsForDisplay(toolName, args);
-            console.error(chalk.gray(`  ${formattedArgs}`));
-
-            // Show specific write parameters
-            if (args.path) {
-              console.error(chalk.gray(`  Target file: ${args.path}`));
-            }
-            if (args.content !== undefined) {
-              const contentInfo = typeof args.content === 'string'
-                ? `${args.content.split('\n').length} lines, ${args.content.length} chars`
-                : 'non-string content';
-              console.error(chalk.gray(`  Content: ${contentInfo}`));
-            }
-            if (args.diff !== undefined) {
-              const diffInfo = typeof args.diff === 'string'
-                ? `${args.diff.split('\n').length} lines`
-                : 'non-string diff';
-              console.error(chalk.gray(`  Diff: ${diffInfo}`));
-            }
-          }
-          console.error(chalk.red('━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-        }
+        // For write tool failures, the error information is already logged above
+        // The UI layer (Ink) will handle displaying critical errors through events
+        // No additional console output needed here to avoid interfering with Ink
       } else {
         // Standard logging for other tool failures
         logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');

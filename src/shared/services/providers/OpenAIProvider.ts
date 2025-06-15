@@ -433,7 +433,9 @@ export class OpenAIProvider extends BaseLLMProvider {
       // For full tool execution loop, use ToolOrchestrator instead
       if (response.tool_calls && response.tool_calls.length > 0) {
         if (verbose) {
-          console.log(`🔧 OpenAI requested ${response.tool_calls.length} tool call(s) - use ToolOrchestrator for full execution`);
+          logger.debug(`🔧 OpenAI requested ${response.tool_calls.length} tool call(s) - use ToolOrchestrator for full execution`, {
+            toolCallCount: response.tool_calls.length
+          }, 'OpenAIProvider');
         }
 
         // Return indication that tool calls are needed

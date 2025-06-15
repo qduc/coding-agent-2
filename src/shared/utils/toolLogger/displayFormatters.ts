@@ -43,8 +43,7 @@ export function getMinimalContext(toolName: string, args: any): string {
     const cmd = args.command.length > 40 ? args.command.substring(0, 40) + '…' : args.command;
     return ` "${cmd}"`;
   } else if ((toolLower.includes('glob') || toolLower.includes('grep')) && args.pattern) {
-    const pattern = args.pattern.length > 30 ? args.pattern.substring(0, 30) + '…' : args.pattern;
-    return ` "${pattern}"`;
+    return ` "pattern: '${args.pattern}' regex: ${args.regex}"`;
   } else if (toolLower.includes('ls') && args.path) {
     return ` ${truncatePath(args.path)}`;
   }

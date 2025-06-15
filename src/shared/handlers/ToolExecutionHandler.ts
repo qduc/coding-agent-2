@@ -67,7 +67,10 @@ export class ToolExecutionHandler {
       }, 'TOOL_EXECUTION');
 
       if (verbose) {
-        console.error(chalk.red(`❌ ${errorMessage}`));
+        logger.debug(`❌ ${errorMessage}`, {
+          toolName: func.name,
+          availableTools: Array.from(this.tools.keys())
+        }, 'TOOL_EXECUTION');
       }
 
       return {
@@ -83,8 +86,10 @@ export class ToolExecutionHandler {
     try {
       const { logToolUsage } = configManager.getConfig();
       if (verbose) {
-        console.log(chalk.cyan(`🛠️  Executing tool: ${func.name}`));
-        console.log(chalk.gray(`   Arguments: ${func.arguments}`));
+        logger.debug(`🛠️  Executing tool: ${func.name}`, {
+          toolName: func.name,
+          arguments: func.arguments
+        }, 'TOOL_EXECUTION');
       }
 
       // Parse arguments
@@ -122,12 +127,16 @@ export class ToolExecutionHandler {
 
       if (verbose) {
         if (result.success) {
-          console.log(chalk.green(`✅ Tool executed successfully`));
-          if (result.metadata?.executionTime) {
-            console.log(chalk.gray(`   Execution time: ${result.metadata.executionTime}ms`));
-          }
+          logger.debug(`✅ Tool executed successfully`, {
+            toolName: func.name,
+            executionTime: result.metadata?.executionTime || executionTime
+          }, 'TOOL_EXECUTION');
         } else {
-          console.log(chalk.red(`❌ Tool execution failed: ${result.error}`));
+          logger.debug(`❌ Tool execution failed: ${result.error}`, {
+            toolName: func.name,
+            error: result.error,
+            executionTime
+          }, 'TOOL_EXECUTION');
         }
       }
 
@@ -159,7 +168,11 @@ export class ToolExecutionHandler {
       logger.error(`Tool execution failed: ${func.name}`, errorObj, toolErrorContext, 'TOOL_EXECUTION');
 
       if (verbose) {
-        console.error(chalk.red(`❌ ${errorMessage}`));
+        logger.debug(`❌ ${errorMessage}`, {
+          toolName: func.name,
+          error: errorObj.message,
+          executionTime
+        }, 'TOOL_EXECUTION');
       }
 
       return {
@@ -188,7 +201,10 @@ export class ToolExecutionHandler {
       };
 
       if (verbose) {
-        console.error(chalk.red(`❌ ${errorResult.error}`));
+        logger.debug(`❌ ${errorResult.error}`, {
+          toolName: func.name,
+          availableTools: Array.from(this.tools.keys())
+        }, 'TOOL_EXECUTION');
       }
 
       return errorResult;
@@ -196,8 +212,10 @@ export class ToolExecutionHandler {
 
     try {
       if (verbose) {
-        console.log(chalk.cyan(`🛠️  Executing: ${func.name}`));
-        console.log(chalk.gray(`   Arguments: ${func.arguments}`));
+        logger.debug(`🛠️  Executing: ${func.name}`, {
+          toolName: func.name,
+          arguments: func.arguments
+        }, 'TOOL_EXECUTION');
       }
 
       // Parse arguments
@@ -227,12 +245,15 @@ export class ToolExecutionHandler {
 
       if (verbose) {
         if (result.success) {
-          console.log(chalk.green(`✅ Tool executed successfully`));
-          if (result.metadata?.executionTime) {
-            console.log(chalk.gray(`   Execution time: ${result.metadata.executionTime}ms`));
-          }
+          logger.debug(`✅ Tool executed successfully`, {
+            toolName: func.name,
+            executionTime: result.metadata?.executionTime
+          }, 'TOOL_EXECUTION');
         } else {
-          console.log(chalk.red(`❌ Tool execution failed: ${result.error}`));
+          logger.debug(`❌ Tool execution failed: ${result.error}`, {
+            toolName: func.name,
+            error: result.error
+          }, 'TOOL_EXECUTION');
         }
       }
 
@@ -246,7 +267,10 @@ export class ToolExecutionHandler {
       };
 
       if (verbose) {
-        console.error(chalk.red(`❌ ${errorResult.error}`));
+        logger.debug(`❌ ${errorResult.error}`, {
+          toolName: func.name,
+          error: errorResult.error
+        }, 'TOOL_EXECUTION');
       }
 
       return errorResult;

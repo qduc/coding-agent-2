@@ -14,6 +14,7 @@ import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError, ToolContext } from './types';
 import { validatePath } from './validation';
 import { toolContextManager } from '../utils/ToolContextManager';
+import { logger } from '../utils/logger';
 
 export interface WriteParams {
   path: string;
@@ -155,8 +156,11 @@ export class WriteTool extends BaseTool {
 
         // Log warnings even if we proceed
         if (validation.warnings.length > 0) {
-          // Use ToolLogger to log warnings for visibility
-          console.warn('⚠️ Write operation warnings:', validation.warnings.join(', '));
+          // Use logger to avoid interfering with Ink rendering
+          logger.warn('⚠️ Write operation warnings', {
+            warnings: validation.warnings,
+            filePath: absolutePath
+          }, 'WRITE_TOOL');
         }
       }
 

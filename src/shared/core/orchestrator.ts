@@ -23,6 +23,7 @@ import { ConversationManager } from '../handlers/ConversationManager';
 import { ToolExecutionHandler } from '../handlers/ToolExecutionHandler';
 import { ProviderStrategyFactory, ProviderStrategy } from '../handlers/ProviderStrategyFactory';
 import { SystemPromptBuilder } from '../utils/SystemPromptBuilder';
+import { logger } from '../utils/logger';
 
 // Define interfaces locally to avoid import issues
 export interface ConversationMessage {
@@ -135,7 +136,7 @@ export class ToolOrchestrator {
     // Loop until we get a final response or detect an infinite loop
     while (true) {
       if (verbose) {
-        console.log(chalk.blue('🔄 Processing with LLM...'));
+        logger.debug('🔄 Processing with LLM...', {}, 'ORCHESTRATOR');
       }
 
       // Build messages for this request with AI-powered task-aware context
@@ -154,7 +155,9 @@ export class ToolOrchestrator {
         // Check if LLM wants to call tools
         if (response.tool_calls && response.tool_calls.length > 0) {
           if (verbose) {
-            console.log(chalk.yellow(`🔧 LLM wants to call ${response.tool_calls.length} tool(s)`));
+            logger.debug(`🔧 LLM wants to call ${response.tool_calls.length} tool(s)`, {
+              toolCount: response.tool_calls.length
+            }, 'ORCHESTRATOR');
           }
 
           // Add assistant's tool call message
@@ -164,7 +167,10 @@ export class ToolOrchestrator {
           const executionTime = Date.now() - startTime;
           if (executionTime > MAX_EXECUTION_TIME) {
             if (verbose) {
-              console.log(chalk.red(`⏱️ Time limit exceeded: ${Math.round(executionTime / 1000)} seconds (limit: ${MAX_EXECUTION_TIME / 1000} seconds)`));
+              logger.debug(`⏱️ Time limit exceeded: ${Math.round(executionTime / 1000)} seconds (limit: ${MAX_EXECUTION_TIME / 1000} seconds)`, {
+                executionTime: Math.round(executionTime / 1000),
+                limit: MAX_EXECUTION_TIME / 1000
+              }, 'ORCHESTRATOR');
             }
             throw new Error(`Maximum execution time reached (${Math.round(executionTime / 1000)} seconds)`);
           }
@@ -185,7 +191,10 @@ export class ToolOrchestrator {
           const loopDetected = this.detectRepetitivePattern(toolCallHistory);
           if (loopDetected.detected) {
             if (verbose) {
-              console.log(chalk.red(`🔄 Infinite loop detected: ${loopDetected.reason}`));
+              logger.debug(`🔄 Infinite loop detected: ${loopDetected.reason}`, {
+                reason: loopDetected.reason,
+                historyLength: toolCallHistory.length
+              }, 'ORCHESTRATOR');
             }
             throw new Error(`Detected repetitive tool call pattern: ${loopDetected.reason}`);
           }
@@ -421,7 +430,7 @@ export class ToolOrchestrator {
     verbose?: boolean
   ): Promise<string> {
     if (verbose) {
-      console.log('🚀 Using enhanced native tool calling (delegating to processMessage)');
+      logger.debug('🚀 Using enhanced native tool calling (delegating to processMessage)', {}, 'ORCHESTRATOR');
     }
     return this.processMessage(userInput, onChunk, verbose);
   }
@@ -436,7 +445,7 @@ export class ToolOrchestrator {
     verbose: boolean = false
   ): Promise<string> {
     if (verbose) {
-      console.log('🔄 Using native tool loop (delegating to processMessage)');
+      logger.debug('🔄 Using native tool loop (delegating to processMessage)', {}, 'ORCHESTRATOR');
     }
     return this.processMessage(userInput, onChunk, verbose);
   }
