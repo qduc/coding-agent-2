@@ -6,6 +6,7 @@ import { MessageUtils } from '../utils/messageUtils';
 import { ToolLoopHandler } from '../handlers/ToolLoopHandler';
 import { logger } from '../utils/logger';
 import { configManager, detectProviderFromModel } from '../core/config';
+import { matchModelName } from '../utils/modelMatcher';
 
 export class LLMService implements LLMProvider {
   private provider: LLMProvider | null = null;
@@ -20,7 +21,9 @@ export class LLMService implements LLMProvider {
       const config = configManager.getConfig();
       
       // If provider is not set, try to detect from model
-      const providerName = config.provider || detectProviderFromModel(config.model || 'gpt-4o-2024-11-20');
+      // Smart model matcher - accept shorthand/alias from config
+      const canonicalModel = matchModelName(config.model || '') || config.model || 'gpt-4o-2024-11-20';
+      const providerName = config.provider || detectProviderFromModel(canonicalModel);
       
       this.provider = await createProvider(providerName);
       return true;

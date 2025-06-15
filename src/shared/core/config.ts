@@ -3,28 +3,47 @@ import * as path from 'path';
 import * as os from 'os';
 import chalk from 'chalk';
 import { Logger, LogLevel } from '../utils/logger';
+import { matchModelName } from '../utils/modelMatcher';
 
 export function detectProviderFromModel(model: string): 'openai' | 'anthropic' | 'gemini' {
-  const modelLower = model.toLowerCase();
+  // First use the model matcher to get a normalized model name
+  const matchedModel = matchModelName(model);
   
-  // OpenAI models
-  if (modelLower.includes('gpt') || modelLower.includes('davinci') || modelLower.includes('curie') || 
-      modelLower.includes('babbage') || modelLower.includes('ada') || modelLower.startsWith('org-') || 
-      modelLower.startsWith('openai/')) {
+  if (!matchedModel) {
+    // If no match is found, fall back to original detection logic
+    const modelLower = model.toLowerCase();
+    
+    // OpenAI models
+    if (modelLower.includes('gpt') || modelLower.includes('davinci') || modelLower.includes('curie') || 
+        modelLower.includes('babbage') || modelLower.includes('ada') || modelLower.startsWith('org-') || 
+        modelLower.startsWith('openai/')) {
+      return 'openai';
+    }
+    
+    // Anthropic models
+    if (modelLower.includes('claude') || modelLower.startsWith('anthropic/')) {
+      return 'anthropic';
+    }
+    
+    // Gemini models
+    if (modelLower.includes('gemini') || modelLower.includes('bard') || modelLower.startsWith('google/')) {
+      return 'gemini';
+    }
+    
+    // Default to OpenAI if no clear match
     return 'openai';
   }
-  
-  // Anthropic models
-  if (modelLower.includes('claude') || modelLower.startsWith('anthropic/')) {
+
+  // If a matched model is found, derive provider from the matched model
+  if (matchedModel.includes('claude')) {
     return 'anthropic';
   }
-  
-  // Gemini models
-  if (modelLower.includes('gemini') || modelLower.includes('bard') || modelLower.startsWith('google/')) {
+
+  if (matchedModel.includes('gemini')) {
     return 'gemini';
   }
-  
-  // Default to OpenAI if no clear match
+
+  // Default to OpenAI for all unclassified models
   return 'openai';
 }
 
