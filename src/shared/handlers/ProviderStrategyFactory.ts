@@ -36,8 +36,8 @@ export class AnthropicStrategy implements ProviderStrategy {
       console.log(chalk.blue(`🤖 Sending ${messages.length} messages to Anthropic with ${schemas.length} tools`));
     }
     
-    // Use streaming for Anthropic - the provider has comprehensive streaming tool support
-    return await this.llmService.streamMessageWithTools(messages, schemas, onChunk);
+    // Use sendMessageWithTools for Anthropic - the provider has comprehensive tool support
+    return await this.llmService.sendMessageWithTools(messages, schemas);
   }
 
   private getToolSchemas(tools: BaseTool[]): any[] {
@@ -61,8 +61,8 @@ export class OpenAIStrategy implements ProviderStrategy {
   ): Promise<{ content: string | null; tool_calls?: any[] }> {
     const schemas = this.getToolSchemas(tools);
     
-    // Use streaming for OpenAI
-    return await this.llmService.streamMessageWithTools(messages, schemas, onChunk);
+    // Use sendMessageWithTools for OpenAI
+    return await this.llmService.sendMessageWithTools(messages, schemas);
   }
 
   private getToolSchemas(tools: BaseTool[]): any[] {
@@ -96,8 +96,8 @@ export class GeminiStrategy implements ProviderStrategy {
       console.log(chalk.blue(`🤖 Sending ${geminiMessages.length} messages to Gemini with ${schemas.length} tools`));
     }
     
-    // Use streaming with tools
-    return await this.llmService.streamMessageWithTools(geminiMessages, schemas, onChunk);
+    // Use sendMessageWithTools with tools
+    return await this.llmService.sendMessageWithTools(geminiMessages, schemas);
   }
 
   private convertMessagesToGeminiFormat(messages: ConversationMessage[]): any[] {

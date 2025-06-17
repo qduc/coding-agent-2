@@ -35,8 +35,24 @@ export class PromptCachingService {
     breakpoints: CacheBreakpoint[]
   } {
     if (!this.config.enablePromptCaching || this.config.provider !== 'anthropic') {
+      this.logger.debug('Prompt caching skipped', {
+        enablePromptCaching: this.config.enablePromptCaching,
+        provider: this.config.provider,
+        model: this.config.model,
+        isModelSupported: this.isModelSupported()
+      });
       return { messages, tools, breakpoints: [] };
     }
+
+    this.logger.debug('Applying prompt caching', {
+      messagesCount: messages.length,
+      hasTools: !!tools && tools.length > 0,
+      hasSystemMessage: !!systemMessage,
+      cacheSystemPrompts: this.config.cacheSystemPrompts,
+      cacheToolDefinitions: this.config.cacheToolDefinitions,
+      cacheConversationHistory: this.config.cacheConversationHistory,
+      strategy: this.config.promptCachingStrategy
+    });
 
     const strategy = this.getStrategy();
     const breakpoints: CacheBreakpoint[] = [];
@@ -45,7 +61,7 @@ export class PromptCachingService {
     let systemMessages: Array<{ type: 'text'; text: string; cache_control?: any }> | undefined;
 
     // Handle system message caching
-    if (systemMessage && this.config.cacheSystemPrompts && this.meetsMinimumTokens(systemMessage)) {
+    if (systemMessage && this.config.cacheSystemPrompts) {
       systemMessages = [
         {
           type: 'text',
@@ -54,8 +70,11 @@ export class PromptCachingService {
         }
       ];
       breakpoints.push({ position: 0, type: 'system' });
+      this.logger.debug('Applied cache control to system message', {
+        systemMessageLength: systemMessage.length
+      });
     } else if (systemMessage) {
-      // Include system message without caching if it doesn't meet requirements
+      // Include system message without caching
       systemMessages = [
         {
           type: 'text',
@@ -66,16 +85,12 @@ export class PromptCachingService {
 
     // Handle tool definition caching
     if (processedTools && this.config.cacheToolDefinitions && processedTools.length > 0) {
-      // Estimate tokens for all tools combined
-      const toolsText = JSON.stringify(processedTools);
-      if (this.meetsMinimumTokens(toolsText)) {
-        const lastToolIndex = processedTools.length - 1;
-        processedTools[lastToolIndex] = {
-          ...processedTools[lastToolIndex],
-          cache_control: { type: 'ephemeral' }
-        };
-        breakpoints.push({ position: 1, type: 'tools' });
-      }
+      const lastToolIndex = processedTools.length - 1;
+      processedTools[lastToolIndex] = {
+        ...processedTools[lastToolIndex],
+        cache_control: { type: 'ephemeral' }
+      };
+      breakpoints.push({ position: 1, type: 'tools' });
     } else if (!this.config.cacheToolDefinitions && processedTools) {
       // Don't modify tools if caching is disabled for them
       processedTools = undefined;
@@ -158,7 +173,7 @@ export class PromptCachingService {
         const index = this.resolveMessageIndex(breakpoint.position, processed.length);
         if (index >= 0 && index < processed.length) {
           const messageContent = processed[index].content || '';
-          if (typeof messageContent === 'string' && this.meetsMinimumTokens(messageContent)) {
+          if (typeof messageContent === 'string') {
             processed[index] = {
               ...processed[index],
               cache_control: {
@@ -187,7 +202,10 @@ export class PromptCachingService {
    * Extract cache usage information from API response
    */
   extractCacheUsage(usage: any): any {
-    if (!usage) return undefined;
+    if (!usage) {
+      this.logger.debug('No usage data available for cache extraction');
+      return undefined;
+    }
 
     const cacheUsage: any = {};
 
@@ -203,7 +221,15 @@ export class PromptCachingService {
       cacheUsage.cache_creation = usage.cache_creation;
     }
 
-    return Object.keys(cacheUsage).length > 0 ? cacheUsage : undefined;
+    const result = Object.keys(cacheUsage).length > 0 ? cacheUsage : undefined;
+
+    this.logger.debug('Cache usage extraction result', {
+      rawUsage: usage,
+      extractedCacheUsage: result,
+      hasCacheUsageData: !!result
+    });
+
+    return result;
   }
 
   /**
@@ -277,14 +303,6 @@ export class PromptCachingService {
     return Math.ceil(text.length / 4);
   }
 
-  /**
-   * Check if content meets minimum token requirements for caching
-   */
-  private meetsMinimumTokens(content: string): boolean {
-    const estimatedTokens = this.estimateTokens(content);
-    const minimumTokens = this.getMinimumTokens();
-    return estimatedTokens >= minimumTokens;
-  }
 
   /**
    * Get supported models for prompt caching
@@ -305,7 +323,17 @@ export class PromptCachingService {
    * Validate if current model supports prompt caching
    */
   isModelSupported(): boolean {
-    if (!this.config.model) return false;
-    return this.getSupportedModels().includes(this.config.model);
+    if (!this.config.model) {
+      this.logger.debug('No model specified for prompt caching check');
+      return false;
+    }
+    const isSupported = this.getSupportedModels().includes(this.config.model);
+    if (!isSupported) {
+      this.logger.debug('Model not supported for prompt caching', {
+        model: this.config.model,
+        supportedModels: this.getSupportedModels()
+      });
+    }
+    return isSupported;
   }
 }

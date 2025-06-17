@@ -35,7 +35,6 @@ describe('ToolOrchestrator', () => {
     mockLLMService = {
       provider: 'openai',
       sendMessageWithTools: jest.fn(),
-      streamMessageWithTools: jest.fn(),
       sendMessage: jest.fn(),
       streamMessage: jest.fn(),
       initialize: jest.fn(),
@@ -55,12 +54,12 @@ describe('ToolOrchestrator', () => {
         finishReason: 'stop' 
       };
 
-      mockLLMService.streamMessageWithTools.mockResolvedValue(mockResult);
+      mockLLMService.sendMessageWithTools.mockResolvedValue(mockResult);
 
       const result = await orchestrator.processMessage(userInput);
 
       expect(result).toBe('test response');
-      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalled();
+      expect(mockLLMService.sendMessageWithTools).toHaveBeenCalled();
     });
 
     it('should handle tool calls in messages', async () => {
@@ -88,7 +87,7 @@ describe('ToolOrchestrator', () => {
         output: 'tool result'
       });
 
-      mockLLMService.streamMessageWithTools
+      mockLLMService.sendMessageWithTools
         .mockResolvedValueOnce(toolCallResponse)
         .mockResolvedValueOnce(finalResponse);
 
@@ -96,7 +95,7 @@ describe('ToolOrchestrator', () => {
 
       expect(result).toBe('final response');
       expect(mockTool.execute).toHaveBeenCalledWith({ input: 'test' });
-      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalledTimes(2);
+      expect(mockLLMService.sendMessageWithTools).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -159,12 +158,12 @@ describe('ToolOrchestrator', () => {
         finishReason: 'stop' 
       };
 
-      mockLLMService.streamMessageWithTools.mockResolvedValue(mockResult);
+      mockLLMService.sendMessageWithTools.mockResolvedValue(mockResult);
 
       const result = await orchestrator.processWithEnhancedNativeCalling(userInput);
 
       expect(result).toBe('test response');
-      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalled();
+      expect(mockLLMService.sendMessageWithTools).toHaveBeenCalled();
     });
 
     it('should delegate processWithNativeToolLoop to processMessage', async () => {
@@ -175,12 +174,12 @@ describe('ToolOrchestrator', () => {
         finishReason: 'stop' 
       };
 
-      mockLLMService.streamMessageWithTools.mockResolvedValue(mockResult);
+      mockLLMService.sendMessageWithTools.mockResolvedValue(mockResult);
 
       const result = await orchestrator.processWithNativeToolLoop(userInput);
 
       expect(result).toBe('test response');
-      expect(mockLLMService.streamMessageWithTools).toHaveBeenCalled();
+      expect(mockLLMService.sendMessageWithTools).toHaveBeenCalled();
     });
   });
 });

@@ -202,34 +202,4 @@ describe('GeminiProvider', () => {
     });
   });
 
-  describe('streamMessage', () => {
-    beforeEach(async () => {
-      await provider.initialize();
-    });
-
-    it('should handle streaming responses', async () => {
-      const mockStream = {
-        stream: (async function* () {
-          yield { text: () => 'Hello ' };
-          yield { text: () => 'world!' };
-        })()
-      };
-
-      mockModel.generateContentStream.mockResolvedValue(mockStream);
-
-      const messages: Message[] = [{ role: 'user', content: 'Test' }];
-      const chunks: string[] = [];
-
-      const result = await provider.streamMessage(
-        messages,
-        (chunk) => chunks.push(chunk)
-      );
-
-      expect(chunks).toEqual(['Hello ', 'world!']);
-      expect(result).toEqual({
-        content: 'Hello world!',
-        finishReason: 'stop'
-      });
-    });
-  });
 });

@@ -41,7 +41,6 @@ export class InkChatHandler implements IInputHandler {
     agent: Agent,
     options: {
       verbose?: boolean;
-      streaming?: boolean;
     } = {}
   ): Promise<void> {
     return new Promise<void>((resolve) => {

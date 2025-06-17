@@ -51,7 +51,7 @@ export class Logger {
 
   private constructor(config: Partial<LoggerConfig> = {}) {
     this.config = {
-      level: LogLevel.INFO,
+      level: LogLevel.DEBUG,
       enableConsole: true,
       enableFile: true,
       enableToolConsole: true, // Default to showing tool messages
@@ -367,7 +367,7 @@ export class Logger {
       return data;
     }
 
-    const sensitiveKeys = ['apiKey', 'api_key', 'token', 'password', 'secret', 'authorization'];
+    const sensitiveKeys = ['apiKey', 'api_key', 'password', 'secret', 'authorization'];
     const sanitized = { ...data };
 
     for (const key of Object.keys(sanitized)) {

@@ -1,15 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseLLMProvider } from '../BaseLLMProvider';
-import { Message, StreamingResponse, FunctionCallResponse } from '../../types/llm';
+import { Message, FunctionCallResponse } from '../../types/llm';
 import { PromptCachingService } from '../PromptCachingService';
+import { Logger } from '../../utils/logger';
 
 export class AnthropicProvider extends BaseLLMProvider {
   private anthropic: Anthropic | null = null;
   private cachingService: PromptCachingService;
+  private logger: Logger;
 
   constructor() {
     super();
     this.cachingService = new PromptCachingService(this.config);
+    this.logger = Logger.getInstance();
   }
 
   getProviderName(): string {
@@ -31,11 +34,17 @@ export class AnthropicProvider extends BaseLLMProvider {
         return false;
       }
 
+      this.logger.debug('Initializing Anthropic provider', {
+        promptCachingEnabled: this.config.enablePromptCaching,
+        bailOnNoCacheUsage: this.config.bailOnNoCacheUsage,
+        model: this.config.model
+      });
+
       this.anthropic = new Anthropic({
         apiKey: this.config.anthropicApiKey!,
-        defaultHeaders: {
-          'anthropic-beta': 'prompt-caching-2024-07-31'
-        }
+        // defaultHeaders: {
+        //   'anthropic-beta': 'prompt-caching-2024-07-31'
+        // }
       });
 
       // Test the connection by making a simple request
@@ -164,126 +173,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     return anthropicMessages;
   }
 
-  /**
-   * Send a message and get streaming response
-   */
-  protected async _streamMessage(
-    messages: Message[],
-    onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void,
-    functions?: any[]
-  ): Promise<StreamingResponse> {
-    this.ensureInitialized();
 
-    const systemMessage = this.extractSystemMessage(messages);
-
-    // Apply prompt caching
-    const { messages: cachedMessages, systemMessages } = this.cachingService.applyCacheControl(
-      messages,
-      undefined,
-      systemMessage
-    );
-
-    const anthropicMessages = this.convertMessages(cachedMessages);
-
-    this.logApiCall('streamMessage', messages.length);
-
-    try {
-      const requestParams: any = {
-        model: this.getModelName(),
-        max_tokens: this.config.maxTokens || 8000,
-        messages: anthropicMessages,
-        stream: true
-      };
-
-      // Use cached system messages if available, otherwise use original
-      if (systemMessages && systemMessages.length > 0) {
-        requestParams.system = systemMessages;
-      } else if (systemMessage) {
-        requestParams.system = systemMessage;
-      }
-
-      const stream = await this.anthropic!.messages.create(requestParams) as any;
-
-      let fullContent = '';
-      let finishReason: string | null = null;
-      let usage: any = undefined;
-
-      for await (const chunk of stream) {
-        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-          fullContent += chunk.delta.text;
-          onChunk(chunk.delta.text);
-        }
-
-        if (chunk.type === 'message_stop') {
-          finishReason = 'stop';
-        }
-
-        // Capture usage information if available
-        if (chunk.type === 'message_delta' && chunk.usage) {
-          usage = chunk.usage;
-        }
-      }
-
-      // Build response with cache usage if available
-      const response: StreamingResponse = {
-        content: fullContent,
-        finishReason,
-        usage: usage ? this.buildUsageResponse(usage) : undefined
-      };
-
-      if (onComplete) {
-        onComplete(response);
-      }
-
-      return response;
-    } catch (error) {
-      throw this.formatError(error, 'streamMessage');
-    }
-  }
-
-  /**
-   * Send a simple message and get complete response
-   */
-  protected async _sendMessage(messages: Message[], functions?: any[]): Promise<string> {
-    this.ensureInitialized();
-
-    const systemMessage = this.extractSystemMessage(messages);
-
-    // Apply prompt caching
-    const { messages: cachedMessages, systemMessages } = this.cachingService.applyCacheControl(
-      messages,
-      undefined,
-      systemMessage
-    );
-
-    const anthropicMessages = this.convertMessages(cachedMessages);
-
-    this.logApiCall('sendMessage', messages.length);
-
-    try {
-      const requestParams: any = {
-        model: this.getModelName(),
-        max_tokens: this.config.maxTokens || 8000,
-        messages: anthropicMessages
-      };
-
-      // Use cached system messages if available, otherwise use original
-      if (systemMessages && systemMessages.length > 0) {
-        requestParams.system = systemMessages;
-      } else if (systemMessage) {
-        requestParams.system = systemMessage;
-      }
-
-      const response = await this.anthropic!.messages.create(requestParams);
-
-      return response.content.map(block =>
-        block.type === 'text' ? block.text : ''
-      ).join('');
-    } catch (error) {
-      throw this.formatError(error, 'sendMessage');
-    }
-  }
 
   /**
    * Send a message with function calling support
@@ -308,7 +198,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const anthropicMessages = this.convertMessages(cachedMessages);
 
-    this.logApiCall('sendMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
+    this.logApiCall('sendMessageWithTools111', messages.length, { functionsCount: normalizedFunctions.length });
 
     try {
       const requestParams: any = {
@@ -362,6 +252,11 @@ export class AnthropicProvider extends BaseLLMProvider {
         }
       }
 
+      // Validate cache usage if bail-on-no-cache is enabled
+      if (this.config.bailOnNoCacheUsage && this.config.enablePromptCaching) {
+        this.validateCacheUsage(response.usage, 'sendMessageWithTools');
+      }
+
       return {
         content: content || null,
         tool_calls: toolCalls,
@@ -373,123 +268,50 @@ export class AnthropicProvider extends BaseLLMProvider {
     }
   }
 
+
   /**
-   * Send a message with function calling support and streaming
+   * Validate that the response used prompt caching, bail out if not
    */
-  protected async _streamMessageWithTools(
-    messages: Message[],
-    functions: any[] = [],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse> {
-    this.ensureInitialized();
-
-    const systemMessage = this.extractSystemMessage(messages);
-    const anthropicMessages = this.convertMessages(messages);
-    const normalizedFunctions = this.validateAndNormalizeTools(functions);
-
-    this.logApiCall('streamMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
-
-    try {
-      const requestParams: any = {
-        model: this.getModelName(),
-        max_tokens: this.config.maxTokens || 8000,
-        system: systemMessage,
-        messages: anthropicMessages,
-        stream: true
-      };
-
-      // Add tool calling if functions are provided
-      if (normalizedFunctions.length > 0) {
-        requestParams.tools = normalizedFunctions.map(func => ({
-          name: func.name,
-          description: func.description,
-          input_schema: func.input_schema || func.parameters
-        }));
-      }
-
-      const stream = await this.anthropic!.messages.create(requestParams) as any;
-
-      let fullContent = '';
-      let finishReason: string | null = null;
-      let toolCalls: any[] | undefined;
-
-      // Track streaming tool input accumulation
-      const streamingToolInputs: Map<number, string> = new Map();
-
-      for await (const chunk of stream) {
-        // Handle content streaming
-        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-          fullContent += chunk.delta.text;
-          if (onChunk) {
-            onChunk(chunk.delta.text);
-          }
-        }
-
-        // Handle tool use start
-        if (chunk.type === 'content_block_start' && chunk.content_block.type === 'tool_use') {
-          if (!toolCalls) {
-            toolCalls = [];
-          }
-
-          const toolBlock = chunk.content_block;
-          const toolCallIndex = chunk.index;
-
-          // Initialize tool call with placeholder - we'll update the arguments later
-          toolCalls.push({
-            id: toolBlock.id,
-            type: 'function',
-            function: {
-              name: toolBlock.name,
-              arguments: '{}' // Will be updated when streaming completes
-            }
-          });
-
-          // Initialize streaming input accumulation for this tool
-          streamingToolInputs.set(toolCallIndex, '');
-        }
-
-        // Handle streaming tool input
-        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'input_json_delta') {
-          const toolCallIndex = chunk.index;
-          const currentInput = streamingToolInputs.get(toolCallIndex) || '';
-          streamingToolInputs.set(toolCallIndex, currentInput + chunk.delta.partial_json);
-        }
-
-        // Handle tool use completion
-        if (chunk.type === 'content_block_stop' && toolCalls) {
-          const toolCallIndex = chunk.index;
-          const fullInputJson = streamingToolInputs.get(toolCallIndex);
-
-          if (fullInputJson !== undefined) {
-            // Find the tool call for this index and update its arguments
-            const toolCallArrayIndex = toolCalls.length - 1; // Assuming tools are added in order
-            if (toolCallArrayIndex >= 0) {
-              const parsedInput = this.parseToolArguments(fullInputJson);
-              toolCalls[toolCallArrayIndex].function.arguments = JSON.stringify(parsedInput);
-
-              this.handleToolCall(toolCalls[toolCallArrayIndex].function.name, parsedInput, onToolCall);
-            }
-
-            // Clean up streaming state
-            streamingToolInputs.delete(toolCallIndex);
-          }
-        }
-
-        if (chunk.type === 'message_stop') {
-          finishReason = 'stop';
-        }
-      }
-
-      return {
-        content: fullContent || null,
-        tool_calls: toolCalls,
-        finishReason,
-        // Note: streaming doesn't provide usage info in the same way
-        usage: undefined
-      };
-    } catch (error) {
-      throw this.formatError(error, 'streamMessageWithTools');
+  private validateCacheUsage(usage: any, operation: string): void {
+    if (!usage) {
+      this.logger.debug('Cache validation failed - no usage data', { operation });
+      throw new Error(`No usage data available for cache validation in ${operation}`);
     }
+
+    const cacheUsage = this.cachingService.extractCacheUsage(usage);
+    const hasCacheReads = cacheUsage?.cache_read_input_tokens > 0;
+    const hasCacheCreation = cacheUsage?.cache_creation_input_tokens > 0;
+
+    this.logger.debug('Cache usage data received', {
+      operation,
+      rawUsage: usage,
+      extractedCacheUsage: cacheUsage,
+      hasCacheReads,
+      hasCacheCreation
+    });
+
+    if (!hasCacheReads && !hasCacheCreation) {
+      const errorMsg = `Request did not use prompt caching (operation: ${operation}). ` +
+        `Bailing out to avoid unnecessary cost. Consider disabling bailOnNoCacheUsage ` +
+        `or ensuring your prompts meet minimum token requirements for caching.`;
+      
+      this.logger.debug('Cache validation failed', {
+        operation,
+        usage: usage,
+        cacheUsage,
+        bailOnNoCacheUsage: this.config.bailOnNoCacheUsage
+      });
+
+      throw new Error(errorMsg);
+    }
+
+    const efficiency = this.cachingService.calculateCacheEfficiency(usage);
+    this.logger.debug('Cache validation passed', {
+      operation,
+      cacheReads: cacheUsage?.cache_read_input_tokens || 0,
+      cacheCreation: cacheUsage?.cache_creation_input_tokens || 0,
+      hitRatio: efficiency.hitRatio,
+      costSavings: efficiency.costSavings
+    });
   }
 }

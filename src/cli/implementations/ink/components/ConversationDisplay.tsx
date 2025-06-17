@@ -21,17 +21,12 @@ export interface Message {
 
 export interface ConversationDisplayProps {
   messages: Message[];
-  streamingMessage?: {
-    content: string;
-    type: 'agent';
-  };
   showWelcome?: boolean;
   isProcessing?: boolean;
 }
 
 export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
   messages,
-  streamingMessage,
   showWelcome = false,
   isProcessing = false,
 }) => {
@@ -73,21 +68,6 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
     );
   };
 
-  const renderStreamingMessage = () => {
-    if (!streamingMessage) return null;
-
-    return (
-      <Box flexDirection="column" marginBottom={1}>
-        <Box>
-          <Text color="cyan" bold>🤖 Agent:</Text>
-          <Text> </Text>
-          <TypingSpinner active={true} />
-          <Text> </Text>
-          <MessageContent content={streamingMessage.content} type="agent" />
-        </Box>
-      </Box>
-    );
-  };
 
   const renderWelcome = () => {
     if (!showWelcome) return null;
@@ -110,8 +90,8 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
   };
 
   const renderProcessingIndicator = () => {
-    // Show processing spinner only when processing but not streaming (streaming has its own animation)
-    if (!isProcessing || streamingMessage) return null;
+    // Show processing spinner when processing
+    if (!isProcessing) return null;
 
     return (
       <Box flexDirection="column" marginBottom={1}>
@@ -128,7 +108,6 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
     <Box flexDirection="column">
       {renderWelcome()}
       {messages.map(renderMessage)}
-      {renderStreamingMessage()}
       {renderProcessingIndicator()}
     </Box>
   );

@@ -295,7 +295,6 @@ function getFeatureFlags(): ConfigFeatureFlags {
   // This should match the ConfigFeatureFlags type in api.ts
   return {
     toolExecution: true, // from original
-    streaming: true,     // from original
     sessions: true,      // from original
     codeAnalysis: true,  // Added
     autoSave: false,     // Added, assuming default false

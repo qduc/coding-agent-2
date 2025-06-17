@@ -20,7 +20,6 @@ export function configureCommands(program: Command, version: string): void {
     .argument('[command]', 'Direct command to execute (e.g. "help me understand this file")')
     .option('-v, --verbose', 'Enable verbose output')
     .option('--no-color', 'Disable colored output')
-    .option('--streaming', 'Enable response streaming (real-time output)')
     .option('--tool-display <mode>', 'Set tool display mode: off, minimal, condensed, standard, verbose')
     .option('--setup', 'Run configuration setup wizard')
     .option('--config', 'Show current configuration')
@@ -80,10 +79,6 @@ export function configureCommands(program: Command, version: string): void {
   console.log(chalk.blue('Provider auto-selected:'), chalk.white(provider));
 }
 
-      // Handle streaming setting from CLI or config
-      const shouldStream = options.streaming !== undefined ?
-        options.streaming :
-        configManager.getConfig().streaming;
 
       // Create CLI implementations
       const toolContext = new CLIToolExecutionContext();
@@ -108,10 +103,10 @@ agentOptions.temporaryProvider = provider;
 
       if (command) {
         // Direct command mode
-        await handleDirectCommand(command, agent, options, shouldStream);
+        await handleDirectCommand(command, agent, options);
       } else {
         // Interactive chat mode - use full Ink control
-        await startInteractiveMode(agent, options, shouldStream, toolContext);
+        await startInteractiveMode(agent, options, toolContext);
       }
     });
 }
@@ -147,7 +142,7 @@ export async function runSetupWizard() {
 /**
  * Handle direct command execution
  */
-export async function handleDirectCommand(command: string, agent: Agent, options: any, shouldStream: boolean = false) {
+export async function handleDirectCommand(command: string, agent: Agent, options: any) {
   if (options.verbose) {
     console.log(chalk.blue('Executing direct command:'), command);
   }
@@ -170,62 +165,22 @@ export async function handleDirectCommand(command: string, agent: Agent, options
     console.log(chalk.cyan('🤖 Agent:'), chalk.gray('🔍 Analyzing your request...'));
 
     // Process message with the agent
-    if (shouldStream) {
-      // Handle streaming mode
-      let accumulatedResponse = '';
-      let hasStartedStreaming = false;
+    const response = await agent.processMessage(
+      command,
+      undefined,
+      options.verbose
+    );
 
-      const response = await agent.processMessage(
-        command,
-        (chunk) => {
-          // On first chunk, clear status and start streaming
-          if (!hasStartedStreaming) {
-            process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
-            console.log(chalk.cyan('🤖 Agent:'), chalk.gray('⚡ Responding...'));
-            hasStartedStreaming = true;
-          }
+    // Clear status line and show enhanced response
+    process.stdout.write('\x1b[1A\x1b[2K');
+    console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
+    console.log();
 
-          // Accumulate response and display immediately
-          accumulatedResponse += chunk;
-          process.stdout.write(chunk);
-        },
-        options.verbose
-      );
-
-      // Add spacing after streaming
-      console.log();
-      console.log(chalk.gray('─'.repeat(50)));
-      console.log();
-
-      // If no content was streamed but we got a response, show it
-      if (!hasStartedStreaming && response.trim()) {
-        process.stdout.write('\x1b[1A\x1b[2K'); // Clear status line
-        console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-        console.log();
-        console.log(renderResponse(response));
-        console.log();
-        console.log(chalk.gray('─'.repeat(50)));
-        console.log();
-      }
-    } else {
-      // Non-streaming mode
-      const response = await agent.processMessage(
-        command,
-        undefined,
-        options.verbose
-      );
-
-      // Clear status line and show enhanced response
-      process.stdout.write('\x1b[1A\x1b[2K');
-      console.log(chalk.cyan('🤖 Agent:'), chalk.gray('💭 Here\'s what I found:'));
-      console.log();
-
-      // Print the response with enhanced formatting
-      console.log(renderResponse(response));
-      console.log();
-      console.log(chalk.gray('─'.repeat(50)));
-      console.log();
-    }
+    // Print the response with enhanced formatting
+    console.log(renderResponse(response));
+    console.log();
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log();
 
     if (options.verbose) {
       console.log(chalk.gray('Conversation summary:'));
@@ -241,7 +196,7 @@ export async function handleDirectCommand(command: string, agent: Agent, options
 /**
  * Start interactive chat mode with full Ink control
  */
-export async function startInteractiveMode(agent: Agent, options: any, shouldStream: boolean = false, toolContext: CLIToolExecutionContext) {
+export async function startInteractiveMode(agent: Agent, options: any, toolContext: CLIToolExecutionContext) {
   if (options.verbose) {
     console.log(chalk.blue('Starting interactive chat mode...'));
   }
@@ -269,8 +224,7 @@ export async function startInteractiveMode(agent: Agent, options: any, shouldStr
     await chatHandler.handleInteractiveChatMode(
       agent, 
       {
-        verbose: options.verbose,
-        streaming: shouldStream,
+        verbose: options.verbose
       }
     );
 

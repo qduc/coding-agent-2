@@ -58,7 +58,6 @@ export interface Config {
   maxTokens?: number;
   model?: string;
   logToolUsage?: boolean;
-  streaming?: boolean;
   useResponsesApi?: boolean; // Use OpenAI Responses API for reasoning models
   // Allow accessing provider-specific settings with string index
   [key: string]: any;
@@ -76,6 +75,7 @@ export interface Config {
   cacheSystemPrompts?: boolean;
   cacheToolDefinitions?: boolean;
   cacheConversationHistory?: boolean;
+  bailOnNoCacheUsage?: boolean; // Bail out if response doesn't use cache to avoid cost
 }
 
 export { LogLevel }; // Re-export LogLevel
@@ -99,10 +99,9 @@ export class ConfigManager {
       model: 'gpt-4o-2024-11-20',
       verbose: false,
       logToolUsage: true,
-      streaming: false,
       useResponsesApi: false, // Enable automatically for reasoning models, or set to true to force
       // Default logging configuration
-      logLevel: 'info',
+      logLevel: 'debug',
       enableFileLogging: true,
       enableConsoleLogging: false, // Disable general console logging by default
       enableToolConsoleLogging: true, // But keep tool messages in console
@@ -113,6 +112,7 @@ export class ConfigManager {
       cacheSystemPrompts: true,
       cacheToolDefinitions: true,
       cacheConversationHistory: true,
+      bailOnNoCacheUsage: true, // Default to not bailing out
     };
 
     let fileConfig: Partial<Config> = {};
@@ -167,9 +167,6 @@ export class ConfigManager {
     }
     if (process.env.CODING_AGENT_LOG_TOOLS) {
       envConfig.logToolUsage = process.env.CODING_AGENT_LOG_TOOLS === 'true';
-    }
-    if (process.env.CODING_AGENT_STREAMING) {
-      envConfig.streaming = process.env.CODING_AGENT_STREAMING === 'true';
     }
     if (process.env.CODING_AGENT_LOG_LEVEL) {
       envConfig.logLevel = process.env.CODING_AGENT_LOG_LEVEL as 'error' | 'warn' | 'info' | 'debug' | 'trace';
@@ -454,7 +451,6 @@ export class ConfigManager {
     }
 
     console.log(`Tool Logging: ${config.logToolUsage ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
-    console.log(`Streaming: ${config.streaming ? chalk.green('✓ Enabled') : chalk.gray('✗ Disabled')}`);
     console.log(`Config file: ${chalk.gray(this.configPath)}`);
     console.log();
   }

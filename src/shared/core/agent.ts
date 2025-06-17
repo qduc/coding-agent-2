@@ -25,6 +25,7 @@ export interface AgentOptions {
   inputHandler?: IInputHandler;
   toolContext?: IToolExecutionContext;
   temporaryModel?: string;
+  temporaryProvider?: string;
 }
 
 export class Agent {
@@ -109,7 +110,7 @@ export class Agent {
 }
 if (this.options?.temporaryProvider) {
   const config = configManager.getConfig();
-  config.provider = this.options.temporaryProvider;
+  config.provider = this.options.temporaryProvider as 'openai' | 'anthropic' | 'gemini';
     }
 
     // Initialize LLM service

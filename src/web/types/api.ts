@@ -149,7 +149,6 @@ export interface WebConfiguration {
     maxLogFiles: number;
   };
   features: {
-    streaming: boolean;
     sessions: boolean;
     fileAccess: boolean;
     codeAnalysis: boolean;
@@ -192,7 +191,6 @@ export interface ConfigToolSettings {
 }
 
 export interface ConfigFeatureFlags {
-  streaming: boolean;
   sessions: boolean;
   fileAccess: boolean;
   toolExecution: boolean;
@@ -251,7 +249,6 @@ export interface ConfigResponse {
   currentModel: string;
   features: {
     toolExecution: boolean;
-    streaming: boolean;
     sessions: boolean;
     fileAccess: boolean;
   };

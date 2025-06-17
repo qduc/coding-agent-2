@@ -20,17 +20,6 @@ export interface CacheUsage {
   };
 }
 
-export interface StreamingResponse {
-  content: string;
-  finishReason: string | null;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-    // Add cache usage tracking
-    cacheUsage?: CacheUsage;
-  };
-}
 
 export interface FunctionCallResponse {
   content: string | null;
@@ -51,22 +40,9 @@ export interface LLMProvider {
   isReady(): boolean;
   getProviderName(): string;
   getModelName(): string;
-  streamMessage(
-    messages: Message[],
-    onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void,
-    functions?: any[]
-  ): Promise<StreamingResponse>;
-  sendMessage(messages: Message[], functions?: any[]): Promise<string>;
   sendMessageWithTools(
     messages: Message[],
     functions?: any[],
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse>;
-  streamMessageWithTools(
-    messages: Message[],
-    functions?: any[],
-    onChunk?: (chunk: string) => void,
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
   sendToolResults?(
@@ -74,19 +50,6 @@ export interface LLMProvider {
     toolResults: Array<{ tool_call_id: string; content: string }>,
     functions?: any[]
   ): Promise<FunctionCallResponse>;
-  streamToolResults?(
-    messages: Message[],
-    toolResults: Array<{ tool_call_id: string; content: string }>,
-    functions?: any[],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse>;
-  processWithNativeToolLoop?(
-    userInput: string,
-    tools: any[],
-    onChunk?: (chunk: string) => void,
-    verbose?: boolean
-  ): Promise<string>;
 
   // Responses API methods for reasoning models
   sendResponsesMessage?(
@@ -104,21 +67,6 @@ export interface LLMProvider {
     }
   ): Promise<ResponsesApiResponse>;
 
-  streamResponsesMessage?(
-    input: string | ResponsesInput[],
-    options?: {
-      model?: string;
-      reasoning?: ReasoningConfig;
-      tools?: any[];
-      include?: string[];
-      store?: boolean;
-      previous_response_id?: string;
-      instructions?: string;
-      temperature?: number;
-      max_output_tokens?: number;
-    },
-    onChunk?: (chunk: string) => void
-  ): Promise<ResponsesApiResponse>;
 }
 
 // Add types for OpenAI Responses API

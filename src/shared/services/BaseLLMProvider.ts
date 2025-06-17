@@ -1,4 +1,4 @@
-import { LLMProvider, Message, StreamingResponse, FunctionCallResponse } from '../types/llm';
+import { LLMProvider, Message, FunctionCallResponse } from '../types/llm';
 import { configManager, Config } from '../core/config';
 import { ToolLogger } from '../utils/toolLogger';
 import { SchemaAdapter } from './schemaAdapter';
@@ -23,40 +23,14 @@ export abstract class BaseLLMProvider implements LLMProvider {
   abstract getProviderName(): string;
 
   // Abstract internal methods that handle processed messages
-  protected abstract _sendMessage(messages: Message[], functions?: any[]): Promise<string>;
-  protected abstract _streamMessage(
-    messages: Message[],
-    onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void,
-    functions?: any[]
-  ): Promise<StreamingResponse>;
   protected abstract _sendMessageWithTools(
     messages: Message[],
     functions?: any[],
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
-  protected abstract _streamMessageWithTools(
-    messages: Message[],
-    functions?: any[],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse>;
 
   // Public methods that process file references before calling abstract methods
-  async sendMessage(messages: Message[], functions?: any[]): Promise<string> {
-    const processedMessages = this.processFileReferences(messages);
-    return this._sendMessage(processedMessages, functions);
-  }
 
-  async streamMessage(
-    messages: Message[],
-    onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void,
-    functions?: any[]
-  ): Promise<StreamingResponse> {
-    const processedMessages = this.processFileReferences(messages);
-    return this._streamMessage(processedMessages, onChunk, onComplete, functions);
-  }
 
   async sendMessageWithTools(
     messages: Message[],
@@ -67,15 +41,6 @@ export abstract class BaseLLMProvider implements LLMProvider {
     return this._sendMessageWithTools(processedMessages, functions, onToolCall);
   }
 
-  async streamMessageWithTools(
-    messages: Message[],
-    functions?: any[],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse> {
-    const processedMessages = this.processFileReferences(messages);
-    return this._streamMessageWithTools(processedMessages, functions, onChunk, onToolCall);
-  }
 
   // Concrete methods with shared implementation
 
@@ -264,33 +229,6 @@ export abstract class BaseLLMProvider implements LLMProvider {
     return this._sendMessageWithTools(processedMessages, functions);
   }
 
-  /**
-   * Standard implementation for streaming tool results
-   * Can be overridden by providers that need custom behavior
-   */
-  async streamToolResults(
-    messages: Message[],
-    toolResults: Array<{ tool_call_id: string; content: string }>,
-    functions: any[] = [],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse> {
-    this.ensureInitialized();
-
-    // Add tool result messages to the conversation
-    const updatedMessages = [...messages];
-    for (const result of toolResults) {
-      updatedMessages.push({
-        role: 'tool',
-        content: result.content,
-        tool_call_id: result.tool_call_id
-      });
-    }
-
-    // Process file references and send the updated conversation back to the LLM with streaming
-    const processedMessages = this.processFileReferences(updatedMessages);
-    return this._streamMessageWithTools(processedMessages, functions, onChunk, onToolCall);
-  }
 
   /**
    * Refresh configuration from config manager

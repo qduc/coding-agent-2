@@ -124,6 +124,11 @@ export class ToolOrchestrator {
       throw new Error('LLM service not initialized');
     }
 
+    // Initialize provider strategy if not already done
+    if (!this.providerStrategy.processMessage) {
+      this.initializeProviderStrategy();
+    }
+
     // Add user message to conversation
     this.conversationManager.addUserMessage(userInput);
 

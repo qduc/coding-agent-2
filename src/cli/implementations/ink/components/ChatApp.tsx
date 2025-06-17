@@ -16,7 +16,6 @@ export interface ChatAppProps {
   clipboardManager: ClipboardManager;
   options?: {
     verbose?: boolean;
-    streaming?: boolean;
   };
   onExit?: () => void;
 }
@@ -30,10 +29,6 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 }) => {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [streamingMessage, setStreamingMessage] = useState<{
-    content: string;
-    type: 'agent';
-  } | undefined>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showToolLogs, setShowToolLogs] = useState(true);
@@ -272,31 +267,20 @@ Example Questions:
     // Process with agent
     setIsProcessing(true);
     try {
-      let accumulatedResponse = '';
 
       const response = await agent.processMessage(
         trimmedInput,
-        options.streaming ? (chunk: string) => {
-          accumulatedResponse += chunk;
-          setStreamingMessage({
-            content: accumulatedResponse,
-            type: 'agent',
-          });
-        } : undefined,
+        undefined,
         options.verbose
       );
-
-      // Clear streaming state
-      setStreamingMessage(undefined);
 
       // Add final response
       addMessage({
         type: 'agent',
-        content: accumulatedResponse || response,
+        content: response,
       });
 
     } catch (error) {
-      setStreamingMessage(undefined);
       addMessage({
         type: 'error',
         content: error instanceof Error ? error.message : 'Unknown error occurred',
@@ -309,7 +293,6 @@ Example Questions:
   const handleInterrupt = useCallback(() => {
     if (isProcessing) {
       // Cancel the current operation
-      setStreamingMessage(undefined);
       setIsProcessing(false);
 
       // Add a message to indicate interruption
@@ -358,7 +341,6 @@ Example Questions:
       <Box flexGrow={1} flexDirection="column" overflow="hidden">
         <ConversationDisplay
           messages={messages}
-          streamingMessage={streamingMessage}
           showWelcome={showWelcome}
           isProcessing={isProcessing}
         />

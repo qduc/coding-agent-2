@@ -1,7 +1,7 @@
-import { LLMProvider, Message, StreamingResponse, FunctionCallResponse, ResponsesInput, ReasoningConfig, ResponsesApiResponse } from '../types/llm';
+import { LLMProvider, Message, FunctionCallResponse, ResponsesInput, ReasoningConfig, ResponsesApiResponse } from '../types/llm';
 import { createProvider } from '../factories/ProviderFactory';
 
-export type { LLMProvider, Message, StreamingResponse, FunctionCallResponse } from '../types/llm';
+export type { LLMProvider, Message, FunctionCallResponse } from '../types/llm';
 import { MessageUtils } from '../utils/messageUtils';
 import { ToolLoopHandler } from '../handlers/ToolLoopHandler';
 import { logger } from '../utils/logger';
@@ -77,30 +77,7 @@ export class LLMService implements LLMProvider {
     return this.provider.getModelName();
   }
 
-  /**
-   * Stream a message and call onChunk for each chunk
-   */
-  async streamMessage(
-    messages: Message[],
-    onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void,
-    functions?: any[]
-  ): Promise<StreamingResponse> {
-    if (!this.provider) {
-      throw new Error('LLM service not initialized');
-    }
-    return this.provider.streamMessage(messages, onChunk, onComplete, functions);
-  }
 
-  /**
-   * Send a message and return the complete response
-   */
-  async sendMessage(messages: Message[], functions?: any[]): Promise<string> {
-    if (!this.provider) {
-      throw new Error('LLM service not initialized');
-    }
-    return this.provider.sendMessage(messages, functions);
-  }
 
   /**
    * Send a message with tools
@@ -128,7 +105,7 @@ export class LLMService implements LLMProvider {
     if (!this.provider) {
       throw new Error('LLM service not initialized');
     }
-    return this.provider.streamMessageWithTools(messages, functions, onChunk, onToolCall);
+    return this.provider.sendMessageWithTools(messages, functions, onToolCall);
   }
 
   /**
@@ -155,10 +132,10 @@ export class LLMService implements LLMProvider {
     onChunk?: (chunk: string) => void,
     onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
-    if (!this.provider?.streamToolResults) {
-      throw new Error('Provider does not support streaming tool results');
+    if (!this.provider?.sendToolResults) {
+      throw new Error('Provider does not support tool results');
     }
-    return this.provider.streamToolResults(messages, toolResults, functions, onChunk, onToolCall);
+    return this.provider.sendToolResults(messages, toolResults, functions);
   }
 
   /**
@@ -229,10 +206,10 @@ export class LLMService implements LLMProvider {
     },
     onChunk?: (chunk: string) => void
   ): Promise<ResponsesApiResponse> {
-    if (!this.provider?.streamResponsesMessage) {
-      throw new Error('Provider does not support streaming responses API');
+    if (!this.provider?.sendResponsesMessage) {
+      throw new Error('Provider does not support responses API');
     }
-    return this.provider.streamResponsesMessage(input, options, onChunk);
+    return this.provider.sendResponsesMessage(input, options);
   }
 }
 

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { BaseLLMProvider } from '../BaseLLMProvider';
-import { LLMProvider, Message, StreamingResponse, FunctionCallResponse, ResponsesApiResponse, ResponsesInput, ReasoningConfig } from '../../types/llm';
+import { LLMProvider, Message, FunctionCallResponse, ResponsesApiResponse, ResponsesInput, ReasoningConfig } from '../../types/llm';
 import { logger } from '../../utils/logger';
 import { SchemaAdapter } from '../schemaAdapter';
 
@@ -73,171 +73,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  protected async _sendMessage(messages: Message[], functions: any[] = []): Promise<string> {
-    this.ensureInitialized();
 
-    const model = this.getModelName();
-
-    // Use Responses API for reasoning models
-    if (this.shouldUseResponsesApi(model)) {
-      try {
-        const input = this.convertMessagesToResponsesInput(messages);
-        const normalizedFunctions = this.validateAndNormalizeTools(functions);
-        const response = await this.sendResponsesMessage(input, {
-          model,
-          reasoning: this.isReasoningModel(model) ? { effort: 'medium' } : undefined,
-          store: true,
-          previous_response_id: this.previousResponseId || undefined,
-          tools: normalizedFunctions.length > 0 ? normalizedFunctions : undefined
-        });
-
-        return response.output_text || '';
-      } catch (error) {
-        logger.warn('Responses API failed, falling back to Chat Completions', { model, error: error instanceof Error ? error.message : String(error) }, 'OpenAIProvider');
-        // Fall through to Chat Completions API
-      }
-    }
-
-    this.logApiCall('sendMessage', messages.length);
-
-    try {
-      const requestParams: any = {
-        model,
-        messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-      };
-
-      // Add function calling if functions are provided
-      if (functions && functions.length > 0) {
-        const normalizedFunctions = this.validateAndNormalizeTools(functions);
-        // Convert tools to OpenAI format using SchemaAdapter
-        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
-        
-        requestParams.tools = openAIFunctions.map(func => ({
-          type: 'function',
-          function: func
-        }));
-        requestParams.tool_choice = 'auto';
-      }
-
-      const response = await this.openai!.chat.completions.create(requestParams);
-
-      const responseContent = response.choices[0]?.message?.content || '';
-
-      logger.debug('OpenAI message sent successfully', {
-        messageCount: messages.length,
-        responseLength: responseContent.length,
-        model: model,
-        usage: response.usage,
-        toolsProvided: functions ? functions.length : 0
-      }, 'OpenAIProvider');
-
-      return responseContent;
-    } catch (error) {
-      throw this.formatError(error, 'sendMessage');
-    }
-  }
-
-  protected async _streamMessage(
-    messages: Message[],
-    onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void,
-    functions: any[] = []
-  ): Promise<StreamingResponse> {
-    this.ensureInitialized();
-
-    const model = this.getModelName();
-
-    // Use Responses API for reasoning models
-    if (this.shouldUseResponsesApi(model)) {
-      try {
-        const input = this.convertMessagesToResponsesInput(messages);
-        const normalizedFunctions = this.validateAndNormalizeTools(functions);
-        const response = await this.streamResponsesMessage(input, {
-          model,
-          reasoning: this.isReasoningModel(model) ? { effort: 'medium' } : undefined,
-          store: true,
-          previous_response_id: this.previousResponseId || undefined,
-          tools: normalizedFunctions.length > 0 ? normalizedFunctions : undefined
-        }, onChunk);
-
-        const streamingResponse: StreamingResponse = {
-          content: response.output_text || '',
-          finishReason: response.status === 'completed' ? 'stop' : null,
-          usage: this.buildUsageResponse(response.usage)
-        };
-
-        if (onComplete) {
-          onComplete(streamingResponse);
-        }
-
-        return streamingResponse;
-      } catch (error) {
-        logger.warn('Responses API streaming failed, falling back to Chat Completions', { model, error: error instanceof Error ? error.message : String(error) }, 'OpenAIProvider');
-        // Fall through to Chat Completions API
-      }
-    }
-
-    this.logApiCall('streamMessage', messages.length);
-
-    try {
-      const requestParams: any = {
-        model,
-        messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-        stream: true,
-      };
-
-      // Add function calling if functions are provided
-      if (functions && functions.length > 0) {
-        const normalizedFunctions = this.validateAndNormalizeTools(functions);
-        // Convert tools to OpenAI format using SchemaAdapter
-        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
-
-        requestParams.tools = openAIFunctions.map(func => ({
-          type: 'function',
-          function: func
-        }));
-        requestParams.tool_choice = 'auto';
-      }
-
-      const stream = await this.openai!.chat.completions.create(requestParams);
-
-      let fullContent = '';
-      let finishReason: string | null = null;
-
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta;
-
-        if (delta?.content) {
-          fullContent += delta.content;
-          onChunk(delta.content);
-        }
-
-        if (chunk.choices[0]?.finish_reason) {
-          finishReason = chunk.choices[0].finish_reason;
-        }
-      }
-
-      const response: StreamingResponse = {
-        content: fullContent,
-        finishReason
-      };
-
-      logger.debug('Streaming message completed', {
-        messageCount: messages.length,
-        responseLength: fullContent.length,
-        finishReason,
-        toolsProvided: functions ? functions.length : 0
-      }, 'OpenAIProvider');
-
-      if (onComplete) {
-        onComplete(response);
-      }
-
-      return response;
-    } catch (error) {
-      throw this.formatError(error, 'streamMessage');
-    }
-  }
 
   protected async _sendMessageWithTools(
     messages: Message[],
@@ -247,7 +83,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     this.ensureInitialized();
 
     const normalizedFunctions = this.validateAndNormalizeTools(functions);
-    this.logApiCall('sendMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
+    this.logApiCall('wowsendMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
 
     try {
       const requestParams: any = {
@@ -294,110 +130,6 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  protected async _streamMessageWithTools(
-    messages: Message[],
-    functions: any[] = [],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse> {
-    this.ensureInitialized();
-
-    const normalizedFunctions = this.validateAndNormalizeTools(functions);
-    this.logApiCall('streamMessageWithTools', messages.length, { functionsCount: normalizedFunctions.length });
-
-    try {
-      const requestParams: any = {
-        model: this.getModelName(),
-        messages: messages.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-          ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
-          ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id })
-        })),
-        stream: true
-      };
-
-      // Add function calling if functions are provided
-      if (normalizedFunctions.length > 0) {
-        // Convert tools to OpenAI format using SchemaAdapter
-        const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedFunctions);
-
-        requestParams.tools = openAIFunctions.map(func => ({
-          type: 'function',
-          function: func
-        }));
-        requestParams.tool_choice = 'auto';
-      }
-
-      const stream = await this.openai!.chat.completions.create(requestParams) as any;
-
-      let fullContent = '';
-      let finishReason: string | null = null;
-      let toolCalls: any[] | undefined;
-
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta;
-
-        // Handle content streaming
-        if (delta?.content) {
-          fullContent += delta.content;
-          if (onChunk) {
-            onChunk(delta.content);
-          }
-        }
-
-        // Handle tool calls
-        if (delta?.tool_calls) {
-          if (!toolCalls) {
-            toolCalls = [];
-          }
-
-          for (const toolCallDelta of delta.tool_calls) {
-            const index = toolCallDelta.index || 0;
-
-            if (!toolCalls[index]) {
-              toolCalls[index] = {
-                id: toolCallDelta.id,
-                type: 'function',
-                function: { name: '', arguments: '' }
-              };
-            }
-
-            if (toolCallDelta.function?.name) {
-              toolCalls[index].function.name += toolCallDelta.function.name;
-            }
-
-            if (toolCallDelta.function?.arguments) {
-              toolCalls[index].function.arguments += toolCallDelta.function.arguments;
-            }
-          }
-        }
-
-        if (chunk.choices[0]?.finish_reason) {
-          finishReason = chunk.choices[0].finish_reason;
-        }
-      }
-
-      // Log and call tool callbacks
-      if (toolCalls) {
-        for (const toolCall of toolCalls) {
-          const { name, arguments: argsString } = toolCall.function;
-          const parsedArgs = this.parseToolArguments(argsString);
-          this.handleToolCall(name, parsedArgs, onToolCall);
-        }
-      }
-
-      return {
-        content: fullContent || null,
-        tool_calls: toolCalls,
-        finishReason,
-        // Note: streaming doesn't provide usage info in the same way
-        usage: undefined
-      };
-    } catch (error) {
-      throw this.formatError(error, 'streamMessageWithTools');
-    }
-  }
 
   async processWithNativeToolLoop(
     userInput: string,
@@ -424,10 +156,10 @@ export class OpenAIProvider extends BaseLLMProvider {
       const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
 
       // Send to LLM with tool schemas (single pass)
-      const response = await this.streamMessageWithTools(
+      const response = await this.sendMessageWithTools(
         messages,
         openAIFunctions,
-        onChunk
+        undefined
       );
 
       // For full tool execution loop, use ToolOrchestrator instead
@@ -555,106 +287,4 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  async streamResponsesMessage(
-    input: string | ResponsesInput[],
-    options?: {
-      model?: string;
-      reasoning?: ReasoningConfig;
-      tools?: any[];
-      include?: string[];
-      store?: boolean;
-      previous_response_id?: string;
-      instructions?: string;
-      temperature?: number;
-      max_output_tokens?: number;
-    },
-    onChunk?: (chunk: string) => void
-  ): Promise<ResponsesApiResponse> {
-    this.ensureInitialized();
-
-    if (!this.openai) throw new Error('OpenAI client not initialized');
-
-    try {
-      const defaultModel = this.getModelName();
-
-      // Build request parameters (same as non-streaming)
-      const requestParams: any = {
-        model: options?.model || defaultModel,
-        input: typeof input === 'string' ? input : {
-          type: 'conversation',
-          messages: input.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
-        },
-        // Optional parameters
-        ...(options?.reasoning && { reasoning: options.reasoning }),
-        ...(options?.tools && { tools: options.tools }),
-        ...(options?.include && { include: options.include }),
-        ...(options?.store !== undefined && { store: options.store }),
-        ...(options?.previous_response_id && { previous_response_id: options.previous_response_id }),
-        ...(options?.instructions && { instructions: options.instructions }),
-        ...(options?.temperature !== undefined && { temperature: options.temperature }),
-        ...(options?.max_output_tokens && { max_output_tokens: options.max_output_tokens }),
-        // Add streaming
-        stream: true
-      };
-
-      // Call the Responses API with streaming
-      const stream = await (this.openai as any).beta.responses.create(requestParams);
-
-      let responseId: string | undefined;
-      let outputText = '';
-      let status = 'incomplete';
-      let usage: { input_tokens: number; output_tokens: number; total_tokens: number } | undefined;
-
-      for await (const chunk of stream) {
-        // Accumulate response ID (should be the same in all chunks)
-        if (chunk.response_id && !responseId) {
-          responseId = chunk.response_id;
-        }
-
-        // Accumulate text content
-        if (chunk.delta?.output_text) {
-          outputText += chunk.delta.output_text;
-          if (onChunk) {
-            onChunk(chunk.delta.output_text);
-          }
-        }
-
-        // Track status
-        if (chunk.status) {
-          status = chunk.status;
-        }
-
-        // Track usage (only present in the final chunk)
-        if (chunk.usage) {
-          usage = {
-            input_tokens: chunk.usage.input_tokens,
-            output_tokens: chunk.usage.output_tokens,
-            total_tokens: chunk.usage.total_tokens
-          };
-        }
-      }
-
-      // Store response ID for multi-turn conversations
-      if (responseId) {
-        this.previousResponseId = responseId;
-      }
-
-      return {
-        response_id: responseId,
-        output_text: outputText,
-        status,
-        usage
-      };
-    } catch (error) {
-      const errorObj = error instanceof Error ? error : new Error('Unknown OpenAI API error');
-      logger.error('OpenAI Responses API streaming error', errorObj, {
-        modelSpecified: options?.model != null
-      }, 'OpenAIProvider');
-
-      throw new Error(`OpenAI Responses API streaming error: ${errorObj.message}`);
-    }
-  }
 }

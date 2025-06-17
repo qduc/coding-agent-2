@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, Content, Part, Tool } from '@google/generative-ai';
 import { BaseLLMProvider } from '../BaseLLMProvider';
-import { Message, StreamingResponse, FunctionCallResponse } from '../../types/llm';
+import { Message, FunctionCallResponse } from '../../types/llm';
 import { SchemaAdapter } from '../schemaAdapter';
 
 /**
@@ -150,77 +150,7 @@ export class GeminiProvider extends BaseLLMProvider {
     }];
   }
 
-  protected async _streamMessage(
-    messages: Message[],
-    onChunk: (chunk: string) => void,
-    onComplete?: (response: StreamingResponse) => void,
-    functions?: any[]
-  ): Promise<StreamingResponse> {
-    this.ensureInitialized();
 
-    if (!this.genAI) {
-      throw new Error('Gemini client not initialized');
-    }
-
-    this.logApiCall('streamMessage', messages.length);
-
-    const model = this.genAI.getGenerativeModel({
-      model: this.getModelName(),
-      generationConfig: {
-        maxOutputTokens: this.config.maxTokens || 8000
-      }
-    });
-
-    try {
-      const contents = this.convertMessagesToParts(messages);
-      const result = await model.generateContentStream({ contents });
-
-      let fullContent = '';
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        fullContent += chunkText;
-        onChunk(chunkText);
-      }
-
-      const response = {
-        content: fullContent,
-        finishReason: 'stop'
-      };
-
-      if (onComplete) {
-        onComplete(response);
-      }
-
-      return response;
-    } catch (error) {
-      throw this.formatError(error, 'streamMessage');
-    }
-  }
-
-  protected async _sendMessage(messages: Message[], functions?: any[]): Promise<string> {
-    this.ensureInitialized();
-
-    if (!this.genAI) {
-      throw new Error('Gemini client not initialized');
-    }
-
-    this.logApiCall('sendMessage', messages.length);
-
-    const model = this.genAI.getGenerativeModel({
-      model: this.getModelName(),
-      generationConfig: {
-        maxOutputTokens: this.config.maxTokens || 8000
-      }
-    });
-
-    try {
-      const contents = this.convertMessagesToParts(messages);
-      const result = await model.generateContent({ contents });
-      return result.response.text();
-    } catch (error) {
-      throw this.formatError(error, 'sendMessage');
-    }
-  }
 
   protected async _sendMessageWithTools(
     messages: Message[],
@@ -280,13 +210,4 @@ export class GeminiProvider extends BaseLLMProvider {
     }
   }
 
-  protected async _streamMessageWithTools(
-    messages: Message[],
-    functions: any[] = [],
-    onChunk?: (chunk: string) => void,
-    onToolCall?: (toolName: string, args: any) => void
-  ): Promise<FunctionCallResponse> {
-    // Gemini doesn't support streaming with tool calls yet
-    return this._sendMessageWithTools(messages, functions, onToolCall);
-  }
 }
