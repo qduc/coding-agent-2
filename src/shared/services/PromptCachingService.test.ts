@@ -64,7 +64,7 @@ describe('PromptCachingService', () => {
     // Create long content that meets minimum token requirements (1024 tokens = ~4096 characters)
     const longSystemPrompt = 'You are a helpful assistant. ' + 'A'.repeat(4500);
     const longConversationContent = 'This is a long conversation message. ' + 'B'.repeat(4500);
-    
+
     const sampleMessages: Message[] = [
       { role: 'system', content: longSystemPrompt },
       { role: 'user', content: 'Hello' },
@@ -77,22 +77,22 @@ describe('PromptCachingService', () => {
       {
         name: 'read_file',
         description: 'Read a file from the filesystem. ' + 'C'.repeat(1000),
-        parameters: { 
-          type: 'object', 
-          properties: { 
+        parameters: {
+          type: 'object',
+          properties: {
             path: { type: 'string', description: 'File path to read. ' + 'D'.repeat(1000) }
-          } 
+          }
         }
       },
       {
         name: 'write_file',
         description: 'Write a file to the filesystem. ' + 'E'.repeat(1000),
-        parameters: { 
-          type: 'object', 
-          properties: { 
-            path: { type: 'string', description: 'File path to write. ' + 'F'.repeat(1000) }, 
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'File path to write. ' + 'F'.repeat(1000) },
             content: { type: 'string', description: 'Content to write. ' + 'G'.repeat(1000) }
-          } 
+          }
         }
       }
     ];
@@ -308,11 +308,11 @@ describe('PromptCachingService Integration', () => {
       {
         name: 'read_file',
         description: 'Read a file from the filesystem. ' + 'X'.repeat(2000),
-        parameters: { 
-          type: 'object', 
-          properties: { 
+        parameters: {
+          type: 'object',
+          properties: {
             path: { type: 'string', description: 'File path to read. ' + 'Y'.repeat(2000) }
-          } 
+          }
         }
       }
     ];
@@ -365,5 +365,66 @@ describe('PromptCachingService Integration', () => {
 
     // Should cache long content
     expect(result2.systemMessages![0].cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('should provide debugging information for cache requirements', () => {
+    const shortContent = 'Short content';
+    const longContent = 'A'.repeat(5000);
+
+    const shortDebug = cachingService.debugCacheRequirements(shortContent, 'system');
+    const longDebug = cachingService.debugCacheRequirements(longContent, 'system');
+
+    expect(shortDebug.meetsMinimumTokens).toBe(false);
+    expect(longDebug.meetsMinimumTokens).toBe(true);
+    expect(shortDebug.recommendation).toContain('tokens short');
+    expect(longDebug.recommendation).toContain('meets minimum requirements');
+  });
+
+  it('should generate cache fingerprints for debugging', () => {
+    const content1 = { test: 'content' };
+    const content2 = { test: 'content' };
+    const content3 = { test: 'different' };
+
+    const fp1 = cachingService.generateCacheFingerprint(content1);
+    const fp2 = cachingService.generateCacheFingerprint(content2);
+    const fp3 = cachingService.generateCacheFingerprint(content3);
+
+    expect(fp1).toBe(fp2); // Same content should have same fingerprint
+    expect(fp1).not.toBe(fp3); // Different content should have different fingerprint
+  });
+
+  it('should analyze cumulative content requirements correctly', () => {
+    const systemMessage = 'System prompt. ' + 'A'.repeat(1000); // ~250 tokens
+    const tools = [
+      {
+        name: 'test_tool',
+        description: 'Test tool description. ' + 'B'.repeat(3000), // ~750 tokens
+        parameters: { type: 'object' }
+      }
+    ];
+    const messages = [
+      { role: 'user' as const, content: 'Short message' }, // ~2 tokens
+      { role: 'assistant' as const, content: 'Response. ' + 'C'.repeat(1000) } // ~250 tokens
+    ];
+
+    // Test tools only (first in hierarchy)
+    const toolsOnly = cachingService.debugCumulativeRequirements(undefined, tools);
+    expect(toolsOnly.cumulativeTokens).toBeGreaterThan(750);
+    expect(toolsOnly.breakdown.toolsTokens).toBeGreaterThan(750);
+    expect(toolsOnly.breakdown.systemTokens).toBe(0);
+    expect(toolsOnly.breakdown.messagesTokens).toBe(0);
+
+    // Test tools + system (second in hierarchy)
+    const toolsSystem = cachingService.debugCumulativeRequirements(systemMessage, tools);
+    expect(toolsSystem.cumulativeTokens).toBeGreaterThan(1000);
+    expect(toolsSystem.breakdown.toolsTokens).toBeGreaterThan(750);
+    expect(toolsSystem.breakdown.systemTokens).toBeGreaterThan(250);
+    expect(toolsSystem.meetsMinimumTokens).toBe(true); // Should exceed 1024 tokens
+
+    // Test tools + system + messages (third in hierarchy)
+    const fullContent = cachingService.debugCumulativeRequirements(systemMessage, tools, messages);
+    expect(fullContent.cumulativeTokens).toBeGreaterThan(1250);
+    expect(fullContent.breakdown.messagesTokens).toBeGreaterThan(250);
+    expect(fullContent.meetsMinimumTokens).toBe(true);
   });
 });

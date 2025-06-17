@@ -42,9 +42,9 @@ export class AnthropicProvider extends BaseLLMProvider {
 
       this.anthropic = new Anthropic({
         apiKey: this.config.anthropicApiKey!,
-        // defaultHeaders: {
-        //   'anthropic-beta': 'prompt-caching-2024-07-31'
-        // }
+        defaultHeaders: {
+          'anthropic-beta': 'prompt-caching-2024-07-31'
+        }
       });
 
       // Test the connection by making a simple request
@@ -287,14 +287,17 @@ export class AnthropicProvider extends BaseLLMProvider {
       rawUsage: usage,
       extractedCacheUsage: cacheUsage,
       hasCacheReads,
-      hasCacheCreation
+      hasCacheCreation,
+      cacheReadTokens: cacheUsage?.cache_read_input_tokens || 0,
+      cacheCreationTokens: cacheUsage?.cache_creation_input_tokens || 0,
+      regularInputTokens: usage.input_tokens || 0
     });
 
     if (!hasCacheReads && !hasCacheCreation) {
       const errorMsg = `Request did not use prompt caching (operation: ${operation}). ` +
         `Bailing out to avoid unnecessary cost. Consider disabling bailOnNoCacheUsage ` +
         `or ensuring your prompts meet minimum token requirements for caching.`;
-      
+
       this.logger.debug('Cache validation failed', {
         operation,
         usage: usage,
@@ -311,7 +314,9 @@ export class AnthropicProvider extends BaseLLMProvider {
       cacheReads: cacheUsage?.cache_read_input_tokens || 0,
       cacheCreation: cacheUsage?.cache_creation_input_tokens || 0,
       hitRatio: efficiency.hitRatio,
-      costSavings: efficiency.costSavings
+      costSavings: efficiency.costSavings,
+      hasReads: hasCacheReads,
+      hasCreation: hasCacheCreation
     });
   }
 }

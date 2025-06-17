@@ -49,13 +49,11 @@ export class SystemPromptBuilder {
   async createSystemMessage(): Promise<ConversationMessage> {
     const currentDirectory = process.cwd();
     const projectName = path.basename(currentDirectory);
-    const currentDateTime = new Date().toLocaleString();
     const platform = process.platform;
 
     const baseSystemMessage = `You are an intelligent coding assistant with advanced problem-solving capabilities. You help developers understand, analyze, and work with their code systematically.
 
 CURRENT CONTEXT:
-- Date/Time: ${currentDateTime}
 - Operating System: ${platform}
 - Working Directory: ${currentDirectory}
 - Project Name: ${projectName}
@@ -174,13 +172,13 @@ The write tool supports three modes, prioritized by reliability and ease of use:
 🥇 1. SEARCH-REPLACE MODE - Pattern-based replacement (PREFERRED):
    write({path: "file.js", search: "old text", replace: "new text"})
    write({path: "file.js", search: "function (\\w+)", replace: "const $1 = ", regex: true})
-   
+
    ADVANTAGES:
    ✅ Simple and reliable
    ✅ Supports regex patterns with capture groups
    ✅ No complex context matching required
    ✅ Clear error messages when patterns don't match
-   
+
    Use for: Most code modifications, refactoring, renaming, pattern-based changes
 
 🥈 2. CONTENT MODE - Full file replacement:
@@ -189,7 +187,7 @@ The write tool supports three modes, prioritized by reliability and ease of use:
 
 🥉 3. DIFF MODE - Precise contextual changes (DEPRECATED):
    ⚠️ WARNING: This mode is complex, error-prone, and deprecated. Use search-replace instead.
-   
+
    BASIC DIFF FORMAT (avoid if possible):
    existing line before change
    -line to remove
