@@ -48,25 +48,53 @@ export class MarkdownRenderer {
     output = output.replace(/^### (.*$)/gm, '\n' + chalk.yellow.bold('▸▸▸ $1') + '\n');
 
     // Bold + Italic (must come first to avoid conflicts)
-    output = output.replace(/\*\*\*(.*?)\*\*\*/g, chalk.bold.italic('$1'));
-    output = output.replace(/__(.*?)__/g, chalk.bold.italic('$1'));
+    output = output.replace(/\*\*\*(.*?)\*\*\*/g, (match, text) => {
+      return chalk.bold(chalk.underline(text));
+    });
+    output = output.replace(/__(.*?)__/g, (match, text) => {
+      return chalk.bold(chalk.underline(text));
+    });
     
     // Bold text
-    output = output.replace(/\*\*(.*?)\*\*/g, chalk.bold('$1'));
-    output = output.replace(/__(.*?)__/g, chalk.bold('$1'));
+    output = output.replace(/\*\*(.*?)\*\*/g, (match, text) => {
+      return chalk.bold(text);
+    });
+    output = output.replace(/__(.*?)__/g, (match, text) => {
+      return chalk.bold(text);
+    });
 
     // Italic text (ignore unmatched or bold markers)
-    output = output.replace(/(?<!\*)\*(?!\*)(.*?)\*(?!\*)/g, chalk.italic('$1'));
-    output = output.replace(/(?<!_)_(?!_)(.*?)_(?!_)/g, chalk.italic('$1'));
+    output = output.replace(/(?<!\*)\*(?!\*)(.*?)\*(?!\*)/g, (match, text) => {
+      return chalk.italic(text);
+    });
+    output = output.replace(/(?<!_)_(?!_)(.*?)_(?!_)/g, (match, text) => {
+      return chalk.italic(text);
+    });
 
     // Links with better terminal compatibility
     output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, chalk.blue.underline('$1') + chalk.gray.dim(' -> $2'));
 
-    // Enhanced unordered lists with consistent spacing
-    output = output.replace(/^[\s]*[-*+] (.*)$/gm, '  ' + chalk.cyan('•') + ' $1');
+    // Enhanced nested lists with hierarchical indentation
+    output = output.replace(/^([ \t]*)([-*+]) (.*)$/gm, (match, indent, marker, content) => {
+      const depth = indent.length;
+      const indentSpaces = '  '.repeat(Math.floor(depth / 2) + 1);
+      const listMarkers = ['•', '◦', '▪'];
+      const markerIndex = Math.min(Math.floor(depth / 2), listMarkers.length - 1);
+      return indentSpaces + chalk.cyan(listMarkers[markerIndex]) + ' ' + content;
+    });
     
-    // Enhanced ordered lists with consistent formatting
-    output = output.replace(/^[\s]*(\d+)\. (.*)$/gm, '  ' + chalk.cyan('$1.') + ' $2');
+    // Enhanced nested ordered lists with hierarchical indentation
+    output = output.replace(/^([ \t]*)(\d+)\. (.*)$/gm, (match, indent, number, content) => {
+      const depth = indent.length;
+      const indentSpaces = '  '.repeat(Math.floor(depth / 2) + 1);
+      const listStyles = [
+        (text: string) => chalk.cyan(text),
+        (text: string) => chalk.yellow(text), 
+        (text: string) => chalk.green(text)
+      ];
+      const styleIndex = Math.min(Math.floor(depth / 2), listStyles.length - 1);
+      return indentSpaces + listStyles[styleIndex](number + '.') + ' ' + content;
+    });
 
     // Enhanced blockquotes with consistent styling
     output = output.replace(/^> (.*)$/gm, chalk.blue('│ ') + chalk.italic.gray('$1'));
