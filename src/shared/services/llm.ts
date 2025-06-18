@@ -19,12 +19,12 @@ export class LLMService implements LLMProvider {
   async initialize(): Promise<boolean> {
     try {
       const config = configManager.getConfig();
-      
+
       // If provider is not set, try to detect from model
       // Smart model matcher - accept shorthand/alias from config
       const canonicalModel = matchModelName(config.model || '') || config.model || 'gpt-4o-2024-11-20';
       const providerName = config.provider || detectProviderFromModel(canonicalModel);
-      
+
       this.provider = await createProvider(providerName);
       return true;
     } catch (error) {
@@ -146,23 +146,6 @@ export class LLMService implements LLMProvider {
       role: 'user',
       content
     };
-  }
-
-  /**
-   * Process input with native tool loop (continuous conversation)
-   */
-  async processWithNativeToolLoop(
-    userInput: string,
-    tools: any[],
-    onChunk?: (chunk: string) => void,
-    verbose: boolean = false
-  ): Promise<string> {
-    if (!this.isReady()) {
-      throw new Error('LLM service not initialized. Run setup first.');
-    }
-
-    // Use the ToolLoopHandler static method
-    return ToolLoopHandler.runToolLoop([this.createUserMessage(userInput)], verbose ? 10 : 5, verbose);
   }
 
   /**

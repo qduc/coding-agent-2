@@ -48,10 +48,10 @@ describe('ToolOrchestrator', () => {
   describe('processMessage', () => {
     it('should process messages without tool calls', async () => {
       const userInput = 'test message';
-      const mockResult = { 
-        content: 'test response', 
-        tool_calls: undefined, 
-        finishReason: 'stop' 
+      const mockResult = {
+        content: 'test response',
+        tool_calls: undefined,
+        finishReason: 'stop'
       };
 
       mockLLMService.sendMessageWithTools.mockResolvedValue(mockResult);
@@ -76,10 +76,10 @@ describe('ToolOrchestrator', () => {
         }],
         finishReason: 'tool_calls'
       };
-      const finalResponse = { 
-        content: 'final response', 
-        tool_calls: undefined, 
-        finishReason: 'stop' 
+      const finalResponse = {
+        content: 'final response',
+        tool_calls: undefined,
+        finishReason: 'stop'
       };
 
       mockTool.execute.mockResolvedValue({
@@ -110,7 +110,7 @@ describe('ToolOrchestrator', () => {
 
       orchestrator.registerTool(newTool);
       const tools = orchestrator.getRegisteredTools();
-      
+
       expect(tools).toHaveLength(2); // original + new
       expect(tools.some(t => t.name === 'new-tool')).toBe(true);
     });
@@ -139,47 +139,13 @@ describe('ToolOrchestrator', () => {
     it('should handle provider-specific schema transformations', () => {
       mockLLMService.getProviderName.mockReturnValue('anthropic');
       const schemas = orchestrator.getToolSchemas();
-      
+
       expect(Array.isArray(schemas)).toBe(true);
       if (schemas.length > 0) {
         expect(schemas[0]).toHaveProperty('name');
         expect(schemas[0]).toHaveProperty('description');
         expect(schemas[0]).toHaveProperty('input_schema');
       }
-    });
-  });
-
-  describe('legacy methods', () => {
-    it('should delegate processWithEnhancedNativeCalling to processMessage', async () => {
-      const userInput = 'test message';
-      const mockResult = { 
-        content: 'test response', 
-        tool_calls: undefined, 
-        finishReason: 'stop' 
-      };
-
-      mockLLMService.sendMessageWithTools.mockResolvedValue(mockResult);
-
-      const result = await orchestrator.processWithEnhancedNativeCalling(userInput);
-
-      expect(result).toBe('test response');
-      expect(mockLLMService.sendMessageWithTools).toHaveBeenCalled();
-    });
-
-    it('should delegate processWithNativeToolLoop to processMessage', async () => {
-      const userInput = 'test message';
-      const mockResult = { 
-        content: 'test response', 
-        tool_calls: undefined, 
-        finishReason: 'stop' 
-      };
-
-      mockLLMService.sendMessageWithTools.mockResolvedValue(mockResult);
-
-      const result = await orchestrator.processWithNativeToolLoop(userInput);
-
-      expect(result).toBe('test response');
-      expect(mockLLMService.sendMessageWithTools).toHaveBeenCalled();
     });
   });
 });

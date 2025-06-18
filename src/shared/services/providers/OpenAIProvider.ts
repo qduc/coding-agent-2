@@ -131,60 +131,6 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
 
-  async processWithNativeToolLoop(
-    userInput: string,
-    tools: any[],
-    onChunk?: (chunk: string) => void,
-    verbose: boolean = false
-  ): Promise<string> {
-    // This method is deprecated in favor of the orchestrator pattern
-    // For OpenAI, tool execution should be handled by ToolOrchestrator with OpenAIStrategy
-    // This implementation provides basic compatibility for legacy code
-
-    // Initialize conversation with system message and user input
-    let messages: Message[] = [
-      {
-        role: 'system',
-        content: `You are an expert coding assistant specialized in helping developers understand, analyze, and work with their codebase.`
-      },
-      { role: 'user', content: userInput }
-    ];
-
-    try {
-      // Convert tools to OpenAI format using SchemaAdapter
-      const normalizedTools = this.validateAndNormalizeTools(tools);
-      const openAIFunctions = SchemaAdapter.convertToOpenAI(normalizedTools);
-
-      // Send to LLM with tool schemas (single pass)
-      const response = await this.sendMessageWithTools(
-        messages,
-        openAIFunctions,
-        undefined
-      );
-
-      // For full tool execution loop, use ToolOrchestrator instead
-      if (response.tool_calls && response.tool_calls.length > 0) {
-        if (verbose) {
-          logger.debug(`🔧 OpenAI requested ${response.tool_calls.length} tool call(s) - use ToolOrchestrator for full execution`, {
-            toolCallCount: response.tool_calls.length
-          }, 'OpenAIProvider');
-        }
-
-        // Return indication that tool calls are needed
-        return JSON.stringify({
-          type: 'tool_calls_required',
-          tool_calls: response.tool_calls,
-          content: response.content,
-          message: 'Use ToolOrchestrator.processMessage() for complete tool execution'
-        });
-      }
-
-      return response.content || '';
-    } catch (error) {
-      throw new Error(`Failed to process OpenAI tool loop: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
   // Helper methods for OpenAI Responses API
   protected shouldUseResponsesApi(model: string): boolean {
     // Force using Responses API if configured, regardless of model

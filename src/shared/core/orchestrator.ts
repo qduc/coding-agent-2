@@ -2,7 +2,7 @@
  * Tool Orchestrator - Coordinates between LLM and tools
  *
  * Refactored to use separate handler classes for better maintainability.
- * 
+ *
  * Infinite loop detection:
  * Instead of using a fixed maximum iteration count, this implementation uses multiple
  * approaches to detect infinite loops:
@@ -10,7 +10,7 @@
  * 2. Pattern detection: Identifies repetitive sequences of tool calls
  * 3. Excessive calls: Detects when the same tool is called many times in succession
  * 4. Total call limit: Stops after 30 total tool calls without resolution
- * 
+ *
  * This approach is more flexible than a fixed iteration count and provides better
  * feedback about why the process was stopped.
  */
@@ -273,8 +273,8 @@ export class ToolOrchestrator {
         if (isRepeating) {
           const toolNames = pattern.map(p => p.name).join(', ');
           const avgSimilarity = (similaritySum / patternLength * 100).toFixed(1);
-          return { 
-            detected: true, 
+          return {
+            detected: true,
             reason: `Repeating pattern of ${patternLength} tools (${toolNames}) with ${avgSimilarity}% argument similarity`
           };
         }
@@ -285,14 +285,14 @@ export class ToolOrchestrator {
     const lastTool = recentCalls[recentCalls.length - 1]?.name;
     if (lastTool) {
       const sameToolCount = recentCalls.filter(call => call.name === lastTool).length;
-      
+
       // Set tool-specific limits - exploratory tools get higher limits
       const exploratoryTools = ['read', 'glob', 'ripgrep', 'ls'];
       const limit = exploratoryTools.includes(lastTool) ? 12 : 8;
-      
+
       if (sameToolCount >= limit) {
-        return { 
-          detected: true, 
+        return {
+          detected: true,
           reason: `Same tool '${lastTool}' called ${sameToolCount} times in the last ${recentCalls.length} calls (limit: ${limit})`
         };
       }
@@ -338,12 +338,12 @@ export class ToolOrchestrator {
 
           // For strings, check if they're very similar
           if (typeof val1 === 'string' && typeof val2 === 'string') {
-            if (val1 === val2 || 
-                (val1.length > 10 && val2.includes(val1.substring(0, 10))) || 
+            if (val1 === val2 ||
+                (val1.length > 10 && val2.includes(val1.substring(0, 10))) ||
                 (val2.length > 10 && val1.includes(val2.substring(0, 10)))) {
               matchingKeys++;
             }
-          } 
+          }
           // For other types, check for equality
           else if (val1 === val2) {
             matchingKeys++;
@@ -436,21 +436,6 @@ export class ToolOrchestrator {
   ): Promise<string> {
     if (verbose) {
       logger.debug('🚀 Using enhanced native tool calling (delegating to processMessage)', {}, 'ORCHESTRATOR');
-    }
-    return this.processMessage(userInput, onChunk, verbose);
-  }
-
-  /**
-   * Legacy method for backwards compatibility
-   * Redirects to the main processMessage method
-   */
-  async processWithNativeToolLoop(
-    userInput: string,
-    onChunk?: (chunk: string) => void,
-    verbose: boolean = false
-  ): Promise<string> {
-    if (verbose) {
-      logger.debug('🔄 Using native tool loop (delegating to processMessage)', {}, 'ORCHESTRATOR');
     }
     return this.processMessage(userInput, onChunk, verbose);
   }
