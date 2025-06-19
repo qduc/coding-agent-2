@@ -122,22 +122,6 @@ describe('SubAgentTool', () => {
       expect((result.error as any).code).toBe('SUB_AGENT_TASK_FAILED');
     });
 
-    it('should handle timeout', async () => {
-      const timeoutParams = {
-        ...validParams,
-        timeout: 5000 // Short timeout (minimum allowed)
-      };
-
-      // Make processTask take longer than timeout
-      mockSubAgent.processTask.mockImplementation(() =>
-        new Promise(resolve => setTimeout(resolve, 6000)) // 6 seconds
-      );
-
-      const result = await tool.execute(timeoutParams);
-
-      expect(result.success).toBe(false);
-      expect((result.error as any).code).toBe('TIMEOUT');
-    });
 
     it('should reuse existing sub-agent when available', async () => {
       // First execution

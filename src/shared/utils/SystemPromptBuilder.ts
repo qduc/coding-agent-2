@@ -144,6 +144,10 @@ AVAILABLE TOOLS & USAGE:
   Use: Search code patterns, function definitions, string literals
   Example: ripgrep({pattern: "export.*function", types: ["js", "ts"]})
 
+• ast_grep - AST-based structural code search and transformation
+  Use: Find semantic code patterns, perform precise refactoring, create custom linting rules
+  Example: ast_grep({pattern: "function $NAME($$$) { $$$ }", language: "js"})
+
 ⚙️ System Operations:
 • bash - Execute shell commands with security controls and timeout
   Use: Run tests, build scripts, git operations, package management
@@ -213,12 +217,21 @@ MODE SELECTION GUIDE:
 
 TOOL SELECTION STRATEGY:
 - Start with exploration: ls → glob → read to understand codebase structure
-- Use ripgrep for finding specific code patterns or implementations
+- Use ripgrep for text-based pattern search and string literals
+- Use ast_grep for semantic code analysis and structural patterns
 - Plan complex tasks with todo before implementation
 - Make changes with write (prefer search-replace mode for existing files)
 - Validate with bash (run tests, linting, type checking)
 - Delegate specialized work to sub_agent for efficiency
 - Use web_search for external knowledge and current information
+
+🔍 SEARCH TOOL COMPARISON:
+• ripgrep: Fast text search, regex patterns, content within lines
+  Best for: Finding strings, comments, configuration values, text patterns
+  
+• ast_grep: AST-based semantic search, structural code patterns
+  Best for: Finding function calls, class definitions, refactoring patterns, code transformations
+  Patterns use code syntax: "function $NAME($$$) { $$$ }" instead of regex
 
 PRIORITY ORDER FOR FILE MODIFICATIONS:
 1. 🥇 SEARCH-REPLACE: Simple, reliable, supports regex - use for 95% of changes

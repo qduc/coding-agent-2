@@ -15,6 +15,7 @@ import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError } from './types';
 import { validatePath } from './validation';
 import { toolContextManager } from '../utils/ToolContextManager';
+import * as ApprovalManager from '../../cli/approval/ApprovalManager';
 
 /**
  * Parameters for the Bash tool
@@ -89,6 +90,18 @@ export class BashTool extends BaseTool {
       env = {}
     } = params;
 
+    // Approval check before destructive action
+    if (process.env.CODING_AGENT_REQUIRE_APPROVAL === '1') {
+      const approval = await ApprovalManager.requestApproval({
+        type: 'command',
+        command,
+        cwd
+      });
+      if (approval === 'denied') {
+        return this.createErrorResult('Command denied by user approval', 'PERMISSION_DENIED');
+      }
+    }
+
     try {
       // Security validation
       this.validateCommand(command);
@@ -131,7 +144,7 @@ export class BashTool extends BaseTool {
     } catch (error) {
       // Track failed bash execution due to exception
       toolContextManager.recordToolCall('bash', false);
-      
+
       if (error instanceof ToolError) {
         throw error;
       }

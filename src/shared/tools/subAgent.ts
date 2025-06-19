@@ -41,13 +41,6 @@ export class SubAgentTool extends BaseTool {
         enum: ['low', 'medium', 'high'],
         default: 'medium'
       },
-      timeout: {
-        type: 'number',
-        description: 'Maximum execution time in milliseconds (default: 60000)',
-        minimum: 5000,
-        maximum: 300000,
-        default: 60000
-      },
       context: {
         type: 'object',
         description: 'Additional context information for the sub-agent',
@@ -94,7 +87,6 @@ export class SubAgentTool extends BaseTool {
       task_description,
       specialization,
       priority = 'medium',
-      timeout = 60000,
       context = {},
       auto_detect_specialization = false
     } = params;
@@ -117,7 +109,6 @@ export class SubAgentTool extends BaseTool {
         description: `Delegated task: ${task_description}`,
         userInput: task_description,
         priority,
-        timeout,
         context
       };
 
@@ -126,11 +117,7 @@ export class SubAgentTool extends BaseTool {
       
       // Execute task
       const startTime = Date.now();
-      const result = await Promise.race([
-        subAgent.processTask(delegation),
-        this.createTimeoutPromise(timeout, taskId)
-      ]);
-
+      const result = await subAgent.processTask(delegation);
       const executionTime = Date.now() - startTime;
 
       if (!result.success) {
@@ -253,19 +240,6 @@ export class SubAgentTool extends BaseTool {
     return patterns.some(pattern => task.includes(pattern));
   }
 
-  /**
-   * Create timeout promise for task execution
-   */
-  private createTimeoutPromise(timeout: number, taskId: string): Promise<never> {
-    return new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new ToolError(
-          `Task ${taskId} timed out after ${timeout}ms`,
-          'TIMEOUT'
-        ));
-      }, timeout);
-    });
-  }
 
   /**
    * Schedule cleanup of inactive sub-agent

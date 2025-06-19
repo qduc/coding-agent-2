@@ -45,6 +45,7 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
+    "@ast-grep/cli": "0.38.5",
     "@google/generative-ai": "^0.24.1",
     "@monaco-editor/react": "^4.5.0",
     "@types/react": "^19.1.6",

@@ -33,8 +33,6 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const [showWelcome, setShowWelcome] = useState(true);
   const [showToolLogs, setShowToolLogs] = useState(true);
   const [verboseToolLogs, setVerboseToolLogs] = useState(false);
-  const [pendingToolCalls, setPendingToolCalls] = useState<Map<string, { toolName: string, args: any }>>(new Map());
-
   const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
     setMessages(prev => [...prev, {
       ...message,
@@ -48,14 +46,15 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     if (!showToolLogs) return;
 
     if (event.type === 'tool_call') {
-      // Store the tool call but don't display it yet
-      const toolKey = `${event.toolName}_${Date.now()}`;
-      setPendingToolCalls(prev => new Map(prev).set(toolKey, {
-        toolName: event.toolName,
-        args: event.args
-      }));
+      // Show tool start immediately
+      const content = ToolLogger.formatToolOperationFull(event.toolName, event.args);
+      if (content.trim()) {
+        addMessage({
+          type: 'tool_call',
+          content,
+        });
+      }
     } else if (event.type === 'tool_result') {
-      // Show the complete operation - verbose or condensed
       if (verboseToolLogs) {
         // Verbose mode: show detailed information
         const callInfo = ToolLogger.formatToolCallForUI(event.toolName, event.args);
@@ -112,7 +111,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           }
         }
       } else {
-        // Modern minimalistic display with full information
+        // Normal mode: show the completion result
         const content = ToolLogger.formatToolOperationFull(
           event.toolName,
           event.args,
@@ -126,19 +125,8 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           });
         }
       }
-      // Clean up pending tool call (find by tool name)
-      setPendingToolCalls(prev => {
-        const newMap = new Map(prev);
-        for (const [key, value] of newMap.entries()) {
-          if (value.toolName === event.toolName) {
-            newMap.delete(key);
-            break;
-          }
-        }
-        return newMap;
-      });
     }
-  }, [addMessage, showToolLogs, verboseToolLogs, setPendingToolCalls]);
+  }, [addMessage, showToolLogs, verboseToolLogs]);
 
   const handleExit = useCallback(() => {
     if (onExit) {

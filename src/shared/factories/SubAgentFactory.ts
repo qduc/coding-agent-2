@@ -24,7 +24,7 @@ import { ToolContext } from '../tools/types';
  */
 export const DEFAULT_SPECIALIZATION_CONFIGS: Record<SubAgentSpecialization, SpecializationConfig> = {
   code: {
-    allowedTools: ['read', 'write', 'glob', 'ripgrep'],
+    allowedTools: ['read', 'write', 'glob', 'ripgrep', 'ast_grep'],
     modelConfig: DEFAULT_MODEL_CONFIGS.code,
     systemPromptAddition: `You are a CODE GENERATION SPECIALIST with expertise in writing clean, efficient, maintainable code.
 
@@ -108,7 +108,7 @@ Documentation should answer: What does this do? How do I use it? Why does it wor
     maxConcurrentTasks: 3
   },
   search: {
-    allowedTools: ['glob', 'ripgrep', 'ls'],
+    allowedTools: ['glob', 'ripgrep', 'ls', 'ast_grep'],
     modelConfig: DEFAULT_MODEL_CONFIGS.search,
     systemPromptAddition: `You are a SEARCH SPECIALIST expert in efficient code discovery and pattern matching across large codebases.
 
@@ -129,7 +129,7 @@ Be thorough but efficient: cast a wide net first, then focus your search based o
     maxConcurrentTasks: 5
   },
   validation: {
-    allowedTools: ['bash', 'read', 'ls'],
+    allowedTools: ['bash', 'read', 'ls', 'ast_grep'],
     modelConfig: DEFAULT_MODEL_CONFIGS.validation,
     systemPromptAddition: `You are a VALIDATION SPECIALIST focused on code quality assurance and build verification.
 
@@ -150,7 +150,7 @@ Be thorough and methodical: validate early, validate often, validate completely.
     maxConcurrentTasks: 2
   },
   general: {
-    allowedTools: ['read', 'write', 'bash', 'glob', 'ripgrep', 'ls'],
+    allowedTools: ['read', 'write', 'bash', 'glob', 'ripgrep', 'ls', 'ast_grep'],
     modelConfig: DEFAULT_MODEL_CONFIGS.general,
     systemPromptAddition: `You are a GENERAL-PURPOSE CODING ASSISTANT with comprehensive capabilities across all aspects of software development.
 

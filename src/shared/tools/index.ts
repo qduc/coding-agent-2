@@ -21,6 +21,7 @@ export * from './bash';
 export * from './todo';
 export * from './subAgent';
 export * from './webSearch';
+export * from './astGrep';
 
 // Tool registry for dynamic tool loading
 import { BaseTool } from './base';
@@ -33,6 +34,7 @@ import { BashTool } from './bash';
 import { TodoTool } from './todo';
 import { SubAgentTool } from './subAgent';
 import { WebSearchTool } from './webSearch';
+import { AstGrepTool } from './astGrep';
 
 /**
  * Registry of all available tools
@@ -46,7 +48,9 @@ export const tools: Record<string, new (...args: any[]) => BaseTool> = {
   bash: BashTool,
   todo: TodoTool,
   sub_agent: SubAgentTool,
-  web_search: WebSearchTool
+  web_search: WebSearchTool,
+  ast_grep: AstGrepTool,
+  ping: PingTool
 };
 
 // Default tools array - can be used to create orchestrator with common tools

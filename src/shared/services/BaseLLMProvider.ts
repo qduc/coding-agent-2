@@ -75,13 +75,10 @@ export abstract class BaseLLMProvider implements LLMProvider {
   }
 
   /**
-   * Handle tool call logging and callbacks
+   * Handle tool call callbacks (UI only, no logging here)
    */
   protected handleToolCall(toolName: string, args: any, onToolCall?: (toolName: string, args: any) => void): void {
-    const { logToolUsage } = configManager.getConfig();
-    if (logToolUsage) {
-      ToolLogger.logToolCall(toolName, args);
-    }
+    // Removed ToolLogger.logToolCall to avoid duplicate tool start messages
     if (onToolCall) {
       onToolCall(toolName, args);
     }

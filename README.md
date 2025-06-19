@@ -105,6 +105,32 @@ Create specialized sub-agents for specific tasks:
 coding-agent "review my recent changes using a code review sub-agent"
 ```
 
+## Safety Features: Approval Prompts for Destructive Actions
+
+To prevent accidental destructive operations, Coding Agent can require explicit user approval before file writes or bash commands. When enabled, a modal prompt will appear in the CLI for each destructive action, with options to approve, deny, or always allow for the session.
+
+**How to enable:**
+
+```bash
+export CODING_AGENT_REQUIRE_APPROVAL=1
+coding-agent
+```
+
+You will be prompted for approval before any file write or bash command.
+
+**Example:**
+
+```bash
+coding-agent "write to src/utils/important.ts"
+# => [Approval modal appears: Approve, Deny, Always allow for session]
+```
+
+You can also try the built-in demo:
+
+```bash
+cd src/cli/commands && node -r ts-node/register ./approvalDemo.tsx
+```
+
 ## Example Workflows
 
 ```
@@ -150,5 +176,5 @@ npm run dev:fullstack
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 (GPL v3).  
+This project is licensed under the GNU General Public License v3.0 (GPL v3).
 See the [LICENSE](./LICENSE) file for details.

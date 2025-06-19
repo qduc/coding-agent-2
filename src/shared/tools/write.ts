@@ -13,6 +13,7 @@ import { ToolSchema, ToolResult, ToolError, ToolContext } from './types';
 import { validatePath } from './validation';
 import { toolContextManager } from '../utils/ToolContextManager';
 import { logger } from '../utils/logger';
+import * as ApprovalManager from '../../cli/approval/ApprovalManager';
 
 export interface WriteParams {
   path: string;
@@ -92,7 +93,7 @@ export class WriteTool extends BaseTool {
       await fs.ensureDir(parentDir);
 
       const fileExists = await fs.pathExists(absolutePath);
-      
+
       // Tool context validation
       if (process.env.NODE_ENV !== 'test') {
         const validation = toolContextManager.validateWriteOperation(absolutePath, false);
@@ -129,10 +130,22 @@ export class WriteTool extends BaseTool {
         finalContent = result.content;
         linesChanged = result.linesChanged;
         replacements = result.replacements;
-        
+
         const contentSize = Buffer.byteLength(finalContent, encoding as BufferEncoding);
         if (contentSize > this.context.maxFileSize) {
           return this.createErrorResult(`Replaced content too large: ${contentSize} bytes`, 'FILE_TOO_LARGE');
+        }
+      }
+
+      // Approval check before destructive action
+      if (process.env.CODING_AGENT_REQUIRE_APPROVAL === '1') {
+        const approval = await ApprovalManager.requestApproval({
+          type: 'write',
+          path: filePath,
+          diff: content || search ? undefined : undefined // Optionally add diff preview
+        });
+        if (approval === 'denied') {
+          return this.createErrorResult('Write denied by user approval', 'PERMISSION_DENIED');
         }
       }
 
@@ -188,15 +201,15 @@ export class WriteTool extends BaseTool {
     }
 
     const originalLines = content.split('\n');
-    
+
     try {
       const result = this.performAdvancedSearchReplace(content, search, replace);
       const resultLines = result.content.split('\n');
-      
+
       // Calculate lines changed
       let linesChanged = 0;
       const minLines = Math.min(originalLines.length, resultLines.length);
-      
+
       for (let i = 0; i < minLines; i++) {
         if (originalLines[i] !== resultLines[i]) {
           linesChanged++;
@@ -252,14 +265,14 @@ export class WriteTool extends BaseTool {
     const searchLines = search.split('\n');
     const replaceLines = replace.split('\n');
     const threshold = 0.7;
-    
+
     let bestMatch: { startLine: number; endLine: number; similarity: number } | null = null;
 
     // Find best matching block
     for (let i = 0; i <= lines.length - searchLines.length; i++) {
       const block = lines.slice(i, i + searchLines.length);
       const similarity = this.calculateSimilarity(searchLines, block);
-      
+
       if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
         bestMatch = { startLine: i, endLine: i + searchLines.length - 1, similarity };
       }
@@ -291,9 +304,9 @@ export class WriteTool extends BaseTool {
     for (let i = 0; i < searchLines.length; i++) {
       const search = searchLines[i].trim();
       const candidate = candidateLines[i].trim();
-      
+
       totalChars += Math.max(search.length, candidate.length);
-      
+
       const minLength = Math.min(search.length, candidate.length);
       for (let j = 0; j < minLength; j++) {
         if (search[j] === candidate[j]) matchingChars++;
@@ -305,7 +318,7 @@ export class WriteTool extends BaseTool {
 
   private isBinaryContent(content: string): boolean {
     if (content.includes('\0')) return true;
-    
+
     const sample = content.substring(0, 1000);
     const nonPrintableCount = Array.from(sample).filter(char => {
       const code = char.charCodeAt(0);

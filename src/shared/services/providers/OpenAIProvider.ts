@@ -73,8 +73,6 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-
-
   protected async _sendMessageWithTools(
     messages: Message[],
     functions: any[] = [],
