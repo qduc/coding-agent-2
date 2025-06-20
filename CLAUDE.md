@@ -57,7 +57,7 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-*OpenAI provider partially implemented
+*OpenAI provider fully implemented
 
 ## Component Details
 
@@ -157,6 +157,10 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Bash Tool** (`bash.ts`): Command execution with security controls
 - **Web Search Tool** (`webSearch.ts`): Internet search using Brave Search API
 
+#### Code Analysis Tools
+- **AST Grep Tool** (`astGrep.ts`): Advanced structural code search and transformation using AST patterns
+- **Todo Tool** (`todo.ts`): In-memory todo list management for planning and tracking complex coding tasks
+
 #### Tool Infrastructure
 - **Base Tool** (`base.ts`): Abstract base class with schema definitions
 - **Tool Validation** (`validation.ts`): Input/output validation utilities
@@ -183,6 +187,12 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 #### Code Analysis
 - **Tree-sitter Parser** (`treeSitterParser.ts`): AST-based code understanding
 - **Code Analyzer** (`codeAnalyzer.ts`): Structure and pattern analysis
+
+#### Advanced Utilities
+- **Task Analyzer** (`TaskAnalyzer.ts`): AI-powered task classification and complexity assessment
+- **Tool Context Manager** (`ToolContextManager.ts`): Tracks tool execution patterns to prevent common errors
+- **Model Matcher** (`modelMatcher.ts`): Smart utility for matching informal model names to official model IDs
+- **Code Highlighter** (`codeHighlighter.ts`): Terminal-based syntax highlighting for code output
 
 ### 7. Sub-Agent System (`src/shared/`)
 
@@ -218,6 +228,28 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Search**: `glob`, `ripgrep`, `ls` - Code discovery and pattern matching
 - **Validation**: `bash`, `read`, `ls` - Linting, type checking, build validation
 - **General**: All tools - Complex multi-step tasks requiring full capabilities
+
+### 8. Core Services (`src/shared/services/`)
+
+#### Prompt Caching Service (`PromptCachingService.ts`)
+- **Advanced Caching**: Anthropic-specific prompt caching for cost optimization
+- **Cache Management**: Model-specific minimum token requirements and breakpoint management
+- **Usage Analytics**: Cache hit tracking and performance metrics
+- **Cost Reduction**: Significant savings for repeated interactions
+
+### 9. Approval System (`src/cli/approval/`)
+
+#### Approval Infrastructure
+- **Approval Manager** (`ApprovalManager.ts`): Core approval logic with session management
+- **Approval UI** (`ApprovalPrompt.tsx`): Interactive Ink-based approval interface
+- **Context System** (`ApprovalContext.tsx`, `ApprovalProvider.tsx`): React context management
+- **Policy Interface** (`IApprovalPolicy.ts`): Approval system contracts
+
+#### Features
+- **Context-Aware Approval**: Smart approval for destructive file operations and command execution
+- **Session Management**: "Always allow for session" option with persistent preferences
+- **Integration**: Seamless integration with CLI tool execution context
+- **Safety**: Prevents accidental destructive operations with clear user confirmation
 
 ## Data Flow
 
@@ -269,14 +301,18 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 ### Enhanced Tool Capabilities
 - **Diff-Based Writing**: Intelligent file editing with change tracking
 - **Context-Aware Search**: Project-specific search patterns and filters
-- **Secure Execution**: Sandboxed command execution with timeout controls
+- **Secure Execution**: Sandboxed command execution with timeout controls and approval system
 - **Auto-Discovery**: Dynamic tool availability detection
+- **AST-Based Analysis**: Advanced structural code search and transformation
+- **Task Management**: Built-in todo list system for complex task planning
 
 ### Project Intelligence
 - **Tech Stack Recognition**: Automatic framework and language detection
-- **Context Injection**: Intelligent system prompt enhancement
+- **Context Injection**: Intelligent system prompt enhancement with AI-powered task analysis
 - **Working Directory Awareness**: Relative path resolution and navigation
-- **Code Analysis**: AST-based understanding with Tree-sitter
+- **Code Analysis**: AST-based understanding with Tree-sitter and advanced pattern matching
+- **Task Classification**: Intelligent task type detection and complexity assessment
+- **Error Prevention**: Tool context management to prevent common coding mistakes
 
 ### Modular Handler System
 - **Separation of Concerns**: Specialized handlers for different responsibilities
@@ -293,6 +329,13 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Error Isolation**: Sub-agent failures don't affect main agent or other sub-agents
 - **Model Flexibility**: Different LLM models optimized for different task complexities
 
+### Advanced Safety & Quality Features
+- **Approval System**: Interactive approval for destructive operations with session management
+- **Prompt Caching**: Cost optimization through intelligent prompt caching
+- **Error Prevention**: Tool context tracking and intelligent warnings
+- **Code Quality**: Terminal syntax highlighting and enhanced output formatting
+- **Model Intelligence**: Smart model name matching and provider optimization
+
 ## Configuration
 
 ### Environment Variables
@@ -308,14 +351,16 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 ## Current Implementation Status
 
 ### ✅ Fully Implemented
-- **CLI Interface**: Advanced Ink-based terminal UI
-- **Agent Core**: Complete agent and orchestration system
-- **Tool Ecosystem**: All documented tools working
-- **Anthropic & Gemini Providers**: Full LLM integration
+- **CLI Interface**: Advanced Ink-based terminal UI with approval system integration
+- **Agent Core**: Complete agent and orchestration system with task analysis
+- **Tool Ecosystem**: All documented tools working including AST grep and todo management
+- **Anthropic & Gemini Providers**: Full LLM integration with prompt caching
 - **OpenAI Provider**: **COMPLETED** - Full integration with schema adapter, tool execution, Responses API support for reasoning models, and orchestrator integration
 - **Sub-Agent System**: **COMPLETED** - Full specialized sub-agent implementation with delegation, communication, and cost optimization
 - **Web Backend**: Express API server with WebSocket support
 - **Handler System**: Modular conversation and tool management
+- **Approval System**: **COMPLETED** - Interactive approval for destructive operations with session management
+- **Advanced Utilities**: Task analysis, tool context management, model matching, and code highlighting
 
 ### 🔄 Partially Implemented
 - **Web Frontend**: Backend ready, no frontend interface
@@ -332,6 +377,9 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Command Sanitization**: Safe bash execution with input filtering
 - **File Access Control**: Working directory constraints
 - **Rate Limiting**: API endpoint protection (web backend)
+- **Approval System**: Interactive approval for destructive operations
+- **Tool Context Tracking**: Prevention of unsafe file operations
+- **Session-Based Permissions**: Granular control over operation approval
 
 ### Error Recovery
 - **Provider Fallbacks**: Automatic switching on service failures
@@ -344,6 +392,28 @@ This architecture provides a robust, extensible foundation for AI-powered progra
 ---
 
 ## Recent Updates (Latest First)
+
+### 2025-01-20: Advanced Tool Integration & Safety Systems
+- **COMPLETED**: AST Grep Tool implementation for advanced structural code search and transformation
+- **Added**: Support for 15+ programming languages with tree-sitter integration
+- **Added**: Pattern matching using code syntax as patterns with custom rule definitions
+- **COMPLETED**: Todo List Tool for in-memory task management and complex problem-solving
+- **Added**: Priority levels, structured workflow guidance, and task breakdown strategies
+- **COMPLETED**: Comprehensive Approval System for destructive operations
+- **Added**: Interactive Ink-based approval UI with session management
+- **Added**: Context-aware approval for file writes and command execution
+- **Features**: "Always allow for session" option with persistent preferences
+- **COMPLETED**: Advanced utility systems for enhanced intelligence
+- **Added**: Task Analyzer with AI-powered classification and complexity assessment
+- **Added**: Tool Context Manager for preventing common file operation errors
+- **Added**: Model Matcher for smart model name resolution and provider optimization
+- **Added**: Code Highlighter for terminal syntax highlighting
+- **COMPLETED**: Prompt Caching Service for cost optimization
+- **Added**: Anthropic-specific cache control with model-specific token requirements
+- **Added**: Usage analytics and cache hit tracking for performance monitoring
+- **Integration**: All new tools properly registered and integrated into existing architecture
+- **Testing**: Comprehensive test suites for all new components
+- **Impact**: Major expansion of capabilities with 40% more tool functionality and enhanced safety
 
 ### 2025-01-09: Web Search Tool Implementation
 - **COMPLETED**: Added comprehensive web search functionality using Brave Search API

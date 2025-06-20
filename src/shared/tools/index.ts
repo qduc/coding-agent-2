@@ -49,8 +49,7 @@ export const tools: Record<string, new (...args: any[]) => BaseTool> = {
   todo: TodoTool,
   sub_agent: SubAgentTool,
   web_search: WebSearchTool,
-  ast_grep: AstGrepTool,
-  ping: PingTool
+  ast_grep: AstGrepTool
 };
 
 // Default tools array - can be used to create orchestrator with common tools
