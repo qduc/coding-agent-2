@@ -1,16 +1,12 @@
-import chalk from 'chalk';
 import { logger, Logger } from './logger';
 import { toolEventEmitter } from './toolEvents';
-import { configManager } from '../core/config';
 import {
-  formatArgsForDisplay,
   filterLongParams
 } from './toolLogger/formatters';
 import {
   getMinimalContext,
   getMinimalOutcome
 } from './toolLogger/displayFormatters';
-import { getResultMetrics } from './toolLogger/metricsExtractor';
 
 /**
  * Tool Logger - Utility for logging tool usage by the LLM
@@ -99,13 +95,13 @@ export class ToolLogger {
     if (success === undefined) {
       // Tool call in progress - clean, minimal format
       const context = getMinimalContext(toolName, args);
-      return `▶ ${toolName}${context}`;
+      return `▶ ${toolName}`;
     } else {
       // Complete operation with modern design
       const status = success ? '✓' : '✗';
       const context = getMinimalContext(toolName, args);
       const outcome = getMinimalOutcome(toolName, success, result, args);
-      
+
       return `${status} ${toolName}${context}${outcome}`;
     }
   }

@@ -50,10 +50,10 @@ export class WebSearchTool extends BaseTool {
       },
       count: {
         type: 'number',
-        description: 'Number of search results to return (default: 10, max: 20)',
+        description: 'Number of search results to return (default: 3, max: 20)',
         minimum: 1,
         maximum: 20,
-        default: 10
+        default: 3
       },
       offset: {
         type: 'number',

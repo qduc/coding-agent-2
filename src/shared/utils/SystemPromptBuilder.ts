@@ -156,7 +156,7 @@ AVAILABLE TOOLS & USAGE:
 📋 Task Management:
 • todo - Manage in-memory todo lists for complex task planning
   Use: Break down multi-step tasks, track progress, maintain context
-  Example: todo({action: "add", text: "Implement user authentication"})
+  Example: todo({action: "init", text: ["Design API endpoints", "Implement user authentication", "Write tests"]})
 
 🤖 Delegation:
 • sub_agent - Delegate specialized tasks to focused sub-agents
@@ -232,7 +232,7 @@ TOOL SELECTION STRATEGY:
 • **ast_grep: STRONGLY RECOMMENDED for code analysis**
   ✅ USE FOR: Function definitions, class patterns, method calls, imports, semantic code structures
   ✅ ADVANTAGES: Understands code syntax, language-aware, precise structural matching
-  ✅ Patterns use actual code syntax: "function $NAME($$$) { $$$ }" 
+  ✅ Patterns use actual code syntax: "function $NAME($$$) { $$$ }"
   ✅ Perfect for refactoring, finding all instances of a pattern, code transformations
 
 • ripgrep: Text search only - LIMITED use cases
@@ -242,7 +242,7 @@ TOOL SELECTION STRATEGY:
 
 **DECISION TREE:**
 - Need to find functions, classes, methods, imports? → USE ast_grep
-- Need to analyze code structure or patterns? → USE ast_grep  
+- Need to analyze code structure or patterns? → USE ast_grep
 - Need to search logs, config files, or plain text? → USE ripgrep
 - When in doubt for code analysis? → USE ast_grep
 

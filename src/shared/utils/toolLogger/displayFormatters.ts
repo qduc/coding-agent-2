@@ -9,17 +9,17 @@ import chalk from 'chalk';
  */
 export function truncatePath(path: string): string {
   if (path.length <= 40) return path;
-  
+
   const parts = path.split('/');
   if (parts.length <= 2) {
     return path.substring(0, 40) + '…';
   }
-  
+
   // Show first and last parts with … in middle
   const first = parts[0] || '';
   const last = parts[parts.length - 1];
   const middle = parts.length > 3 ? '/…/' : '/';
-  
+
   const truncated = `${first}${middle}${last}`;
   return truncated.length > 40 ? path.substring(0, 40) + '…' : truncated;
 }
@@ -33,7 +33,7 @@ export function getMinimalContext(toolName: string, args: any): string {
   }
 
   const toolLower = toolName.toLowerCase();
-  
+
   // Show full context with all arguments (except file content which is too long)
   if (toolLower.includes('read') && (args.path || args.file_path)) {
     const path = args.path || args.file_path;
@@ -73,6 +73,17 @@ export function getMinimalContext(toolName: string, args: any): string {
     if (args.ignore && args.ignore.length > 0) params.push(`ignore: [${args.ignore.join(', ')}]`);
     const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
     return ` ${args.path}${paramStr}`;
+  } else if (toolLower.includes('web_search') && args.query) {
+    // Display query and any non-default params
+    let params = [];
+    if (args.count && args.count !== 3) params.push(`count: ${args.count}`);
+    if (args.offset && args.offset !== 0) params.push(`offset: ${args.offset}`);
+    if (args.search_lang && args.search_lang !== 'en') params.push(`lang: ${args.search_lang}`);
+    if (args.country && args.country !== 'US') params.push(`country: ${args.country}`);
+    if (args.safesearch && args.safesearch !== 'moderate') params.push(`safesearch: ${args.safesearch}`);
+    if (args.freshness) params.push(`freshness: ${args.freshness}`);
+    const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
+    return ` "${args.query}"${paramStr}`;
   }
 
   return '';
@@ -121,7 +132,7 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
     } else if (typeof result === 'object' && result !== null && result.message) {
       errorMsg = result.message;
     }
-    
+
     return `\n${errorMsg}`;
   }
 
@@ -190,6 +201,33 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
       return ` • ${lines} matches`;
     }
     return ` • searched`;
+  } else if (toolLower.includes('todo')) {
+    if (!success) {
+      // Error already handled above
+      return `\n${result?.message || 'Todo error'}`;
+    }
+    if (typeof result === 'object' && result !== null) {
+      // Handle different todo actions by inspecting result keys
+      if (result.added && Array.isArray(result.added)) {
+        return ` • added ${result.added.length} todo${result.added.length === 1 ? '' : 's'}`;
+      } else if (result.completed && Array.isArray(result.completed)) {
+        return ` • completed ${result.completed.length} todo${result.completed.length === 1 ? '' : 's'}`;
+      } else if (result.deleted && Array.isArray(result.deleted)) {
+        return ` • deleted ${result.deleted.length} todo${result.deleted.length === 1 ? '' : 's'}`;
+      } else if (result.itemsRemoved !== undefined) {
+        return ` • cleared ${result.itemsRemoved} todo${result.itemsRemoved === 1 ? '' : 's'}`;
+      } else if (result.todos && Array.isArray(result.todos)) {
+        const pending = result.summary?.pending ?? result.todos.filter((t: any) => !t.completed).length;
+        const completed = result.summary?.completed ?? result.todos.filter((t: any) => t.completed).length;
+        return ` • ${result.todos.length} todos (${pending} pending, ${completed} completed)`;
+      } else if (result.id && result.message) {
+        // For single add/complete/delete
+        return ` • ${result.message}`;
+      } else if (result.message) {
+        return ` • ${result.message}`;
+      }
+    }
+    return ' • todo updated';
   }
 
   return ` • completed`;

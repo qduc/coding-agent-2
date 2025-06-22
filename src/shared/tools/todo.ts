@@ -50,21 +50,21 @@ Operations: add, list, complete, delete, clear`;
     properties: {
       action: {
         type: 'string',
-        enum: ['add', 'list', 'complete', 'delete', 'clear'],
+        enum: ['add', 'list', 'complete', 'delete', 'clear', 'init'],
         description: 'The action to perform on the todo list'
       },
       text: {
         type: 'string',
-        description: 'Todo item text (required for add action)'
+        description: 'Todo item text (string or array of strings for batch add/init; required for add/init actions)'
       },
       id: {
         type: 'string',
-        description: 'Todo item ID (required for complete/delete actions)'
+        description: 'Todo item ID (string or array of strings for batch complete/delete; required for complete/delete actions)'
       },
       priority: {
         type: 'string',
         enum: ['low', 'medium', 'high'],
-        description: 'Priority level (optional for add, defaults to medium)'
+        description: 'Priority level (optional for add/init, defaults to medium)'
       }
     },
     required: ['action'],
@@ -75,27 +75,70 @@ Operations: add, list, complete, delete, clear`;
   private nextId = 1;
 
   protected async executeImpl(params: {
-    action: 'add' | 'list' | 'complete' | 'delete' | 'clear';
-    text?: string;
-    id?: string;
+    action: 'add' | 'list' | 'complete' | 'delete' | 'clear' | 'init';
+    text?: string | string[];
+    id?: string | string[];
     priority?: 'low' | 'medium' | 'high';
   }, abortSignal?: AbortSignal): Promise<ToolResult> {
+    const extractErrorMsg = (err: any) => typeof err === 'string' ? err : err?.message;
     switch (params.action) {
-      case 'add':
-        return this.addTodo(params.text!, params.priority || 'medium');
-
+      case 'add': {
+        if (Array.isArray(params.text)) {
+          const results = params.text.map(text => this.addTodo(text, params.priority || 'medium'));
+          const successes = results.filter(r => r.success);
+          const errors = results.filter(r => !r.success);
+          return this.createSuccessResult({
+            message: `Added ${successes.length} of ${results.length} todo items`,
+            added: successes.map(r => r.output?.id),
+            errors: errors.map(r => extractErrorMsg(r.error)),
+            total: this.todos.size
+          });
+        } else {
+          return this.addTodo(params.text!, params.priority || 'medium');
+        }
+      }
       case 'list':
         return this.listTodos();
-
-      case 'complete':
-        return this.completeTodo(params.id!);
-
-      case 'delete':
-        return this.deleteTodo(params.id!);
-
+      case 'complete': {
+        if (Array.isArray(params.id)) {
+          const results = params.id.map(id => this.completeTodo(id));
+          const successes = results.filter(r => r.success);
+          const errors = results.filter(r => !r.success);
+          return this.createSuccessResult({
+            message: `Completed ${successes.length} of ${results.length} todo items`,
+            completed: successes.map(r => r.output?.id),
+            errors: errors.map(r => extractErrorMsg(r.error))
+          });
+        } else {
+          return this.completeTodo(params.id!);
+        }
+      }
+      case 'delete': {
+        if (Array.isArray(params.id)) {
+          const results = params.id.map(id => this.deleteTodo(id));
+          const successes = results.filter(r => r.success);
+          const errors = results.filter(r => !r.success);
+          return this.createSuccessResult({
+            message: `Deleted ${successes.length} of ${results.length} todo items`,
+            deleted: successes.map(r => r.output?.id),
+            errors: errors.map(r => extractErrorMsg(r.error))
+          });
+        } else {
+          return this.deleteTodo(params.id!);
+        }
+      }
       case 'clear':
         return this.clearTodos();
-
+      case 'init': {
+        if (!params.text || !Array.isArray(params.text) || params.text.length === 0) {
+          return this.createErrorResult(
+            'Provide an array of todo item texts for init action',
+            'INVALID_PARAMS',
+            ['text must be a non-empty array of strings']
+          );
+        }
+        return this.initTodos(params.text, params.priority || 'medium');
+      }
       default:
         return this.createErrorResult(
           `Unknown action: ${params.action}`,
@@ -236,6 +279,25 @@ Operations: add, list, complete, delete, clear`;
     return this.createSuccessResult({
       message: `Cleared all todo items (${count} items removed)`,
       itemsRemoved: count
+    });
+  }
+
+  /**
+   * Clears the todo list and adds a batch of new todos.
+   * @param texts Array of todo item texts
+   * @param priority Priority for all new todos
+   */
+  private initTodos(texts: string[], priority: 'low' | 'medium' | 'high'): ToolResult {
+    this.todos.clear();
+    this.nextId = 1;
+    const results = texts.map(text => this.addTodo(text, priority));
+    const successes = results.filter(r => r.success);
+    const errors = results.filter(r => !r.success);
+    return this.createSuccessResult({
+      message: `Initialized todo list with ${successes.length} of ${results.length} items`,
+      added: successes.map(r => r.output?.id),
+      errors: errors.map(r => (typeof r.error === 'string' ? r.error : r.error?.message)),
+      total: this.todos.size
     });
   }
 }

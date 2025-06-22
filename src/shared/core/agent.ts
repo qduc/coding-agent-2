@@ -13,6 +13,7 @@ import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscov
 import { toolContextManager } from '../utils/ToolContextManager';
 import { logger, Logger } from '../utils/logger';
 import { WebSearchTool } from '../tools/webSearch';
+import { TodoTool } from '../tools/todo';
 
 /**
  * Core Agent - Primary interface for AI programming assistant
@@ -62,13 +63,14 @@ export class Agent {
     const bashTool = new BashTool(toolContext);
     const subAgentTool = new SubAgentTool();
     const webSearchTool = new WebSearchTool();
+    const todoTool = new TodoTool();
 
     // Create ripgrep tool and check if ripgrep is available
     const ripgrepTool = new RipgrepTool();
     const ripgrepAvailable = ripgrepTool.isRipgrepAvailable();
 
     // Create the list of tools - only add ripgrep if available
-    const tools: BaseTool[] = [lsTool, globTool, readTool, writeTool, bashTool, subAgentTool, webSearchTool];
+    const tools: BaseTool[] = [lsTool, globTool, readTool, writeTool, bashTool, subAgentTool, webSearchTool, todoTool];
 
     if (ripgrepAvailable) {
       tools.push(ripgrepTool);
