@@ -116,9 +116,9 @@ export class ToolContextManager {
   /**
    * Validate if a write operation should proceed based on read history
    */
-  validateWriteOperation(filePath: string, isDiff: boolean): { 
-    isValid: boolean; 
-    warnings: string[]; 
+  validateWriteOperation(filePath: string, isDiff: boolean): {
+    isValid: boolean;
+    warnings: string[];
     suggestions: string[];
   } {
     const normalizedPath = this.normalizePath(filePath);
@@ -185,12 +185,30 @@ export class ToolContextManager {
 
     // Only block on critical errors - warnings are allowed
     const hasCriticalError = isDiff && (!fileInfo || !fileInfo.lastRead);
-    
+
     return {
       isValid: !hasCriticalError,
       warnings,
       suggestions
     };
+  }
+
+  /**
+   * Validate if a search-replace operation should proceed based on read history
+   */
+  validateSearchReplaceOperation(filePath: string): {
+    isValid: boolean;
+    message?: string;
+  } {
+    const normalizedPath = this.normalizePath(filePath);
+    const fileInfo = this.fileAccess.get(normalizedPath);
+    if (!fileInfo || !fileInfo.lastRead) {
+      return {
+        isValid: false,
+        message: 'Cannot perform search-replace: file has not been read yet. Use the read tool first.'
+      };
+    }
+    return { isValid: true };
   }
 
   /**
@@ -220,14 +238,14 @@ export class ToolContextManager {
         info.lastRead?.getTime() || 0,
         info.lastWrite?.getTime() || 0
       );
-      
+
       if (lastActivity < cutoff) {
         this.fileAccess.delete(path);
       }
     }
 
     // Clean up tool history
-    this.toolHistory = this.toolHistory.filter(entry => 
+    this.toolHistory = this.toolHistory.filter(entry =>
       entry.timestamp.getTime() > cutoff
     );
   }
@@ -247,7 +265,7 @@ export class ToolContextManager {
 
   private addToolHistory(info: ToolCallInfo): void {
     this.toolHistory.push(info);
-    
+
     // Keep history size manageable
     if (this.toolHistory.length > this.maxHistorySize) {
       this.toolHistory = this.toolHistory.slice(-this.maxHistorySize);
@@ -262,7 +280,7 @@ export class ToolContextManager {
 
   private getRecentWriteFailures(filePath: string): number {
     const recentWindow = Date.now() - (10 * 60 * 1000); // 10 minutes
-    return this.toolHistory.filter(entry => 
+    return this.toolHistory.filter(entry =>
       entry.filePath === filePath &&
       entry.operation === 'write' &&
       !entry.success &&

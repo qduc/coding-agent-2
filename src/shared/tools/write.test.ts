@@ -9,15 +9,25 @@ import { WriteTool, WriteParams, WriteResult } from './write';
 import { ToolError, ToolContext } from './types';
 import { toolContextManager } from '../utils/ToolContextManager';
 
-jest.mock('../utils/ToolContextManager', () => ({
-  toolContextManager: {
-    recordFileWrite: jest.fn(),
-    validateWriteOperation: jest.fn(() => ({
-      isValid: true,
-      warnings: [],
-      suggestions: []
-    }))
-  }
+jest.mock('../utils/ToolContextManager', () => {
+  const actual = jest.requireActual('../utils/ToolContextManager');
+  return {
+    toolContextManager: {
+      ...actual.toolContextManager,
+      recordFileWrite: jest.fn(),
+      validateWriteOperation: jest.fn(() => ({
+        isValid: true,
+        warnings: [],
+        suggestions: []
+      })),
+      validateSearchReplaceOperation: jest.fn(() => ({ isValid: true })),
+      reset: actual.toolContextManager.reset?.bind(actual.toolContextManager),
+      getFileInfo: actual.toolContextManager.getFileInfo?.bind(actual.toolContextManager)
+    }
+  };
+});
+jest.mock('../../cli/approval/ApprovalManager', () => ({
+  requestApproval: jest.fn(() => Promise.resolve('approved'))
 }));
 
 describe('WriteTool', () => {
@@ -284,6 +294,22 @@ describe('WriteTool', () => {
       expect(result.success).toBe(true);
       const fileContent = await fs.readFile(filePath, 'utf8');
       expect(fileContent).toContain('Goodbye world');
+    });
+
+    it('should fail search-replace if file has not been read yet', async () => {
+      const filePath = await createTestFile('unread.txt', 'foo bar');
+      // Do not call read tool or recordFileRead for this file
+      // Remove any prior record via reset (public API)
+      if (toolContextManager.reset) toolContextManager.reset();
+      // Override mock to simulate file not read
+      (toolContextManager.validateSearchReplaceOperation as jest.Mock).mockReturnValueOnce({ isValid: false, message: 'File has not been read yet' });
+      const result = await writeTool.execute({
+        path: filePath,
+        search: 'foo',
+        replace: 'baz'
+      });
+      expect(result.success).toBe(false);
+      expect((result.error as ToolError).message).toMatch(/file has not been read/i);
     });
   });
 

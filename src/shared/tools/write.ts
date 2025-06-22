@@ -21,6 +21,7 @@ export interface WriteParams {
   search?: string;
   replace?: string;
   encoding?: 'utf8' | 'binary' | 'base64';
+  searchRegex?: boolean; // If true, treat search as a regex pattern
 }
 
 export interface WriteResult {
@@ -39,15 +40,16 @@ export class WriteTool extends BaseTool {
     properties: {
       path: { type: 'string', description: 'File path to write to' },
       content: { type: 'string', description: 'Full content to write (for new files or overwriting existing files)' },
-      search: { type: 'string', description: 'Text to search for in search-replace mode with fuzzy matching fallback.' },
-      replace: { type: 'string', description: 'Text to replace matches with in search-replace mode.' }
+      search: { type: 'string', description: 'Text to search for in search-replace mode with fuzzy matching fallback or regex if searchRegex is true.' },
+      replace: { type: 'string', description: 'Text to replace matches with in search-replace mode.' },
+      searchRegex: { type: 'boolean', description: 'If true, treat search as a regex pattern.' }
     },
     required: ['path'],
     additionalProperties: false
   };
 
   protected async executeImpl(params: WriteParams, abortSignal?: AbortSignal): Promise<ToolResult> {
-    const { path: filePath, content, search, replace, encoding = 'utf8' } = params;
+    const { path: filePath, content, search, replace, encoding = 'utf8', searchRegex = false } = params;
 
     // Validate mode parameters
     const modes = [content, search].filter(x => x !== undefined);
@@ -95,7 +97,7 @@ export class WriteTool extends BaseTool {
       const fileExists = await fs.pathExists(absolutePath);
 
       // Tool context validation
-      if (process.env.NODE_ENV !== 'test') {
+      {
         const validation = toolContextManager.validateWriteOperation(absolutePath, false);
         if (!validation.isValid) {
           return this.createErrorResult(validation.warnings.join('; '), 'VALIDATION_ERROR');
@@ -125,10 +127,26 @@ export class WriteTool extends BaseTool {
         if (!fileExists) {
           return this.createErrorResult('Cannot perform search-replace on non-existent file', 'VALIDATION_ERROR');
         }
+        // For search-replace mode, ensure file has been read before allowing operation
+        const searchReplaceValidation = toolContextManager.validateSearchReplaceOperation(absolutePath);
+        if (!searchReplaceValidation.isValid) {
+          return this.createErrorResult(searchReplaceValidation.message || 'File must be read before search-replace.', 'VALIDATION_ERROR');
+        }
         const currentContent = await fs.readFile(absolutePath, 'utf8');
-        const result = this.performSearchReplace(currentContent, search!, replace!);
+        let result;
+        if (searchRegex) {
+          try {
+            result = this.performRegexSearchReplace(currentContent, search!, replace!);
+          } catch (error) {
+            if (error instanceof ToolError) throw error;
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            throw new ToolError(`Regex search-replace failed: ${message}`, 'UNKNOWN_ERROR');
+          }
+        } else {
+          result = this.performSearchReplace(currentContent, search!, replace!);
+        }
         finalContent = result.content;
-        linesChanged = result.linesChanged;
+        linesChanged = result.linesChanged ?? 0;
         replacements = result.replacements;
 
         const contentSize = Buffer.byteLength(finalContent, encoding as BufferEncoding);
@@ -326,5 +344,41 @@ export class WriteTool extends BaseTool {
     }).length;
 
     return nonPrintableCount > sample.length * 0.1;
+  }
+
+  private performRegexSearchReplace(content: string, search: string, replace: string): {
+    content: string;
+    replacements: number;
+    linesChanged: number;
+  } {
+    let regex: RegExp;
+    try {
+      regex = new RegExp(search, 'g');
+    } catch (e) {
+      throw new ToolError(`Invalid regex pattern: ${search}`, 'VALIDATION_ERROR');
+    }
+    if (this.isBinaryContent(content)) {
+      throw new ToolError('Cannot search-replace binary content', 'VALIDATION_ERROR');
+    }
+    const matches = content.match(regex);
+    if (!matches) {
+      throw new ToolError(`Regex pattern not found: ${search}`, 'VALIDATION_ERROR');
+    }
+    const newContent = content.replace(regex, replace);
+    const originalLines = content.split('\n');
+    const resultLines = newContent.split('\n');
+    let linesChanged = 0;
+    const minLines = Math.min(originalLines.length, resultLines.length);
+    for (let i = 0; i < minLines; i++) {
+      if (originalLines[i] !== resultLines[i]) {
+        linesChanged++;
+      }
+    }
+    linesChanged += Math.abs(resultLines.length - originalLines.length);
+    return {
+      content: newContent,
+      replacements: matches.length,
+      linesChanged
+    };
   }
 }

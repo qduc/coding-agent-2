@@ -78,7 +78,7 @@ Follow these guidelines:
 - Always be helpful, accurate, and focused on the specific coding task at hand.
 - Make clear of the user's intention:
   - If the user is asking a question, provide an answer without changing the codebase.
-  - If the user is asking for code changes, provide a clear plan and implementation steps.`;
+  - If the user is asking for code changes, provide a clear plan then implement.`;
 
     return {
       role: 'system',
