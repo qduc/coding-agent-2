@@ -11,7 +11,7 @@ import { SubAgentTool } from '../tools/subAgent';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 import { toolContextManager } from '../utils/ToolContextManager';
-import { logger, Logger } from '../utils/logger';
+import { Logger } from '../utils/logger';
 import { WebSearchTool } from '../tools/webSearch';
 import { TodoTool } from '../tools/todo';
 

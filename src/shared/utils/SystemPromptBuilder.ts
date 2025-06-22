@@ -6,7 +6,6 @@ import * as path from 'path';
 import { BaseTool } from '../tools';
 import { ProjectDiscoveryResult } from './projectDiscovery';
 import { ConversationMessage } from '../handlers/ConversationManager';
-import { TaskAnalyzer } from './TaskAnalyzer';
 import { LLMService } from '../services/llm';
 
 export interface TaskContext {
@@ -19,7 +18,6 @@ export interface TaskContext {
 export class SystemPromptBuilder {
   private projectContext?: ProjectDiscoveryResult;
   private taskContext?: TaskContext;
-  private taskAnalyzer = TaskAnalyzer.getInstance();
   private llmService?: LLMService;
 
   /**
@@ -55,8 +53,8 @@ export class SystemPromptBuilder {
 
 CURRENT CONTEXT:
 - Operating System: ${platform}
-- Working Directory: ${currentDirectory}
 - Project Name: ${projectName}
+- Working Directory: ${currentDirectory}
 - When users refer to "this file", "this project", or use relative paths, they're referring to files within this directory
 
 Key capabilities:
@@ -75,7 +73,6 @@ Key capabilities:
     const fullSystemMessage = `${baseSystemMessage}\n${projectContextSection}\n${toolUsageSection}\nWhen working with files:
 - Use the current working directory (${currentDirectory}) as the base for relative paths
 - When users say "this", they mean the project in the current directory
-- Be proactive, assume the user intention is to make change to the codebase with the write tool, don't ask for confirmation unless the change is destructive
 
 Always be helpful, accurate, and focused on the specific coding task at hand.`;
 
@@ -159,10 +156,9 @@ AVAILABLE TOOLS & USAGE:
   Example: todo({action: "init", text: ["Design API endpoints", "Implement user authentication", "Write tests"]})
 
 🤖 Delegation:
-• sub_agent - Delegate specialized tasks to focused sub-agents
-  Use: Complex tasks requiring specific expertise (code, test, debug, docs)
-  Auto-detects specialization or specify: code, test, debug, docs, search, validation
-  Example: sub_agent({task_description: "Generate unit tests", auto_detect_specialization: true})
+• sub_agent - Find and summarize codebase context for the main agent
+  Use: When the main agent needs to understand something in the codebase that simple search tools (like ripgrep) cannot provide, use sub_agent to analyze and explain deeper context or relationships in the codebase.
+  Example: sub_agent({query: "How does authentication flow work?", files: ["src/auth.ts", "src/middleware/auth.ts"]})
 
 🌐 Web Search:
 • web_search - Search the internet using Brave Search API

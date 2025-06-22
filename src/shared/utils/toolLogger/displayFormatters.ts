@@ -45,7 +45,8 @@ export function getMinimalContext(toolName: string, args: any): string {
   } else if (toolLower.includes('write') && args.path) {
     const mode = args.search ? 'search-replace' : args.diff ? 'diff' : 'content';
     if (mode === 'search-replace') {
-      return ` ${args.path} • "${args.search}" → "${args.replace}"`;
+      // Use newlines and color backgrounds for search/replace blocks
+      return ` ${args.path}${formatSearchReplaceBlock(args.search, args.replace)}`;
     } else if (mode === 'diff') {
       return ` ${args.path}\n${formatDiff(args.diff)}`;
     } else {
@@ -104,6 +105,15 @@ function formatDiff(diff: string): string {
       .join('\n');
 }
 
+function formatSearchReplaceBlock(search: string, replace: string): string {
+  // Split into lines for multiline support
+  const searchLines = (search || '').split('\n');
+  const replaceLines = (replace || '').split('\n');
+  const searchBlock = searchLines.map(line => chalk.bgYellow.black(`${line}`)).join('\n');
+  const replaceBlock = replaceLines.map(line => chalk.bgGreen.black(`${line}`)).join('\n');
+  return `\n${searchBlock}\n${replaceBlock}`;
+}
+
 /**
  * Get minimal outcome for modern display
  */
@@ -142,9 +152,9 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
       if (mode === 'search-replace') {
         const replacements = result.replacements || 0;
         const linesChanged = result.linesChanged || 0;
-        return ` • ${replacements} replacements, ${linesChanged}L changed`;
+        return `\n• ${replacements} replacements, ${linesChanged}L changed`;
       } else if (result.linesChanged) {
-        return ` • ${result.linesChanged}L changed`;
+        return `\n• ${result.linesChanged}L changed`;
       }
     } else if (args?.content) {
       const lines = args.content.split('\n').length;
