@@ -11,7 +11,7 @@ import { InputCallbacks, InputOptions, CompletionState } from '../types';
 import { CompletionItem } from '../services/completion/CompletionProvider';
 
 export interface InputComponentProps {
-  callbacks: InputCallbacks;
+  callbacks: InputCallbacks & { onInterruptOrExit?: () => void };
   options?: InputOptions;
   completionManager: CompletionManager;
   clipboardManager: ClipboardManager;
@@ -24,7 +24,7 @@ export const InputComponent: React.FC<InputComponentProps> = ({
   clipboardManager,
 }) => {
   const { state: inputState, actions: inputActions } = useInputState(options.initialInput);
-  
+
   // Local completion state - no more dual system
   const [completionState, setCompletionState] = useState<CompletionState>({
     items: [],
@@ -62,12 +62,12 @@ export const InputComponent: React.FC<InputComponentProps> = ({
         inputState.value,
         inputState.cursorPosition
       );
-      
+
       const activeProvider = completionManager.getActiveProvider(
         inputState.value,
         inputState.cursorPosition
       );
-      
+
       setCompletionState(prev => ({
         ...prev,
         items,
@@ -86,12 +86,12 @@ export const InputComponent: React.FC<InputComponentProps> = ({
           inputState.value,
           inputState.cursorPosition
         );
-        
+
         const activeProvider = completionManager.getActiveProvider(
           inputState.value,
           inputState.cursorPosition
         );
-        
+
         setCompletionState({
           items,
           selectedIndex: 0,
@@ -122,6 +122,7 @@ export const InputComponent: React.FC<InputComponentProps> = ({
     inputValue: inputState.value,
     cursorPosition: inputState.cursorPosition,
     disabled: options.disabled,
+    // No need to pass anything else, callbacks now includes onInterruptOrExit
   });
 
   return (

@@ -105,7 +105,7 @@ export class ReadTool extends BaseTool {
     additionalProperties: false
   };
 
-  protected async executeImpl(params: ReadParams): Promise<ToolResult> {
+  protected async executeImpl(params: ReadParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const {
       path: filePath,
       encoding = 'utf8',

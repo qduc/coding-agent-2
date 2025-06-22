@@ -122,7 +122,7 @@ if (this.options?.temporaryProvider) {
 
     // Initialize LLM service
     const initialized = await this.llmService.initialize();
-    
+
     if (initialized) {
       // Output the current provider and model being used
       const providerName = this.llmService.getProviderName();
@@ -137,7 +137,7 @@ if (this.options?.temporaryProvider) {
       // Initialize the orchestrator's provider strategy now that LLM service is ready
       this.orchestrator.initializeProviderStrategy();
     }
-    
+
     return initialized;
   }
 
@@ -154,13 +154,14 @@ if (this.options?.temporaryProvider) {
   async processMessage(
     userMessage: string,
     onChunk?: (chunk: string) => void,
-    verbose: boolean = false
+    verbose: boolean = false,
+    abortSignal?: AbortSignal
   ): Promise<string> {
     if (!this.isReady()) {
       throw new Error('Agent not initialized. Call initialize() first.');
     }
 
-    return await this.orchestrator.processMessage(userMessage, onChunk, verbose);
+    return await this.orchestrator.processMessage(userMessage, onChunk, verbose, abortSignal);
   }
 
   /**
@@ -194,7 +195,7 @@ if (this.options?.temporaryProvider) {
   async refreshProjectContext(): Promise<void> {
     // Re-run project discovery with force refresh
     this.discoveryResult = await this.projectDiscovery.discover(true);
-    
+
     // Update project context in orchestrator
     this.orchestrator.setProjectContext(this.discoveryResult);
   }

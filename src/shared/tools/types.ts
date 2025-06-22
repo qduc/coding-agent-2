@@ -105,6 +105,16 @@ export interface ToolContext {
 }
 
 /**
+ * Tool execution context including cancellation support
+ */
+export interface ExecutionContext {
+  /** Abort signal for cancelling long-running operations */
+  abortSignal?: AbortSignal;
+  /** Retry options for this execution */
+  retryOptions?: Partial<import('./retry').RetryOptions>;
+}
+
+/**
  * Default tool context with sensible security limits
  */
 export const DEFAULT_TOOL_CONTEXT: ToolContext = {

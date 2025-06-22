@@ -97,7 +97,7 @@ export class LSTool extends BaseTool {
     additionalProperties: false
   };
 
-  protected async executeImpl(params: LSParams): Promise<ToolResult> {
+  protected async executeImpl(params: LSParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const {
       path: targetPath,
       pattern,

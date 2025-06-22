@@ -23,7 +23,7 @@ export class GeminiProvider extends BaseLLMProvider {
   async initialize(): Promise<boolean> {
     try {
       this.refreshConfig();
-      
+
       if (!this.validateApiKey(this.config.geminiApiKey, 'GEMINI_API_KEY')) {
         return false;
       }
@@ -42,10 +42,10 @@ export class GeminiProvider extends BaseLLMProvider {
    */
   private convertMessagesToParts(messages: any[]): Content[] {
     const convertedMessages: Content[] = [];
-    
+
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
-      
+
       // Handle Gemini-native format
       if (msg.parts) {
         if (!msg.parts || msg.parts.length === 0) {
@@ -54,7 +54,7 @@ export class GeminiProvider extends BaseLLMProvider {
         convertedMessages.push(msg);
         continue;
       }
-      
+
       // Handle tool results (role: 'tool')
       if (msg.role === 'tool' && msg.tool_call_id) {
         // Find the corresponding tool call in previous messages to get the function name
@@ -69,7 +69,7 @@ export class GeminiProvider extends BaseLLMProvider {
             }
           }
         }
-        
+
         // Convert tool result to Gemini function response format
         convertedMessages.push({
           role: 'user',
@@ -82,23 +82,23 @@ export class GeminiProvider extends BaseLLMProvider {
         });
         continue;
       }
-      
+
       // Handle assistant messages with tool calls
       if (msg.role === 'assistant' && msg.tool_calls) {
         const parts: Part[] = [];
-        
+
         // Add text content if present
         if (msg.content) {
           parts.push({ text: msg.content });
         }
-        
+
         // Add tool calls as function calls
         for (const toolCall of msg.tool_calls) {
           try {
-            const args = typeof toolCall.function.arguments === 'string' 
+            const args = typeof toolCall.function.arguments === 'string'
               ? this.parseToolArguments(toolCall.function.arguments)
               : toolCall.function.arguments;
-            
+
             parts.push({
               functionCall: {
                 name: toolCall.function.name,
@@ -109,7 +109,7 @@ export class GeminiProvider extends BaseLLMProvider {
             console.warn(`Failed to parse tool call arguments for ${toolCall.function.name}:`, error);
           }
         }
-        
+
         if (parts.length > 0) {
           convertedMessages.push({
             role: 'model',
@@ -118,13 +118,13 @@ export class GeminiProvider extends BaseLLMProvider {
         }
         continue;
       }
-      
+
       // Handle regular messages
       const parts: Part[] = [];
       if (msg.content) {
         parts.push({ text: msg.content });
       }
-      
+
       if (parts.length > 0) {
         convertedMessages.push({
           role: msg.role === 'user' ? 'user' : 'model',
@@ -132,7 +132,7 @@ export class GeminiProvider extends BaseLLMProvider {
         });
       }
     }
-    
+
     return convertedMessages;
   }
 
@@ -155,7 +155,8 @@ export class GeminiProvider extends BaseLLMProvider {
   protected async _sendMessageWithTools(
     messages: Message[],
     functions: any[] = [],
-    onToolCall?: (toolName: string, args: any) => void
+    onToolCall?: (toolName: string, args: any) => void,
+    abortSignal?: AbortSignal
   ): Promise<FunctionCallResponse> {
     this.ensureInitialized();
 

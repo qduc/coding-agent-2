@@ -94,7 +94,7 @@ export class WebSearchTool extends BaseTool {
     });
   }
 
-  protected async executeImpl(params: WebSearchParams): Promise<ToolResult> {
+  protected async executeImpl(params: WebSearchParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const { query, count = 10, offset = 0, search_lang = 'en', country = 'US', safesearch = 'moderate', freshness } = params;
 
     // Check if Brave Search API key is configured
@@ -120,7 +120,7 @@ export class WebSearchTool extends BaseTool {
       searchUrl.searchParams.set('search_lang', search_lang);
       searchUrl.searchParams.set('country', country);
       searchUrl.searchParams.set('safesearch', safesearch);
-      
+
       if (freshness) {
         searchUrl.searchParams.set('freshness', freshness);
       }
@@ -137,7 +137,7 @@ export class WebSearchTool extends BaseTool {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        
+
         if (response.status === 401) {
           return this.createErrorResult(
             'Invalid Brave Search API key. Please check your credentials.',
@@ -149,7 +149,7 @@ export class WebSearchTool extends BaseTool {
             ]
           );
         }
-        
+
         if (response.status === 429) {
           return this.createErrorResult(
             'Rate limit exceeded. Please try again later.',
@@ -169,7 +169,7 @@ export class WebSearchTool extends BaseTool {
 
       // Extract search results
       const results = data.web?.results || [];
-      
+
       if (results.length === 0) {
         return this.createSuccessResult({
           query: query,
@@ -216,7 +216,7 @@ export class WebSearchTool extends BaseTool {
       }
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      
+
       // Handle network errors
       if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
         return this.createErrorResult(

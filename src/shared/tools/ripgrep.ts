@@ -122,7 +122,7 @@ export class RipgrepTool extends BaseTool {
    */
   isRipgrepAvailable(): boolean {
     if (!this.ripgrepPath) return false;
-    
+
     // If it's just 'rg', try to execute it to see if it works
     if (this.ripgrepPath === 'rg') {
       try {
@@ -132,7 +132,7 @@ export class RipgrepTool extends BaseTool {
         return false;
       }
     }
-    
+
     // If it's a full path, check if the file exists
     return fs.existsSync(this.ripgrepPath);
   }
@@ -288,7 +288,7 @@ export class RipgrepTool extends BaseTool {
     web: ['.js', '.ts', '.jsx', '.tsx', '.vue', '.html', '.css', '.scss']
   };
 
-  protected async executeImpl(params: RipgrepParams): Promise<ToolResult> {
+  protected async executeImpl(params: RipgrepParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const startTime = Date.now();
     const {
       pattern,
@@ -334,7 +334,7 @@ export class RipgrepTool extends BaseTool {
       const stats_fs = await fs.stat(absolutePath);
       const isDirectory = stats_fs.isDirectory();
       const isFile = stats_fs.isFile();
-      
+
       if (!isDirectory && !isFile) {
         return this.createErrorResult(
           `Search path is neither a directory nor a file: ${searchPath}`,
@@ -380,7 +380,7 @@ export class RipgrepTool extends BaseTool {
    */
   private async executeSystemRipgrep(params: RipgrepParams, searchPath: string, isFileSearch: boolean = false): Promise<RipgrepResult> {
     const rgPath = this.ripgrepPath || 'rg';
-    
+
     // Check if ripgrep is available
     if (!this.isRipgrepAvailable()) {
       // Fallback to pure JS search
@@ -389,7 +389,7 @@ export class RipgrepTool extends BaseTool {
 
     return new Promise((resolve, reject) => {
       const args = this.buildRipgrepArgs(params, searchPath);
-      
+
       const child = spawn(rgPath, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: this.context.workingDirectory
@@ -440,10 +440,10 @@ export class RipgrepTool extends BaseTool {
    */
   private buildRipgrepArgs(params: RipgrepParams, searchPath: string): string[] {
     const args: string[] = [];
-    
+
     // Output format
     args.push('--line-number', '--column', '--no-heading', '--with-filename');
-    
+
     // Context options
     if (params.before && params.before > 0) {
       args.push('--before-context', params.before.toString());
@@ -451,19 +451,19 @@ export class RipgrepTool extends BaseTool {
     if (params.after && params.after > 0) {
       args.push('--after-context', params.after.toString());
     }
-    
+
     // Case sensitivity
     if (params.ignoreCase) {
       args.push('--ignore-case');
     }
-    
+
     // File type filtering
     if (params.types && params.types.length > 0) {
       for (const type of params.types) {
         args.push('--type', type);
       }
     }
-    
+
     // Extension filtering
     if (params.extensions && params.extensions.length > 0) {
       for (const ext of params.extensions) {
@@ -471,26 +471,26 @@ export class RipgrepTool extends BaseTool {
         args.push('--glob', `*.${cleanExt}`);
       }
     }
-    
+
     // Hidden files
     if (!params.includeHidden) {
       args.push('--hidden');
     }
-    
+
     // Max results
     if (params.maxResults && params.maxResults > 0) {
       args.push('--max-count', params.maxResults.toString());
     }
-    
+
     // Pattern handling
     if (params.regex === false) {
       args.push('--fixed-strings');
     }
-    
+
     // Add the pattern and search path
     args.push(params.pattern);
     args.push(searchPath);
-    
+
     return args;
   }
 
@@ -516,18 +516,18 @@ export class RipgrepTool extends BaseTool {
       // ripgrep output format with --no-heading --with-filename --line-number --column:
       // filepath:line:column:content
       const match = line.match(/^([^:]+):(\d+):(\d+):(.*)$/);
-      
+
       if (match) {
         const [, filePath, lineStr, columnStr, content] = match;
         const lineNumber = parseInt(lineStr, 10);
         const columnNumber = parseInt(columnStr, 10);
-        
+
         // Track unique files
         filesSearched.add(filePath);
-        
+
         // Find the actual matched text within the content
         let matchedText = pattern;
-        
+
         try {
           if (params.regex !== false) {
             const flags = params.ignoreCase ? 'gi' : 'g';
@@ -572,7 +572,7 @@ export class RipgrepTool extends BaseTool {
         });
 
         stats.matchesFound++;
-        
+
         // Stop if we reached the maximum results
         if (params.maxResults && matches.length >= params.maxResults) {
           break;
@@ -622,10 +622,10 @@ export class RipgrepTool extends BaseTool {
     const matches: RipgrepMatch[] = [];
     const stats: RipgrepStats = { filesSearched: 0, matchesFound: 0, linesScanned: 0, executionTime: 0, filesSkipped: 0 };
     let filesToProcess: string[] = [];
-    
+
     // Check if searchPath is a file or directory
     const searchStat = await fs.stat(searchPath);
-    
+
     if (searchStat.isFile()) {
       // If it's a file, just add it to the process list
       filesToProcess.push(searchPath);
@@ -653,7 +653,7 @@ export class RipgrepTool extends BaseTool {
           }
         }
       };
-      
+
       // Start collecting files from directory
       await collect(searchPath);
     }
@@ -710,7 +710,7 @@ export class RipgrepTool extends BaseTool {
           if (foundMatch) {
             // For single file searches, use just the filename; for directory searches, use relative path
             const displayPath = searchStat.isFile() ? path.basename(file) : path.relative(searchPath, file);
-            
+
             matches.push({
               file: displayPath,
               lineNumber: lineNumber + 1,

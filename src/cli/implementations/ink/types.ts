@@ -35,6 +35,7 @@ export interface InputCallbacks {
   onSubmit: (input: string) => void;
   onExit: () => void;
   onInterrupt?: () => void;
+  onInterruptOrExit?: () => void; // Added for unified interrupt/exit
 }
 
 export interface InputOptions {

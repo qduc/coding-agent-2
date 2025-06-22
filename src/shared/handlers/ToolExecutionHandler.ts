@@ -50,7 +50,7 @@ export class ToolExecutionHandler {
   /**
    * Execute a tool call and return formatted result for conversation
    */
-  async executeToolCall(toolCall: ToolCall, verbose: boolean = false): Promise<{
+  async executeToolCall(toolCall: ToolCall, verbose: boolean = false, abortSignal?: AbortSignal): Promise<{
     success: boolean;
     content: string;
     toolCallId: string;
@@ -105,6 +105,11 @@ export class ToolExecutionHandler {
         throw parseError;
       }
 
+      // Check for cancellation before tool execution
+      if (abortSignal?.aborted) {
+        throw new Error('Operation was aborted by user');
+      }
+
       logger.debug('Executing tool', { toolName: func.name, args }, 'TOOL_EXECUTION');
 
       // Log tool call for UI display
@@ -112,8 +117,8 @@ export class ToolExecutionHandler {
         ToolLogger.logToolCall(func.name, args);
       }
 
-      // Execute the tool
-      const result = await tool.execute(args);
+      // Execute the tool with abort signal if supported
+      const result = await tool.execute(args, { abortSignal });
       const executionTime = Date.now() - startTime;
 
       // Log tool execution
@@ -143,8 +148,8 @@ export class ToolExecutionHandler {
       if (logToolUsage) {
         // For bash tool, always pass the output (which contains BashResult even on failure)
         // For other tools, pass output on success, error on failure
-        const logResult = (func.name.toLowerCase() === 'bash' && result.output) 
-          ? result.output 
+        const logResult = (func.name.toLowerCase() === 'bash' && result.output)
+          ? result.output
           : (result.success ? result.output : result.error);
         ToolLogger.logToolResult(func.name, result.success, logResult, args);
       }
@@ -237,8 +242,8 @@ export class ToolExecutionHandler {
 
       // Log tool usage if enabled
       if (logToolUsage) {
-        const logResult = (func.name.toLowerCase() === 'bash' && result.output) 
-          ? result.output 
+        const logResult = (func.name.toLowerCase() === 'bash' && result.output)
+          ? result.output
           : (result.success ? result.output : result.error);
         ToolLogger.logToolResult(func.name, result.success, logResult, args);
       }

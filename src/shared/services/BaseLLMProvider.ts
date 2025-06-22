@@ -26,7 +26,8 @@ export abstract class BaseLLMProvider implements LLMProvider {
   protected abstract _sendMessageWithTools(
     messages: Message[],
     functions?: any[],
-    onToolCall?: (toolName: string, args: any) => void
+    onToolCall?: (toolName: string, args: any) => void,
+    abortSignal?: AbortSignal
   ): Promise<FunctionCallResponse>;
 
   // Public methods that process file references before calling abstract methods
@@ -35,10 +36,11 @@ export abstract class BaseLLMProvider implements LLMProvider {
   async sendMessageWithTools(
     messages: Message[],
     functions?: any[],
-    onToolCall?: (toolName: string, args: any) => void
+    onToolCall?: (toolName: string, args: any) => void,
+    abortSignal?: AbortSignal
   ): Promise<FunctionCallResponse> {
     const processedMessages = this.processFileReferences(messages);
-    return this._sendMessageWithTools(processedMessages, functions, onToolCall);
+    return this._sendMessageWithTools(processedMessages, functions, onToolCall, abortSignal);
   }
 
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text, useApp } from 'ink';
 import { ConversationDisplay, Message } from './ConversationDisplay';
 import { InputComponent } from './InputComponent';
@@ -34,6 +34,9 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const [showWelcome, setShowWelcome] = useState(true);
   const [showToolLogs, setShowToolLogs] = useState(true);
   const [verboseToolLogs, setVerboseToolLogs] = useState(false);
+
+  // Current abort controller for ongoing requests
+  const currentAbortControllerRef = useRef<AbortController | null>(null);
   const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
     setMessages(prev => [...prev, {
       ...message,
@@ -41,6 +44,11 @@ export const ChatApp: React.FC<ChatAppProps> = ({
       timestamp: new Date(),
     }]);
   }, []);
+
+  // Interrupt/exit press tracking
+  const lastInterruptTime = useRef<number>(0);
+  const interruptCount = useRef<number>(0);
+  const interruptTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Handle tool events
   const handleToolEvent = useCallback((event: ToolEvent) => {
@@ -136,6 +144,44 @@ export const ChatApp: React.FC<ChatAppProps> = ({
       exit();
     }
   }, [exit, onExit]);
+
+  const handleInterrupt = useCallback(() => {
+    if (isProcessing) {
+      // Actually abort the current request
+      if (currentAbortControllerRef.current) {
+        currentAbortControllerRef.current.abort();
+        currentAbortControllerRef.current = null;
+      }
+
+      setIsProcessing(false);
+      addMessage({
+        type: 'system',
+        content: '⚠️ Operation interrupted. What would you like to do next?',
+      });
+    }
+  }, [isProcessing, addMessage]);
+
+  // New: Unified interrupt/exit handler for Ctrl+C/Esc
+  const handleInterruptOrExit = useCallback(() => {
+    const now = Date.now();
+    if (!isProcessing) {
+      handleExit();
+      return;
+    }
+    if (interruptCount.current === 0 || now - lastInterruptTime.current > 1000) {
+      // First press or too late, treat as interrupt
+      handleInterrupt();
+      interruptCount.current = 1;
+      lastInterruptTime.current = now;
+      if (interruptTimeout.current) clearTimeout(interruptTimeout.current);
+      interruptTimeout.current = setTimeout(() => {
+        interruptCount.current = 0;
+      }, 1000);
+    } else {
+      // Second press within 1s, force exit
+      handleExit();
+    }
+  }, [isProcessing, handleInterrupt, handleExit]);
 
   const commandHandlers: { [key: string]: () => Promise<void> | void } = {
     '/exit': () => handleExit(),
@@ -250,51 +296,45 @@ Example Questions:
 
     // Process with agent
     setIsProcessing(true);
+
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    currentAbortControllerRef.current = abortController;
+
     try {
       const response = await agent.processMessage(
         trimmedInput,
         undefined,
-        options.verbose
+        options.verbose,
+        abortController.signal
       );
-      addMessage({
-        type: 'agent',
-        content: response,
-      });
+
+      // Only add response if the request wasn't aborted
+      if (!abortController.signal.aborted) {
+        addMessage({
+          type: 'agent',
+          content: response,
+        });
+      }
     } catch (error) {
+      // Handle abort errors gracefully
+      if (error instanceof Error && error.message.includes('aborted')) {
+        // Don't show error message for user-initiated cancellations
+        return;
+      }
+
       addMessage({
         type: 'error',
         content: error instanceof Error ? error.message : 'Unknown error occurred',
       });
     } finally {
+      // Clear the abort controller reference
+      if (currentAbortControllerRef.current === abortController) {
+        currentAbortControllerRef.current = null;
+      }
       setIsProcessing(false);
     }
   }, [agent, addMessage, handleExit, options, showWelcome, verboseToolLogs, showToolLogs]);
-
-  const handleInterrupt = useCallback(() => {
-    if (isProcessing) {
-      // Cancel the current operation
-      setIsProcessing(false);
-
-      // Add a message to indicate interruption
-      addMessage({
-        type: 'system',
-        content: '⚠️ Operation interrupted. What would you like to do next?',
-      });
-    }
-  }, [isProcessing, addMessage]);
-
-  const inputCallbacks: InputCallbacks = {
-    onSubmit: handleUserInput,
-    onExit: handleExit,
-    onInterrupt: handleInterrupt,
-  };
-
-  const inputOptions: InputOptions = {
-    prompt: isProcessing
-      ? '🤖 Processing...'
-      : '💬 Your Message (Enter to send, Enter again for multi-line):',
-    disabled: isProcessing,
-  };
 
   // Set up tool event listener
   useEffect(() => {
@@ -311,10 +351,33 @@ Example Questions:
     };
 
     process.on('SIGINT', handleSigInt);
+
+    // Cleanup function
     return () => {
       process.removeListener('SIGINT', handleSigInt);
+
+      // Abort any ongoing requests when component unmounts
+      if (currentAbortControllerRef.current) {
+        currentAbortControllerRef.current.abort();
+        currentAbortControllerRef.current = null;
+      }
     };
   }, [handleExit]);
+
+  const inputCallbacks: InputCallbacks = {
+    onSubmit: handleUserInput,
+    onExit: handleExit, // fallback, not used for Ctrl+C/Esc anymore
+    onInterrupt: handleInterrupt, // fallback, not used for Ctrl+C/Esc anymore
+    // @ts-ignore
+    onInterruptOrExit: handleInterruptOrExit, // custom, used for Ctrl+C/Esc
+  };
+
+  const inputOptions: InputOptions = {
+    prompt: isProcessing
+      ? '🤖 Processing...'
+      : '💬 Your Message (Enter to send, Enter again for multi-line):',
+    disabled: isProcessing,
+  };
 
   return (
     <ApprovalProvider>

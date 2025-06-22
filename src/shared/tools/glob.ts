@@ -129,7 +129,7 @@ export class GlobTool extends BaseTool {
   private filesScanned = 0;
   private directoriesTraversed = 0;
 
-  protected async executeImpl(params: GlobParams): Promise<ToolResult> {
+  protected async executeImpl(params: GlobParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const {
       pattern,
       patterns = [],
@@ -170,7 +170,7 @@ export class GlobTool extends BaseTool {
       try {
         // Check if the pattern is valid by attempting to parse it
         new minimatch.Minimatch(pattern, { nocomment: true });
-      
+
         // Also validate any additional patterns
         for (const additionalPattern of patterns) {
           new minimatch.Minimatch(additionalPattern);
@@ -355,11 +355,11 @@ export class GlobTool extends BaseTool {
 
           // Check if this item matches any of the patterns
           const matchesInclusionPatterns = inclusionPatterns.length === 0 ||
-            inclusionPatterns.some(pattern => 
+            inclusionPatterns.some(pattern =>
               this.matchesPattern(match, pattern, caseSensitive)
             );
 
-          const matchesExclusionPatterns = exclusionPatterns.some(pattern => 
+          const matchesExclusionPatterns = exclusionPatterns.some(pattern =>
             this.matchesPattern(match, pattern, caseSensitive)
           );
 

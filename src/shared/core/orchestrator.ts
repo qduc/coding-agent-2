@@ -126,7 +126,8 @@ export class ToolOrchestrator {
   async processMessage(
     userInput: string,
     onChunk?: (chunk: string) => void,
-    verbose: boolean = false
+    verbose: boolean = false,
+    abortSignal?: AbortSignal
   ): Promise<string> {
     if (!this.llmService.isReady()) {
       throw new Error('LLM service not initialized');
@@ -148,6 +149,11 @@ export class ToolOrchestrator {
 
     // Loop until we get a final response or detect an infinite loop
     while (true) {
+      // Check for cancellation at the start of each iteration
+      if (abortSignal?.aborted) {
+        throw new Error('Operation was aborted by user');
+      }
+
       if (verbose) {
         logger.debug('🔄 Processing with LLM...', {}, 'ORCHESTRATOR', this.correlationId);
       }
@@ -162,7 +168,8 @@ export class ToolOrchestrator {
           messages,
           this.toolExecutionHandler.getRegisteredTools(),
           onChunk,
-          verbose
+          verbose,
+          abortSignal
         );
 
         // Check if LLM wants to call tools
@@ -190,13 +197,18 @@ export class ToolOrchestrator {
 
           // Execute each tool call and track in history
           for (const toolCall of response.tool_calls) {
+            // Check for cancellation before each tool execution
+            if (abortSignal?.aborted) {
+              throw new Error('Operation was aborted by user');
+            }
+
             // Track tool call for pattern detection
             const toolName = toolCall.function.name;
             const toolArgs = toolCall.function.arguments;
             toolCallHistory.push({ name: toolName, args: toolArgs });
 
             // Execute the tool
-            const result = await this.toolExecutionHandler.executeToolCall(toolCall, verbose);
+            const result = await this.toolExecutionHandler.executeToolCall(toolCall, verbose, abortSignal);
             this.conversationManager.addToolResult(result.content, result.toolCallId);
           }
 

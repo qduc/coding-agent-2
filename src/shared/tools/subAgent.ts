@@ -1,6 +1,6 @@
 /**
  * SubAgentTool - Tool for delegating tasks to specialized sub-agents
- * 
+ *
  * Allows the main agent to delegate focused tasks to specialized sub-agents
  * for improved efficiency, cost optimization, and parallel processing.
  */
@@ -9,10 +9,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError } from './types';
 import { SubAgentFactory } from '../factories/SubAgentFactory';
-import { 
-  SubAgentSpecialization, 
-  TaskDelegation, 
-  SubAgentOptions 
+import {
+  SubAgentSpecialization,
+  TaskDelegation,
+  SubAgentOptions
 } from '../types/subAgent';
 import { ISubAgent } from '../interfaces/ISubAgent';
 import { logger } from '../utils/logger';
@@ -20,7 +20,7 @@ import { logger } from '../utils/logger';
 export class SubAgentTool extends BaseTool {
   readonly name = 'sub_agent';
   readonly description = 'Delegate focused tasks to specialized sub-agents for efficient processing';
-  
+
   readonly schema: ToolSchema = {
     type: 'object',
     properties: {
@@ -82,7 +82,7 @@ export class SubAgentTool extends BaseTool {
   /**
    * Execute task delegation to sub-agent
    */
-  protected async executeImpl(params: any): Promise<ToolResult> {
+  protected async executeImpl(params: any, abortSignal?: AbortSignal): Promise<ToolResult> {
     const {
       task_description,
       specialization,
@@ -94,7 +94,7 @@ export class SubAgentTool extends BaseTool {
     try {
       // Determine specialization
       let targetSpecialization: SubAgentSpecialization;
-      
+
       if (auto_detect_specialization || !specialization) {
         targetSpecialization = this.detectSpecialization(task_description);
         logger.debug(`Auto-detected specialization: ${targetSpecialization} for task: ${task_description.substring(0, 100)}...`);
@@ -114,7 +114,7 @@ export class SubAgentTool extends BaseTool {
 
       // Get or create sub-agent
       const subAgent = await this.getOrCreateSubAgent(targetSpecialization);
-      
+
       // Execute task
       const startTime = Date.now();
       const result = await subAgent.processTask(delegation);
@@ -177,12 +177,12 @@ export class SubAgentTool extends BaseTool {
     try {
       const subAgent = await this.subAgentFactory.createSpecializedAgent(specialization);
       this.activeSubAgents.set(subAgent.id, subAgent);
-      
+
       logger.info(`Created new sub-agent ${subAgent.id} for specialization: ${specialization}`);
-      
+
       // Clean up sub-agent after a period of inactivity
       this.scheduleCleanup(subAgent.id, 300000); // 5 minutes
-      
+
       return subAgent;
     } catch (error) {
       logger.error(`Failed to create sub-agent for specialization ${specialization}:`, error instanceof Error ? error : new Error('Unknown error'));
@@ -198,37 +198,37 @@ export class SubAgentTool extends BaseTool {
    */
   private detectSpecialization(taskDescription: string): SubAgentSpecialization {
     const task = taskDescription.toLowerCase();
-    
+
     // Test-related patterns
     if (this.containsPatterns(task, ['test', 'spec', 'coverage', 'jest', 'mocha', 'pytest', 'unittest'])) {
       return 'test';
     }
-    
+
     // Debug-related patterns
     if (this.containsPatterns(task, ['debug', 'error', 'fix', 'bug', 'troubleshoot', 'stack trace', 'exception'])) {
       return 'debug';
     }
-    
+
     // Documentation patterns
     if (this.containsPatterns(task, ['document', 'readme', 'comment', 'docs', 'explain', 'api doc', 'jsdoc'])) {
       return 'docs';
     }
-    
+
     // Search patterns
     if (this.containsPatterns(task, ['find', 'search', 'locate', 'discover', 'pattern', 'grep', 'look for'])) {
       return 'search';
     }
-    
+
     // Validation patterns
     if (this.containsPatterns(task, ['lint', 'validate', 'check', 'verify', 'build', 'eslint', 'tsc'])) {
       return 'validation';
     }
-    
+
     // Code patterns
     if (this.containsPatterns(task, ['implement', 'create', 'add', 'refactor', 'function', 'class', 'module', 'component'])) {
       return 'code';
     }
-    
+
     // Default to general for complex or ambiguous tasks
     return 'general';
   }
@@ -250,7 +250,7 @@ export class SubAgentTool extends BaseTool {
       if (agent && agent.isReady()) {
         const status = agent.getStatus();
         const timeSinceLastActivity = Date.now() - status.lastActivity;
-        
+
         // Only cleanup if agent has been idle for the full delay period
         if (timeSinceLastActivity >= delayMs) {
           try {
@@ -290,10 +290,10 @@ export class SubAgentTool extends BaseTool {
    */
   async shutdownAllSubAgents(): Promise<void> {
     const shutdownPromises: Promise<void>[] = [];
-    
+
     for (const [agentId, agent] of this.activeSubAgents) {
       shutdownPromises.push(
-        agent.shutdown().catch(error => 
+        agent.shutdown().catch(error =>
           logger.error(`Failed to shutdown sub-agent ${agentId}:`, error)
         )
       );
@@ -301,7 +301,7 @@ export class SubAgentTool extends BaseTool {
 
     await Promise.allSettled(shutdownPromises);
     this.activeSubAgents.clear();
-    
+
     logger.info('All sub-agents shut down via SubAgentTool');
   }
 
@@ -314,7 +314,7 @@ export class SubAgentTool extends BaseTool {
     subAgentsBySpecialization: Record<string, number>;
   } {
     const subAgentsBySpecialization: Record<string, number> = {};
-    
+
     for (const agent of this.activeSubAgents.values()) {
       const spec = agent.specialization;
       subAgentsBySpecialization[spec] = (subAgentsBySpecialization[spec] || 0) + 1;

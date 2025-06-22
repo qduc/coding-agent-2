@@ -32,7 +32,7 @@ This tool encourages structured problem-solving by breaking complex tasks into m
 
 **When to Use:**
 - Multi-step coding tasks (3+ distinct actions)
-- Complex refactoring or architectural changes  
+- Complex refactoring or architectural changes
 - Feature implementations requiring multiple files
 - Debugging workflows with multiple potential causes
 - When user asks "how should I approach this?"
@@ -79,23 +79,23 @@ Operations: add, list, complete, delete, clear`;
     text?: string;
     id?: string;
     priority?: 'low' | 'medium' | 'high';
-  }): Promise<ToolResult> {
+  }, abortSignal?: AbortSignal): Promise<ToolResult> {
     switch (params.action) {
       case 'add':
         return this.addTodo(params.text!, params.priority || 'medium');
-      
+
       case 'list':
         return this.listTodos();
-      
+
       case 'complete':
         return this.completeTodo(params.id!);
-      
+
       case 'delete':
         return this.deleteTodo(params.id!);
-      
+
       case 'clear':
         return this.clearTodos();
-      
+
       default:
         return this.createErrorResult(
           `Unknown action: ${params.action}`,
@@ -143,12 +143,12 @@ Operations: add, list, complete, delete, clear`;
         if (a.completed !== b.completed) {
           return a.completed ? 1 : -1;
         }
-        
+
         const priorityOrder = { high: 3, medium: 2, low: 1 };
         if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
           return priorityOrder[b.priority] - priorityOrder[a.priority];
         }
-        
+
         return a.created.getTime() - b.created.getTime();
       });
 

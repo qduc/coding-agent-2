@@ -94,9 +94,20 @@ export function useKeyboardHandler({
   }, [callbacks]);
 
   useInput((inputChar: string, key: any) => {
-    // Always exit on Ctrl+C, no matter what's happening
-    if (key.ctrl && inputChar === 'c') {
-      handleExit();
+    // Unified interrupt/exit logic for Ctrl+C and Esc
+    const handleInterruptOrExit = callbacks.onInterruptOrExit || (() => {
+      // fallback: old behavior
+      if (callbacks.onExit) callbacks.onExit();
+      exit();
+    });
+
+    if ((key.ctrl && inputChar === 'c') || key.escape) {
+      // If completions are open and Esc, just hide completions
+      if (key.escape && hasCompletions) {
+        completionActions.hide();
+        return;
+      }
+      handleInterruptOrExit();
       return;
     }
 

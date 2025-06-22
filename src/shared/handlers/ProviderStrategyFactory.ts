@@ -14,7 +14,8 @@ export interface ProviderStrategy {
     messages: ConversationMessage[],
     tools: BaseTool[],
     onChunk?: (chunk: string) => void,
-    verbose?: boolean
+    verbose?: boolean,
+    abortSignal?: AbortSignal
   ): Promise<{
     content: string | null;
     tool_calls?: any[];
@@ -28,16 +29,17 @@ export class AnthropicStrategy implements ProviderStrategy {
     messages: ConversationMessage[],
     tools: BaseTool[],
     onChunk?: (chunk: string) => void,
-    verbose?: boolean
+    verbose?: boolean,
+    abortSignal?: AbortSignal
   ): Promise<{ content: string | null; tool_calls?: any[] }> {
     const schemas = this.getToolSchemas(tools);
-    
+
     if (verbose) {
       console.log(chalk.blue(`🤖 Sending ${messages.length} messages to Anthropic with ${schemas.length} tools`));
     }
-    
+
     // Use sendMessageWithTools for Anthropic - the provider has comprehensive tool support
-    return await this.llmService.sendMessageWithTools(messages, schemas);
+    return await this.llmService.sendMessageWithTools(messages, schemas, undefined, abortSignal);
   }
 
   private getToolSchemas(tools: BaseTool[]): any[] {
@@ -57,12 +59,13 @@ export class OpenAIStrategy implements ProviderStrategy {
     messages: ConversationMessage[],
     tools: BaseTool[],
     onChunk?: (chunk: string) => void,
-    verbose?: boolean
+    verbose?: boolean,
+    abortSignal?: AbortSignal
   ): Promise<{ content: string | null; tool_calls?: any[] }> {
     const schemas = this.getToolSchemas(tools);
-    
+
     // Use sendMessageWithTools for OpenAI
-    return await this.llmService.sendMessageWithTools(messages, schemas);
+    return await this.llmService.sendMessageWithTools(messages, schemas, undefined, abortSignal);
   }
 
   private getToolSchemas(tools: BaseTool[]): any[] {
@@ -85,19 +88,20 @@ export class GeminiStrategy implements ProviderStrategy {
     messages: ConversationMessage[],
     tools: BaseTool[],
     onChunk?: (chunk: string) => void,
-    verbose?: boolean
+    verbose?: boolean,
+    abortSignal?: AbortSignal
   ): Promise<{ content: string | null; tool_calls?: any[] }> {
     const schemas = this.getToolSchemas(tools);
-    
+
     // Convert conversation messages to proper format
     const geminiMessages = this.convertMessagesToGeminiFormat(messages);
-    
+
     if (verbose) {
       console.log(chalk.blue(`🤖 Sending ${geminiMessages.length} messages to Gemini with ${schemas.length} tools`));
     }
-    
+
     // Use sendMessageWithTools with tools
-    return await this.llmService.sendMessageWithTools(geminiMessages, schemas);
+    return await this.llmService.sendMessageWithTools(geminiMessages, schemas, undefined, abortSignal);
   }
 
   private convertMessagesToGeminiFormat(messages: ConversationMessage[]): any[] {

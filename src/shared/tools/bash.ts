@@ -82,7 +82,7 @@ export class BashTool extends BaseTool {
     additionalProperties: false
   };
 
-  protected async executeImpl(params: BashParams): Promise<ToolResult> {
+  protected async executeImpl(params: BashParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const {
       command,
       cwd = this.context.workingDirectory,
@@ -119,7 +119,7 @@ export class BashTool extends BaseTool {
       }
 
       const startTime = Date.now();
-      const result = await this.executeCommand(command, resolvedCwd, timeout, env);
+      const result = await this.executeCommand(command, resolvedCwd, timeout, env, abortSignal);
       const executionTime = Date.now() - startTime;
 
       const bashResult: BashResult = {
@@ -216,9 +216,16 @@ export class BashTool extends BaseTool {
     command: string,
     cwd: string,
     timeout: number,
-    env: Record<string, string>
+    env: Record<string, string>,
+    abortSignal?: AbortSignal
   ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
+      // Check if already aborted
+      if (abortSignal?.aborted) {
+        reject(new ToolError('Operation was aborted by user', 'OPERATION_TIMEOUT'));
+        return;
+      }
+
       const childProcess = spawn('bash', ['-c', command], {
         cwd,
         env: { ...process.env, ...env },
@@ -228,6 +235,22 @@ export class BashTool extends BaseTool {
       let stdout = '';
       let stderr = '';
       let timeoutId: NodeJS.Timeout;
+
+      // Handle abort signal
+      const abortHandler = () => {
+        childProcess.kill('SIGTERM'); // First try graceful termination
+        setTimeout(() => {
+          if (!childProcess.killed) {
+            childProcess.kill('SIGKILL'); // Force kill if still running
+          }
+        }, 1000);
+        clearTimeout(timeoutId);
+        reject(new ToolError('Operation was aborted by user', 'OPERATION_TIMEOUT'));
+      };
+
+      if (abortSignal) {
+        abortSignal.addEventListener('abort', abortHandler);
+      }
 
       // Set up timeout
       timeoutId = setTimeout(() => {
@@ -248,6 +271,9 @@ export class BashTool extends BaseTool {
       // Handle process completion
       childProcess.on('close', (code: number | null) => {
         clearTimeout(timeoutId);
+        if (abortSignal) {
+          abortSignal.removeEventListener('abort', abortHandler);
+        }
         resolve({
           exitCode: code ?? -1,
           stdout: stdout.trim(),
@@ -258,6 +284,9 @@ export class BashTool extends BaseTool {
       // Handle process errors
       childProcess.on('error', (error: Error) => {
         clearTimeout(timeoutId);
+        if (abortSignal) {
+          abortSignal.removeEventListener('abort', abortHandler);
+        }
         reject(new ToolError(`Failed to spawn process: ${error.message}`, 'SPAWN_ERROR'));
       });
     });

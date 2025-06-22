@@ -46,7 +46,7 @@ export class WriteTool extends BaseTool {
     additionalProperties: false
   };
 
-  protected async executeImpl(params: WriteParams): Promise<ToolResult> {
+  protected async executeImpl(params: WriteParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const { path: filePath, content, search, replace, encoding = 'utf8' } = params;
 
     // Validate mode parameters

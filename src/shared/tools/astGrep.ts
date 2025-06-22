@@ -119,7 +119,7 @@ export class AstGrepTool extends BaseTool {
    */
   isAstGrepAvailable(): boolean {
     if (!this.astGrepPath) return false;
-    
+
     try {
       execSync(`${this.astGrepPath} --version`, { stdio: 'ignore' });
       return true;
@@ -149,12 +149,12 @@ export class AstGrepTool extends BaseTool {
         // Node.js/npm locations
         'node_modules/.bin/ast-grep',
         './node_modules/.bin/ast-grep',
-        
+
         // System locations
         '/usr/local/bin/ast-grep',
         '/opt/homebrew/bin/ast-grep',
         '/usr/bin/ast-grep',
-        
+
         // Cargo/Rust locations
         process.env.HOME ? `${process.env.HOME}/.cargo/bin/ast-grep` : null
       ].filter(Boolean) as string[];
@@ -254,7 +254,7 @@ export class AstGrepTool extends BaseTool {
     additionalProperties: false
   };
 
-  protected async executeImpl(params: AstGrepParams): Promise<ToolResult> {
+  protected async executeImpl(params: AstGrepParams, abortSignal?: AbortSignal): Promise<ToolResult> {
     const startTime = Date.now();
     const {
       pattern,
@@ -297,12 +297,12 @@ export class AstGrepTool extends BaseTool {
         try {
           validatePath(searchPath, { allowAbsolute: true, mustExist: true });
           const absolutePath = path.resolve(searchPath);
-          
+
           // Check for blocked paths
           if (this.isBlockedPath(absolutePath)) {
             continue; // Skip blocked paths
           }
-          
+
           resolvedPaths.push(absolutePath);
         } catch (error) {
           // Log warning but continue with other paths
@@ -320,7 +320,7 @@ export class AstGrepTool extends BaseTool {
 
       // Execute ast-grep search
       const searchResult = await this.executeAstGrep(params, resolvedPaths);
-      
+
       // Add execution time to stats
       searchResult.stats.executionTime = Date.now() - startTime;
 
@@ -346,10 +346,10 @@ export class AstGrepTool extends BaseTool {
    */
   private async executeAstGrep(params: AstGrepParams, searchPaths: string[]): Promise<AstGrepResult> {
     const astGrepPath = this.astGrepPath || 'npx ast-grep';
-    
+
     return new Promise((resolve, reject) => {
       const args = this.buildAstGrepArgs(params, searchPaths);
-      
+
       const child = spawn(astGrepPath.split(' ')[0], astGrepPath.includes(' ') ? [...astGrepPath.split(' ').slice(1), ...args] : args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: this.context.workingDirectory
@@ -401,61 +401,61 @@ export class AstGrepTool extends BaseTool {
    */
   private buildAstGrepArgs(params: AstGrepParams, searchPaths: string[]): string[] {
     const args: string[] = [];
-    
+
     // Use 'run' command (default command for search/rewrite)
     args.push('run');
-    
+
     // Pattern is required for run command
     if (params.pattern) {
       args.push('--pattern', params.pattern);
     }
-    
+
     // Rewrite functionality
     if (params.rewrite) {
       args.push('--rewrite', params.rewrite);
-      
+
       if (params.updateInPlace) {
         args.push('--update-all');
       }
     }
-    
+
     // Language specification
     if (params.language) {
       args.push('--lang', params.language);
     }
-    
+
     // Output format - use JSON for better parsing
     if (params.format === 'json') {
       args.push('--json=stream');
     }
-    
+
     // Context lines
     if (params.context && params.context > 0) {
       args.push('--context', params.context.toString());
     }
-    
+
     // Include patterns using globs
     if (params.include && params.include.length > 0) {
       for (const pattern of params.include) {
         args.push('--globs', pattern);
       }
     }
-    
+
     // Exclude patterns using globs
     if (params.exclude && params.exclude.length > 0) {
       for (const pattern of params.exclude) {
         args.push('--globs', `!${pattern}`);
       }
     }
-    
+
     // Hidden files
     if (params.includeHidden) {
       args.push('--no-ignore', 'hidden');
     }
-    
+
     // Add search paths
     args.push(...searchPaths);
-    
+
     return args;
   }
 
@@ -498,10 +498,10 @@ export class AstGrepTool extends BaseTool {
         const lines = output.trim().split('\n');
         for (const line of lines) {
           if (!line.trim()) continue;
-          
+
           try {
             const jsonMatch = JSON.parse(line);
-            
+
             // ast-grep JSON format has: file, range: { start: { line, column } }, text, lines, language
             const match: AstGrepMatch = {
               file: this.getRelativePath(jsonMatch.file, searchPaths),
@@ -523,10 +523,10 @@ export class AstGrepTool extends BaseTool {
         // Parse text output - ast-grep default format
         const lines = output.split('\n');
         let currentFile = '';
-        
+
         for (const line of lines) {
           if (!line.trim()) continue;
-          
+
           // Check if this is a file header
           if (!line.startsWith(' ') && line.includes(':')) {
             const parts = line.split(':');
@@ -535,7 +535,7 @@ export class AstGrepTool extends BaseTool {
               const lineNum = parseInt(parts[1], 10);
               const colNum = parseInt(parts[2], 10);
               const text = parts.slice(3).join(':').trim();
-              
+
               if (!isNaN(lineNum) && !isNaN(colNum)) {
                 const match: AstGrepMatch = {
                   file: this.getRelativePath(filePath, searchPaths),
@@ -544,7 +544,7 @@ export class AstGrepTool extends BaseTool {
                   text: text,
                   language: params.language || this.detectLanguage(filePath)
                 };
-                
+
                 matches.push(match);
                 stats.matchesFound++;
               }
@@ -562,7 +562,7 @@ export class AstGrepTool extends BaseTool {
     // Count unique files processed
     const uniqueFiles = new Set(matches.map(m => m.file));
     stats.filesProcessed = uniqueFiles.size;
-    
+
     if (mode === 'rewrite' && params.updateInPlace) {
       stats.filesTransformed = uniqueFiles.size;
     }
@@ -621,7 +621,7 @@ export class AstGrepTool extends BaseTool {
    */
   private detectLanguage(filePath: string): string {
     const ext = path.extname(filePath).toLowerCase();
-    
+
     const languageMap: Record<string, string> = {
       '.js': 'js',
       '.jsx': 'jsx',

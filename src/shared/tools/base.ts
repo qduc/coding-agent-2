@@ -5,7 +5,7 @@
  * and integration with OpenAI's function calling mechanism.
  */
 
-import { ToolSchema, ToolResult, ToolError, ToolContext, FunctionCallSchema, DEFAULT_TOOL_CONTEXT } from './types';
+import { ToolSchema, ToolResult, ToolError, ToolContext, FunctionCallSchema, DEFAULT_TOOL_CONTEXT, ExecutionContext } from './types';
 import { validateParams } from './validation';
 import { executeWithRetry, executeWithTimeout, DEFAULT_RETRY_OPTIONS, RetryOptions } from './retry';
 
@@ -30,26 +30,40 @@ export abstract class BaseTool {
    * Execute the tool with the given parameters
    * This is the main method that concrete tools must implement
    */
-  protected abstract executeImpl(params: any): Promise<ToolResult>;
+  protected abstract executeImpl(params: any, abortSignal?: AbortSignal): Promise<ToolResult>;
 
   /**
    * Public execution method with validation, error handling, and retry logic
    */
-  async execute(params: any, retryOptions?: Partial<RetryOptions>): Promise<ToolResult> {
+  async execute(params: any, executionContext?: ExecutionContext): Promise<ToolResult> {
     const startTime = Date.now();
+    const abortSignal = executionContext?.abortSignal;
+    const retryOptions = executionContext?.retryOptions || DEFAULT_RETRY_OPTIONS;
 
     try {
+      // Check for cancellation before starting
+      if (abortSignal?.aborted) {
+        throw new ToolError('Operation was aborted by user', 'OPERATION_TIMEOUT');
+      }
+
       // Validate parameters against schema
       this.validateParams(params);
 
       // Execute with timeout and retry logic
       const result = await executeWithRetry(
-        () => executeWithTimeout(
-          () => this.executeImpl(params),
-          this.context.timeout,
-          `Tool '${this.name}' execution timed out after ${this.context.timeout}ms`
-        ),
-        retryOptions || DEFAULT_RETRY_OPTIONS
+        () => {
+          // Check for cancellation before each retry attempt
+          if (abortSignal?.aborted) {
+            throw new ToolError('Operation was aborted by user', 'OPERATION_TIMEOUT');
+          }
+
+          return executeWithTimeout(
+            () => this.executeImpl(params, abortSignal),
+            this.context.timeout,
+            `Tool '${this.name}' execution timed out after ${this.context.timeout}ms`
+          );
+        },
+        retryOptions
       );
 
       // Add execution metadata
