@@ -85,13 +85,12 @@ export class LLMService implements LLMProvider {
   async sendMessageWithTools(
     messages: Message[],
     functions?: any[],
-    onToolCall?: (toolName: string, args: any) => void,
-    abortSignal?: AbortSignal
+    onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
     if (!this.provider) {
       throw new Error('LLM service not initialized');
     }
-    return this.provider.sendMessageWithTools(messages, functions, onToolCall, abortSignal);
+    return this.provider.sendMessageWithTools(messages, functions, onToolCall);
   }
 
   /**

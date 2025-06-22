@@ -7,6 +7,10 @@ export async function createProvider(provider: string) {
       const { OpenAIProvider } = await import('../services/providers/OpenAIProvider');
       providerInstance = new OpenAIProvider();
       break;
+    case 'openrouter':
+      const { OpenRouterProvider } = await import('../services/providers/OpenRouterProvider');
+      providerInstance = new OpenRouterProvider();
+      break;
     case 'anthropic':
       const { AnthropicProvider } = await import('../services/providers/AnthropicProvider');
       providerInstance = new AnthropicProvider();

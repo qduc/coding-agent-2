@@ -43,14 +43,12 @@ export interface LLMProvider {
   sendMessageWithTools(
     messages: Message[],
     functions?: any[],
-    onToolCall?: (toolName: string, args: any) => void,
-    abortSignal?: AbortSignal
+    onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse>;
   sendToolResults?(
     messages: Message[],
     toolResults: Array<{ tool_call_id: string; content: string }>,
-    functions?: any[],
-    abortSignal?: AbortSignal
+    functions?: any[]
   ): Promise<FunctionCallResponse>;
 
   // Responses API methods for reasoning models

@@ -8,21 +8,49 @@ export interface ModelMatchInfo {
 }
 
 export const MODEL_ALIASES: Record<string, string[]> = {
-  // Anthropic Claude Models
-  'claude-3-opus-20240229': ['opus', 'opus-3', 'claude-opus', 'claude-3-opus', 'claude-opus-3', 'claude-3'],
-  'claude-3-sonnet-20240229': ['sonnet', 'sonnet-3', 'claude-sonnet', 'claude-3-sonnet', 'claude-sonnet-3', 'claude-3'],
-  'claude-3-haiku-20240307': ['haiku', 'haiku-3', 'claude-haiku', 'claude-3-haiku', 'claude-haiku-3', 'claude-3'],
-  'claude-3-haiku-20240307-v2': ['haiku-v2', 'haiku2', 'haiku 2', 'claude-haiku-v2'],
+  // Anthropic Claude 4 Models (Latest - 2025)
+  'claude-4-sonnet': ['sonnet', 'sonnet-4', 'claude-sonnet-4', 'sonnet4', 'claude-4-sonnet', 'claude4-sonnet'],
 
-  // OpenAI Models
-  'gpt-4o': ['4o', 'gpt-4o', 'gpt4o', 'openai-4o', 'flash', 'omni', 'gpt4'],
-  'gpt-4-turbo': ['4-turbo', 'gpt-4-turbo', 'gpt4-turbo', 'turbo', 'gpt4 turbo', 'gpt4'],
-  'gpt-4-1106-preview': ['4.1', 'gpt-4.1', 'gpt-4-1106', 'gpt4-1106', 'preview'],
-  'gpt-3.5-turbo': ['3.5', 'gpt-3.5', 'gpt3.5', 'openai-3.5', 'chatgpt'],
+  // Anthropic Claude 3.7 Models (Current Top Performers)
+  'claude-3-7-sonnet': ['sonnet-3.7', 'claude-3.7-sonnet', 'claude-sonnet-3.7', '3.7-sonnet', 'sonnet3.7', 'sonnet', 'claude-3.7'],
+  'claude-3-7-sonnet-thinking': ['sonnet-3.7-thinking', 'claude-3.7-thinking', 'thinking-3.7', 'extended-thinking'],
 
-  // Google Gemini Models
-  'gemini-pro': ['gemini', 'gemini-pro', 'google-gemini', 'pro', 'gemini-1.0-pro'],
-  'gemini-1.5-pro': ['gemini-1.5', '1.5-pro', 'gemini-pro-1.5', 'advanced'],
+  // Anthropic Claude 3.5 Models (Still Strong)
+  'claude-3-5-sonnet-20241022': ['sonnet-3.5', 'claude-3.5-sonnet', 'claude-sonnet-3.5', '3.5-sonnet', 'sonnet3.5'],
+  'claude-3-5-haiku-20241022': ['haiku', 'haiku-3.5', 'claude-3.5-haiku', 'claude-haiku-3.5', '3.5-haiku', 'haiku3.5', 'haiku'],
+
+  // OpenAI GPT-4 Series (2025 Updates)
+  'gpt-4.1': ['4.1', 'gpt-4.1', 'gpt4.1', 'coding-focused', 'developer'],
+
+  // OpenAI o-series (Reasoning Models)
+  'o4-mini': ['o4-mini', 'o4-mini-model', 'reasoning-mini', 'o4-small'],
+  'o4-mini-high': ['o4-mini-high', 'o4-high', 'reasoning-high'],
+
+  // Google Gemini 2.5 Models (Latest)
+  'gemini-2.5-pro': ['gemini-2.5', 'gemini-2.5-pro', 'pro-2.5', 'gemini25', 'gem-2.5', 'thinking-gemini'],
+  'gemini-2.5-flash': ['flash', 'flash-2.5', 'gemini-flash-2.5', '2.5-flash', 'fast-gemini'],
+  'gemini-2.5-flash-lite': ['flash-lite', 'gemini-lite', 'lite-2.5', 'cheap-gemini'],
+
+  // DeepSeek Models (Strong Coding & Cost-Effective)
+  'deepseek-r1': ['deepseek-r1', 'r1', 'deepseek-reasoning', 'ds-r1', 'reasoning-deepseek'],
+  'deepseek-v3': ['deepseek-v3', 'v3', 'deepseek-3', 'ds-v3'],
+  'deepseek-v3-0324': ['deepseek-v3-0324', 'v3-0324', 'deepseek-latest'],
+  'deepseek-coder': ['deepseek-coder', 'ds-coder', 'deepseek-code'],
+
+  // Mistral Models (Coding Specialists)
+  'codestral-25.01': ['codestral', 'codestral-25', 'mistral-code', 'code-25', 'coding-mistral'],
+  'mistral-large-2407': ['mistral-large', 'large-2407', 'mistral-l'],
+  'mistral-small-3.1': ['mistral-small', 'small-3.1', 'mistral-s'],
+
+  // Qwen Models (Alibaba)
+  'qwen2.5-max': ['qwen-max', 'qwen2.5-max', 'qw-max', 'qwen-2.5-max'],
+  'qwen2.5-coder-32b': ['qwen-coder', 'qwen2.5-coder', 'qw-coder', 'qwen-32b'],
+  'qwen2.5-7b-instruct-1m': ['qwen-1m', 'qwen-long', 'qw-1m', 'million-context'],
+  'qwen2.5-14b-instruct-1m': ['qwen-14b-1m', 'qwen-large-1m', 'qw-14b-1m'],
+
+  // Meta Llama Models
+  'llama-3.3-70b': ['llama-3.3', 'llama3.3', 'meta-3.3', 'llama-70b'],
+  'llama-3.1-405b': ['llama-405b', 'llama3.1-405b', 'llama-3.1', 'meta-405b'],
 };
 
 // Levenshtein distance for fuzzy matching
@@ -81,7 +109,7 @@ export function matchModelName(input: string, options: { fuzzyThreshold?: number
       const cleanedAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
       const distance = levenshteinDistance(cleaned, cleanedAlias);
       const score = distance / Math.max(cleaned.length, cleanedAlias.length);
-      
+
       if (score <= fuzzyThreshold / 10 && (!bestMatch || score < bestMatch.score)) {
         bestMatch = { model: official, score };
       }
@@ -112,7 +140,7 @@ export function findModelMatches(input: string, options: { fuzzyThreshold?: numb
       } else {
         const distance = levenshteinDistance(cleaned, cleanedAlias);
         const calculatedScore = 1 - (distance / Math.max(cleaned.length, cleanedAlias.length));
-        
+
         if (calculatedScore >= (1 - (fuzzyThreshold / 10))) {
           matchType = 'fuzzy';
           score = calculatedScore;

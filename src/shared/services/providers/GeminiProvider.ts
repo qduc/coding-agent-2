@@ -155,8 +155,7 @@ export class GeminiProvider extends BaseLLMProvider {
   protected async _sendMessageWithTools(
     messages: Message[],
     functions: any[] = [],
-    onToolCall?: (toolName: string, args: any) => void,
-    abortSignal?: AbortSignal
+    onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
     this.ensureInitialized();
 

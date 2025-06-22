@@ -76,8 +76,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   protected async _sendMessageWithTools(
     messages: Message[],
     functions: any[] = [],
-    onToolCall?: (toolName: string, args: any) => void,
-    abortSignal?: AbortSignal
+    onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
     this.ensureInitialized();
 
@@ -105,11 +104,6 @@ export class OpenAIProvider extends BaseLLMProvider {
           function: func
         }));
         requestParams.tool_choice = 'auto';
-      }
-
-      // Add abort signal support
-      if (abortSignal) {
-        requestParams.abortSignal = abortSignal;
       }
 
       const response = await this.openai!.chat.completions.create(requestParams);

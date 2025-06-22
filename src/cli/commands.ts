@@ -9,6 +9,7 @@ import { BoxRenderer } from '../shared/utils/boxRenderer';
 import { MarkdownRenderer } from '../shared/utils/markdown';
 import { calculateStreamingClearSequence } from '../shared/utils/terminalOutput';
 import { Logger } from '../shared/utils/logger';
+import { getModelName } from '../shared/utils/modelMatcher';
 
 /**
  * Configure the commander program with all available commands
@@ -57,7 +58,7 @@ export function configureCommands(program: Command, version: string): void {
           console.log(chalk.yellow('Valid modes:'), validModes.join(', '));
           process.exit(1);
         }
-        
+
         // Override tool display mode for this session
         await configManager.saveConfig({ toolDisplayMode: options.toolDisplay });
         console.log(chalk.blue('Tool display mode set to:'), chalk.white(options.toolDisplay));
@@ -78,12 +79,13 @@ export function configureCommands(program: Command, version: string): void {
 
       // Handle model selection from CLI option
       if (options.model) {
-  const { detectProviderFromModel } = await import('../shared/core/config');
-  const provider = detectProviderFromModel(options.model);
-  await configManager.saveConfig({ model: options.model, provider });
-  console.log(chalk.blue('Model set to:'), chalk.white(options.model));
-  console.log(chalk.blue('Provider auto-selected:'), chalk.white(provider));
-}
+        const canonicalModel = getModelName(options.model);
+        const { detectProviderFromModel } = await import('../shared/core/config');
+        const provider = detectProviderFromModel(canonicalModel);
+        await configManager.saveConfig({ model: canonicalModel, provider });
+        console.log(chalk.blue('Model set to:'), chalk.white(canonicalModel));
+        console.log(chalk.blue('Provider auto-selected:'), chalk.white(provider));
+      }
 
 
       // Create CLI implementations
@@ -92,11 +94,12 @@ export function configureCommands(program: Command, version: string): void {
       // Create and initialize agent with CLI implementations
       const agentOptions: any = { toolContext };
       if (options.model) {
-        console.log(chalk.blue('🤖 Using temporary model:'), chalk.white(options.model));
+        const canonicalModel = getModelName(options.model);
+        console.log(chalk.blue('🤖 Using temporary model:'), chalk.white(canonicalModel));
         const { detectProviderFromModel } = await import('../shared/core/config');
-const provider = detectProviderFromModel(options.model);
-agentOptions.temporaryModel = options.model;
-agentOptions.temporaryProvider = provider;
+        const provider = detectProviderFromModel(canonicalModel);
+        agentOptions.temporaryModel = canonicalModel;
+        agentOptions.temporaryProvider = provider;
       }
 
       const agent = new Agent(agentOptions);
@@ -228,7 +231,7 @@ export async function startInteractiveMode(agent: Agent, options: any, toolConte
 
     // Start the full Ink interactive mode with the already initialized agent
     await chatHandler.handleInteractiveChatMode(
-      agent, 
+      agent,
       {
         verbose: options.verbose
       }

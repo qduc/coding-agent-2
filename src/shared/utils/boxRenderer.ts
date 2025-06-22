@@ -254,7 +254,7 @@ export class BoxRenderer {
    */
   private static createInputBoxHeader(title: string, boxWidth: number): string {
     const titleWidth = this.getDisplayWidth(title);
-    const headerPadding = Math.max(0, boxWidth - titleWidth - 4);
+    const headerPadding = Math.max(0, boxWidth - titleWidth - 3);
     return chalk.cyan('┌─' + title + '─'.repeat(headerPadding) + '┐');
   }
 

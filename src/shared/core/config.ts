@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { Logger, LogLevel } from '../utils/logger';
 import { matchModelName } from '../utils/modelMatcher';
 
-export function detectProviderFromModel(model: string): 'openai' | 'anthropic' | 'gemini' {
+export function detectProviderFromModel(model: string): 'openai' | 'anthropic' | 'gemini' | 'openrouter' {
   // First use the model matcher to get a normalized model name
   const matchedModel = matchModelName(model);
 
@@ -13,25 +13,33 @@ export function detectProviderFromModel(model: string): 'openai' | 'anthropic' |
     // If no match is found, fall back to original detection logic
     const modelLower = model.toLowerCase();
 
-    // OpenAI models
+    // OpenAI models (including new 2025 releases)
     if (modelLower.includes('gpt') || modelLower.includes('davinci') || modelLower.includes('curie') ||
         modelLower.includes('babbage') || modelLower.includes('ada') || modelLower.startsWith('org-') ||
-        modelLower.startsWith('openai/')) {
+        modelLower.startsWith('openai/') || modelLower.includes('o1') || modelLower.includes('o3')) {
       return 'openai';
     }
 
-    // Anthropic models
+    // Anthropic models (including Claude 3.7 and Claude 4)
     if (modelLower.includes('claude') || modelLower.startsWith('anthropic/')) {
       return 'anthropic';
     }
 
-    // Gemini models
+    // Gemini models (including 2.5 series)
     if (modelLower.includes('gemini') || modelLower.includes('bard') || modelLower.startsWith('google/')) {
       return 'gemini';
     }
 
-    // Default to OpenAI if no clear match
-    return 'openai';
+    // Non-major providers - fallback to OpenRouter
+    if (modelLower.includes('deepseek') || modelLower.includes('mistral') || modelLower.includes('codestral') ||
+        modelLower.includes('qwen') || modelLower.includes('llama') || modelLower.includes('grok') ||
+        modelLower.includes('meta/') || modelLower.includes('alibaba/') || modelLower.includes('xai/') ||
+        modelLower.includes('huggingface/')) {
+      return 'openrouter';
+    }
+
+    // Default to OpenRouter for unrecognized models (instead of OpenAI)
+    return 'openrouter';
   }
 
   // If a matched model is found, derive provider from the matched model
@@ -43,8 +51,20 @@ export function detectProviderFromModel(model: string): 'openai' | 'anthropic' |
     return 'gemini';
   }
 
-  // Default to OpenAI for all unclassified models
-  return 'openai';
+  // Check for OpenAI models (including o-series)
+  if (matchedModel.includes('gpt') || matchedModel.includes('o1') || matchedModel.includes('o3') || matchedModel.includes('o4')) {
+    return 'openai';
+  }
+
+  // Check for non-major providers that should use OpenRouter
+  if (matchedModel.includes('deepseek') || matchedModel.includes('mistral') ||
+      matchedModel.includes('codestral') || matchedModel.includes('qwen') ||
+      matchedModel.includes('llama') || matchedModel.includes('grok')) {
+    return 'openrouter';
+  }
+
+  // Default to OpenRouter for all other unclassified models
+  return 'openrouter';
 }
 
 export interface Config {
@@ -53,7 +73,7 @@ export interface Config {
   anthropicApiKey?: string;
   geminiApiKey?: string;
   braveSearchApiKey?: string;
-  provider?: 'openai' | 'anthropic' | 'gemini';
+  provider?: 'openai' | 'anthropic' | 'gemini' | 'openrouter';
   verbose?: boolean;
   maxTokens?: number;
   model?: string;
@@ -249,18 +269,25 @@ export class ConfigManager {
       config.provider = detectProviderFromModel(config.model);
     }
 
+    // If the model is OpenRouter-compatible, set base URL to OpenRouter endpoint
+    const openrouterModels = ['deepseek', 'mistral', 'codestral', 'qwen', 'llama', 'grok'];
+    if (typeof config.model === 'string' && openrouterModels.some(m => config.model!.toLowerCase().includes(m))) {
+      if (!config.openaiApiBaseUrl || !config.openaiApiBaseUrl.includes('openrouter.ai')) {
+        config.openaiApiBaseUrl = 'https://openrouter.ai/api/v1';
+      }
+    }
+
     return config;
   }
 
   /**
    * Get the current provider, detecting it from the model if necessary
    */
-  getCurrentProvider(): 'openai' | 'anthropic' | 'gemini' {
+  getCurrentProvider(): 'openai' | 'anthropic' | 'gemini' | 'openrouter' {
     // If provider is explicitly set, use it
     if (this.config.provider) {
       return this.config.provider;
     }
-
     // If not set, detect from the model
     return detectProviderFromModel(this.config.model || 'gpt-4o-2024-11-20');
   }

@@ -182,8 +182,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   protected async _sendMessageWithTools(
     messages: Message[],
     functions: any[] = [],
-    onToolCall?: (toolName: string, args: any) => void,
-    abortSignal?: AbortSignal
+    onToolCall?: (toolName: string, args: any) => void
   ): Promise<FunctionCallResponse> {
     this.ensureInitialized();
 
@@ -224,11 +223,6 @@ export class AnthropicProvider extends BaseLLMProvider {
           input_schema: func.input_schema || func.parameters,
           cache_control: func.cache_control
         }));
-      }
-
-      // Add abort signal support
-      if (abortSignal) {
-        requestParams.abortSignal = abortSignal;
       }
 
       const response = await this.anthropic!.messages.create(requestParams);
