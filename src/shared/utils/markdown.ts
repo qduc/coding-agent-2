@@ -1,4 +1,3 @@
-
 import chalk from 'chalk';
 import { BoxRenderer } from './boxRenderer';
 import { CodeHighlighter } from './codeHighlighter';
@@ -16,10 +15,10 @@ export class MarkdownRenderer {
    */
   static render(markdownText: string): string {
     let output = markdownText;
-    
+
     // Store code blocks in placeholders to protect them from markdown processing
     const codeBlocks: string[] = [];
-    
+
     // Extract and process code blocks, storing them separately
     output = output.replace(/```(\w+)?\n?([\s\S]*?)```/g, (match, language, code) => {
       const lang = language || 'text';
@@ -34,9 +33,27 @@ export class MarkdownRenderer {
 
     // Store inline code in placeholders to protect them from markdown processing
     const inlineCodes: string[] = [];
-    
+
     output = output.replace(/`(.*?)`/g, (match, code) => {
-      const renderedInlineCode = chalk.bgGray.black(' ' + code + ' ');
+      // Determine terminal width, fallback to 80 if unavailable
+      const termWidth = (process.stdout && process.stdout.columns) ? process.stdout.columns : 80;
+      // Add 2 for padding spaces
+      const maxLineLength = termWidth - 2;
+      const lines: string[] = [];
+      let remaining = code;
+      while (remaining.length > maxLineLength) {
+        // Try to split at the last space within maxLineLength
+        let splitIdx = remaining.lastIndexOf(' ', maxLineLength);
+        if (splitIdx === -1 || splitIdx < Math.floor(maxLineLength * 0.5)) {
+          // If no good space found, force split at maxLineLength
+          splitIdx = maxLineLength;
+        }
+        lines.push(remaining.slice(0, splitIdx));
+        remaining = remaining.slice(splitIdx).replace(/^\s+/, '');
+      }
+      if (remaining.length > 0) lines.push(remaining);
+      // Render each line with background color
+      const renderedInlineCode = lines.map(line => chalk.bgGray.black(' ' + line + ' ')).join('\n');
       inlineCodes.push(renderedInlineCode);
       return `§§§INLINECODE${inlineCodes.length - 1}§§§`;
     });
@@ -54,7 +71,7 @@ export class MarkdownRenderer {
     output = output.replace(/__(.*?)__/g, (match, text) => {
       return chalk.bold(chalk.underline(text));
     });
-    
+
     // Bold text
     output = output.replace(/\*\*(.*?)\*\*/g, (match, text) => {
       return chalk.bold(text);
@@ -82,14 +99,14 @@ export class MarkdownRenderer {
       const markerIndex = Math.min(Math.floor(depth / 2), listMarkers.length - 1);
       return indentSpaces + chalk.cyan(listMarkers[markerIndex]) + ' ' + content;
     });
-    
+
     // Enhanced nested ordered lists with hierarchical indentation
     output = output.replace(/^([ \t]*)(\d+)\. (.*)$/gm, (match, indent, number, content) => {
       const depth = indent.length;
       const indentSpaces = '  '.repeat(Math.floor(depth / 2) + 1);
       const listStyles = [
         (text: string) => chalk.cyan(text),
-        (text: string) => chalk.yellow(text), 
+        (text: string) => chalk.yellow(text),
         (text: string) => chalk.green(text)
       ];
       const styleIndex = Math.min(Math.floor(depth / 2), listStyles.length - 1);
@@ -118,7 +135,7 @@ export class MarkdownRenderer {
 
   /**
    * Highlight code with syntax highlighting
-   * 
+   *
    * @param code The code to highlight
    * @param language Optional language identifier for language-specific highlighting
    * @returns Highlighted code string
