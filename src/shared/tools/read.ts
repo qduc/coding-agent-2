@@ -522,4 +522,36 @@ export class ReadTool extends BaseTool {
     // More than 10% control characters likely indicates binary content
     return controlCharCount > sampleSize * 0.1;
   }
+
+  /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: ReadParams, success: boolean, result?: any): string {
+    if (!success) {
+      const errorMsg = result instanceof Error ? result.message : 
+                      typeof result === 'string' ? result :
+                      result?.message || 'Unknown error';
+      return `\n${errorMsg}`;
+    }
+
+    const path = params.path || params.file_path;
+    let context = '';
+    
+    if (path) {
+      let contextParams = [];
+      if (params.offset) contextParams.push(`offset: ${params.offset}`);
+      if (params.limit) contextParams.push(`limit: ${params.limit}`);
+      const paramStr = contextParams.length > 0 ? ` (${contextParams.join(', ')})` : '';
+      context = ` ${path}${paramStr}`;
+    }
+
+    if (typeof result === 'object' && result?.lineCount) {
+      return `${context} • ${result.lineCount}L read`;
+    } else if (typeof result === 'string') {
+      const lines = result.split('\n').length;
+      return `${context} • ${lines}L read`;
+    }
+    
+    return `${context} • loaded`;
+  }
 }

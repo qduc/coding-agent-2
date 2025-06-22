@@ -308,4 +308,56 @@ export class BashTool extends BaseTool {
       });
     });
   }
+
+  /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: BashParams, success: boolean, result?: any): string {
+    if (!success) {
+      let errorMsg = 'Command failed';
+      if (result?.stderr) {
+        errorMsg = `Command failed (exit ${result.exitCode || 'unknown'}): ${result.stderr}`;
+      } else if (result?.error?.message) {
+        errorMsg = result.error.message;
+      } else if (result?.message) {
+        errorMsg = result.message;
+      } else if (result instanceof Error) {
+        errorMsg = result.message;
+      } else if (result?.exitCode !== 0) {
+        errorMsg = `Command failed with exit code ${result.exitCode}`;
+      }
+      return `\n${errorMsg}`;
+    }
+
+    let context = '';
+    if (params.command) {
+      let contextParams = [];
+      if (params.timeout) contextParams.push(`timeout: ${params.timeout}ms`);
+      if (params.cwd) contextParams.push(`cwd: ${params.cwd}`);
+      const paramStr = contextParams.length > 0 ? ` (${contextParams.join(', ')})` : '';
+      context = ` "${params.command}"${paramStr}`;
+    }
+
+    if (typeof result === 'object' && result?.exitCode !== undefined) {
+      const time = result.executionTime ? ` ${result.executionTime}ms` : '';
+      if (result.exitCode === 0) {
+        // For successful commands, show stdout if available and not too long
+        let output = '';
+        if (result.stdout && result.stdout.length < 500) {
+          output = `\n${result.stdout}`;
+        } else if (result.stdout && result.stdout.length >= 500) {
+          output = `\n${result.stdout.substring(0, 500)}...`;
+        }
+        return `${context} • ok${time}${output}`;
+      } else {
+        let stderr = result.stderr || '';
+        if (stderr.length > 500) {
+          stderr = stderr.substring(0, 500) + '...';
+        }
+        return `${context} • exit ${result.exitCode}${time}\n${stderr}`;
+      }
+    }
+
+    return `${context} • executed`;
+  }
 }

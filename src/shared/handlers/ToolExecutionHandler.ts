@@ -114,7 +114,7 @@ export class ToolExecutionHandler {
 
       // Log tool call for UI display
       if (logToolUsage) {
-        ToolLogger.logToolCall(func.name, args);
+        ToolLogger.logToolCall(func.name, args, tool);
       }
 
       // Execute the tool with abort signal if supported
@@ -151,7 +151,7 @@ export class ToolExecutionHandler {
         const logResult = (func.name.toLowerCase() === 'bash' && result.output)
           ? result.output
           : (result.success ? result.output : result.error);
-        ToolLogger.logToolResult(func.name, result.success, logResult, args);
+        ToolLogger.logToolResult(func.name, result.success, logResult, args, tool);
       }
 
       return {
@@ -234,7 +234,7 @@ export class ToolExecutionHandler {
       // Log tool call for UI display
       const { logToolUsage } = configManager.getConfig();
       if (logToolUsage) {
-        ToolLogger.logToolCall(func.name, args);
+        ToolLogger.logToolCall(func.name, args, tool);
       }
 
       // Execute the tool
@@ -245,7 +245,7 @@ export class ToolExecutionHandler {
         const logResult = (func.name.toLowerCase() === 'bash' && result.output)
           ? result.output
           : (result.success ? result.output : result.error);
-        ToolLogger.logToolResult(func.name, result.success, logResult, args);
+        ToolLogger.logToolResult(func.name, result.success, logResult, args, tool);
       }
 
       if (verbose) {

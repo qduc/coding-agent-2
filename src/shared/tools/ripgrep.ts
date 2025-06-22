@@ -594,6 +594,28 @@ export class RipgrepTool extends BaseTool {
   }
 
   /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: any, success: boolean, result?: any): string {
+    if (!success) {
+      const errorMsg = result instanceof Error ? result.message :
+                      typeof result === 'string' ? result :
+                      result?.message || 'Unknown error';
+      return `\n${errorMsg}`;
+    }
+
+    if (typeof result === 'object' && result?.matches) {
+      const matches = result.matches.length;
+      const files = new Set(result.matches.map((match: any) => match.file)).size;
+      return ` • ${matches} matches in ${files} files`;
+    } else if (typeof result === 'string') {
+      const lines = result.trim() ? result.split('\n').filter(line => line.trim()).length : 0;
+      return ` • ${lines} matches`;
+    }
+    return ` • searched`;
+  }
+
+  /**
    * Check if a path is in the blocked list
    */
   private isBlockedPath(targetPath: string): boolean {

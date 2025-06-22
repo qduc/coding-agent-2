@@ -243,6 +243,25 @@ export class WebSearchTool extends BaseTool {
   }
 
   /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: any, success: boolean, result?: any): string {
+    if (!success) {
+      const errorMsg = result instanceof Error ? result.message :
+                      typeof result === 'string' ? result :
+                      result?.message || 'Unknown error';
+      return `\n${errorMsg}`;
+    }
+
+    if (typeof result === 'object' && result?.results) {
+      const count = result.results.length;
+      const query = result.query || params?.query || 'unknown query';
+      return ` • ${count} results for "${query}"`;
+    }
+    return ` • search completed`;
+  }
+
+  /**
    * Get Brave Search API key from environment variables or config
    */
   private getBraveSearchApiKey(): string | undefined {

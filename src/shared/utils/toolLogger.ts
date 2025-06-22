@@ -7,6 +7,7 @@ import {
   getMinimalContext,
   getMinimalOutcome
 } from './toolLogger/displayFormatters';
+import { BaseTool } from '../tools/base';
 
 /**
  * Tool Logger - Utility for logging tool usage by the LLM
@@ -22,7 +23,7 @@ export class ToolLogger {
   /**
    * Log when a tool is being called by the LLM
    */
-  static logToolCall(toolName: string, args: any): void {
+  static logToolCall(toolName: string, args: any, tool?: BaseTool): void {
     // Emit tool event for UI components (like Ink) to handle
     toolEventEmitter.emitToolCall(toolName, args);
 
@@ -36,7 +37,7 @@ export class ToolLogger {
   /**
    * Log the result of a tool execution
    */
-  static logToolResult(toolName: string, success: boolean, result?: any, args?: any): void {
+  static logToolResult(toolName: string, success: boolean, result?: any, args?: any, tool?: BaseTool): void {
     // Emit tool event for UI components (like Ink) to handle
     toolEventEmitter.emitToolResult(toolName, success, result, args);
 
@@ -84,25 +85,31 @@ export class ToolLogger {
   /**
    * Format tool result for UI display with full details
    */
-  static formatToolResultForUI(toolName: string, success: boolean, result?: any, args?: any): string {
-    return this.formatToolOperationFull(toolName, args, success, result);
+  static formatToolResultForUI(toolName: string, success: boolean, result?: any, args?: any, tool?: BaseTool): string {
+    return this.formatToolOperationFull(toolName, args, success, result, tool);
   }
 
   /**
    * Format tool operation with modern minimalistic design
    */
-  static formatToolOperationFull(toolName: string, args: any, success?: boolean, result?: any): string {
+  static formatToolOperationFull(toolName: string, args: any, success?: boolean, result?: any, tool?: BaseTool): string {
     if (success === undefined) {
       // Tool call in progress - clean, minimal format
       const context = getMinimalContext(toolName, args);
-      return `▶ ${toolName}`;
+      return `▶ ${toolName}${context}`;
     } else {
       // Complete operation with modern design
       const status = success ? '✓' : '✗';
-      const context = getMinimalContext(toolName, args);
-      const outcome = getMinimalOutcome(toolName, success, result, args);
-
-      return `${status} ${toolName}${context}${outcome}`;
+      
+      // Use tool's getHumanReadableOutput if available, otherwise fall back to displayFormatters
+      if (tool && tool.getHumanReadableOutput) {
+        const outcome = tool.getHumanReadableOutput(args, success, result);
+        return `${status} ${toolName}${outcome}`;
+      } else {
+        const context = getMinimalContext(toolName, args);
+        const outcome = getMinimalOutcome(toolName, success, result, args);
+        return `${status} ${toolName}${context}${outcome}`;
+      }
     }
   }
 }

@@ -326,6 +326,53 @@ Operations: add, list, complete, delete, clear`;
   }
 
   /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: any, success: boolean, result?: any): string {
+    if (!success) {
+      const errorMsg = result instanceof Error ? result.message :
+                      typeof result === 'string' ? result :
+                      result?.message || 'Unknown error';
+      return `\n${errorMsg}`;
+    }
+
+    if (typeof result === 'object' && result !== null) {
+      // Show added todos with content
+      if (result.addedTodos && Array.isArray(result.addedTodos)) {
+        const lines = result.addedTodos.map((t: any) => `  • ${t.text}${t.priority ? ` (${t.priority})` : ''}`);
+        return `\n✓ todo(s) added:\n${lines.join('\n')}`;
+      } else if (result.completedTodos && Array.isArray(result.completedTodos)) {
+        const lines = result.completedTodos.map((t: any) => `  ✓ ${t.text}`);
+        return `\n✓ todo(s) completed:\n${lines.join('\n')}`;
+      } else if (result.deletedTodos && Array.isArray(result.deletedTodos)) {
+        const lines = result.deletedTodos.map((t: any) => `  ✗ ${t.text}`);
+        return `\n✗ todo(s) deleted:\n${lines.join('\n')}`;
+      } else if (result.initializedTodos && Array.isArray(result.initializedTodos)) {
+        const lines = result.initializedTodos.map((t: any) => `  • ${t.text}${t.priority ? ` (${t.priority})` : ''}`);
+        return `\n✓ todo list initialized:\n${lines.join('\n')}`;
+      } else if (result.added && Array.isArray(result.added)) {
+        return ` • added ${result.added.length} todo${result.added.length === 1 ? '' : 's'}`;
+      } else if (result.completed && Array.isArray(result.completed)) {
+        return ` • completed ${result.completed.length} todo${result.completed.length === 1 ? '' : 's'}`;
+      } else if (result.deleted && Array.isArray(result.deleted)) {
+        return ` • deleted ${result.deleted.length} todo${result.deleted.length === 1 ? '' : 's'}`;
+      } else if (result.itemsRemoved !== undefined) {
+        return ` • cleared ${result.itemsRemoved} todo${result.itemsRemoved === 1 ? '' : 's'}`;
+      } else if (result.todos && Array.isArray(result.todos)) {
+        const pending = result.summary?.pending ?? result.todos.filter((t: any) => !t.completed).length;
+        const completed = result.summary?.completed ?? result.todos.filter((t: any) => t.completed).length;
+        return ` • ${result.todos.length} todos (${pending} pending, ${completed} completed)`;
+      } else if (result.id && result.message) {
+        // For single add/complete/delete
+        return ` • ${result.message}`;
+      } else if (result.message) {
+        return ` • ${result.message}`;
+      }
+    }
+    return ' • todo updated';
+  }
+
+  /**
    * Clears the todo list and adds a batch of new todos.
    * @param texts Array of todo item texts
    * @param priority Priority for all new todos

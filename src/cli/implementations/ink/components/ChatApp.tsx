@@ -120,20 +120,22 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           }
         }
       } else {
-        // Normal mode: show the completion result
-        const content = ToolLogger.formatToolOperationFull(
-          event.toolName,
-          event.args,
-          event.success,
-          event.result
-        );
-        if (content.trim()) {
-          addMessage({
-            type: 'tool_call',
-            content,
-          });
-        }
+        // Normal mode: only show the tool_result message, not the tool_call summary
+        // (Removed the addMessage for type: 'tool_call' here)
       }
+      // Always add a tool_result message for ConversationDisplay
+      addMessage({
+        type: 'tool_result',
+        content: '', // content is not used, toolData is used for rendering
+        toolData: {
+          toolName: event.toolName,
+          args: event.args,
+          result: event.result,
+          success: event.success,
+          duration: event.result?.metadata?.executionTime || undefined,
+          error: event.result && !event.success ? (typeof event.result === 'string' ? event.result : event.result?.error || undefined) : undefined,
+        },
+      });
     }
   }, [addMessage, showToolLogs, verboseToolLogs]);
 
@@ -379,12 +381,51 @@ Example Questions:
     disabled: isProcessing,
   };
 
+  // Add this mapping function after imports
+  function mapBackendToUIMessage(msg: any): Message {
+    // If already a UI message, return as is
+    if (msg.type) return msg;
+
+    if (msg.role === 'tool') {
+      let toolData: any = {};
+      try {
+        const parsed = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+        toolData = {
+          toolName: parsed.tool || 'unknown',
+          result: parsed.data || parsed.result,
+          success: parsed.success !== false,
+          error: parsed.error,
+          duration: parsed.metadata?.executionTime,
+        };
+      } catch {
+        toolData = { toolName: 'unknown', result: msg.content, success: false };
+      }
+      return {
+        id: msg.id || Math.random().toString(),
+        type: 'tool_result',
+        content: '', // Optionally, a summary string
+        timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+        toolData,
+      };
+    }
+    // Map other roles if needed
+    return {
+      ...msg,
+      type: msg.role === 'user' ? 'user'
+           : msg.role === 'assistant' ? 'agent'
+           : msg.role === 'system' ? 'system'
+           : 'unknown',
+      id: msg.id || Math.random().toString(),
+      timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+    };
+  }
+
   return (
     <ApprovalProvider>
       <Box flexDirection="column" height="100%">
         <Box flexGrow={1} flexDirection="column" overflow="hidden">
           <ConversationDisplay
-            messages={messages}
+            messages={messages.map(mapBackendToUIMessage)}
             showWelcome={showWelcome}
             isProcessing={isProcessing}
             provider={configManager.getCurrentProvider()}

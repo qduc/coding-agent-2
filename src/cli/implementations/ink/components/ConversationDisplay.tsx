@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import { MarkdownRenderer } from '../../../../shared/utils/markdown';
 import { ProcessingSpinner, TypingSpinner } from './Spinner';
+import { getMinimalOutcome } from '../../../../shared/utils/toolLogger/displayFormatters';
 
 export interface Message {
   id: string;
@@ -175,6 +176,12 @@ const ToolMessage: React.FC<{ message: Message }> = ({ message }) => {
   if (message.type === 'tool_result') {
     const statusColor = toolData.success ? 'green' : 'red';
     const statusIcon = toolData.success ? '✅' : '❌';
+    const minimalOutcome = getMinimalOutcome(
+      toolData.toolName,
+      toolData.success ?? false,
+      toolData.result,
+      toolData.args
+    );
 
     return (
       <Box flexDirection="column">
@@ -193,21 +200,10 @@ const ToolMessage: React.FC<{ message: Message }> = ({ message }) => {
           </Box>
         )}
 
-        {toolData.result && !toolData.error && (
+        {/* Minimal outcome summary */}
+        {minimalOutcome && (
           <Box marginLeft={2} marginTop={1}>
-            <Text color="gray">Result:</Text>
-            <Box marginLeft={1}>
-              <Text color="white">
-                {typeof toolData.result === 'string'
-                  ? toolData.result.length > 200
-                    ? `${toolData.result.substring(0, 200)}...`
-                    : toolData.result
-                  : JSON.stringify(toolData.result, null, 2).length > 200
-                    ? `${JSON.stringify(toolData.result, null, 2).substring(0, 200)}...`
-                    : JSON.stringify(toolData.result, null, 2)
-                }
-              </Text>
-            </Box>
+            <Text color="gray">{minimalOutcome}</Text>
           </Box>
         )}
       </Box>

@@ -381,4 +381,46 @@ export class WriteTool extends BaseTool {
       linesChanged
     };
   }
+
+  /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: WriteParams, success: boolean, result?: any): string {
+    if (!success) {
+      let errorMsg = 'Unknown error';
+      if (result instanceof Error) {
+        errorMsg = result.message;
+      } else if (typeof result === 'string' && result.trim()) {
+        errorMsg = result;
+      } else if (typeof result === 'object' && result !== null && result.message) {
+        errorMsg = result.message;
+      }
+      return `\n${errorMsg}`;
+    }
+
+    const path = params.path;
+    let context = path ? ` ${path}` : '';
+
+    if (params.search && params.replace) {
+      // Search-replace mode formatting
+      const mode = params.searchRegex ? 'search-replace (regex)' : 'search-replace';
+      if (typeof result === 'object' && result !== null) {
+        const replacements = result.replacements || 0;
+        const linesChanged = result.linesChanged || 0;
+        return `${context}\n• ${replacements} replacements, ${linesChanged}L changed`;
+      }
+      return `${context} • search-replace completed`;
+    } else if (params.content !== undefined) {
+      // Content mode formatting
+      if (typeof result === 'object' && result?.linesChanged) {
+        return `${context}\n• ${result.linesChanged}L changed`;
+      } else if (params.content) {
+        const lines = params.content.split('\n').length;
+        return `${context} • ${lines}L written`;
+      }
+      return `${context} • saved`;
+    }
+
+    return `${context} • completed`;
+  }
 }

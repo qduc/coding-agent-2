@@ -251,4 +251,18 @@ export abstract class BaseTool {
       schema: this.schema
     };
   }
+
+  /**
+   * Get human-readable output for display formatting
+   * Concrete tools should override this to provide tool-specific formatting
+   */
+  getHumanReadableOutput?(params: any, success: boolean, result?: any): string {
+    if (!success) {
+      const errorMsg = result instanceof Error ? result.message : 
+                      typeof result === 'string' ? result :
+                      result?.message || 'Unknown error';
+      return `\n${errorMsg}`;
+    }
+    return ` • completed`;
+  }
 }

@@ -96,4 +96,28 @@ export class SubAgentTool extends BaseTool {
       );
     }
   }
+
+  /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: any, success: boolean, result?: any): string {
+    if (!success) {
+      const errorMsg = result instanceof Error ? result.message :
+                      typeof result === 'string' ? result :
+                      result?.message || 'Unknown error';
+      return `\n${errorMsg}`;
+    }
+
+    // For successful sub-agent execution, show brief summary
+    const query = params?.query || 'context query';
+    if (typeof result === 'string') {
+      const responseLength = result.length;
+      const wordCount = result.split(/\s+/).length;
+      return ` • context found for "${query}" (${wordCount} words)`;
+    } else if (typeof result === 'object' && result?.content) {
+      const wordCount = result.content.split(/\s+/).length;
+      return ` • context found for "${query}" (${wordCount} words)`;
+    }
+    return ` • context analysis completed`;
+  }
 }

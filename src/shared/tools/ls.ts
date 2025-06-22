@@ -299,7 +299,32 @@ export class LSTool extends BaseTool {
       minimatch(entry.relativePath, pattern) ||
       minimatch(entry.path, pattern)
     );
-  }  /**
+  }
+
+  /**
+   * Get human-readable output for display formatting
+   */
+  getHumanReadableOutput(params: any, success: boolean, result?: any): string {
+    if (!success) {
+      const errorMsg = result instanceof Error ? result.message :
+                      typeof result === 'string' ? result :
+                      result?.message || 'Unknown error';
+      return `\n${errorMsg}`;
+    }
+
+    if (typeof result === 'object' && result?.entries) {
+      const files = result.entries.filter((item: any) => item.type === 'file').length;
+      const dirs = result.entries.filter((item: any) => item.type === 'directory').length;
+      return ` • ${files} files, ${dirs} directories`;
+    } else if (Array.isArray(result)) {
+      const files = result.filter(item => !item.endsWith('/')).length;
+      const dirs = result.length - files;
+      return ` • ${files} files, ${dirs} directories`;
+    }
+    return ` • listed`;
+  }
+
+  /**
    * Check if a path is in the blocked list
    */
   private isBlockedPath(targetPath: string): boolean {
