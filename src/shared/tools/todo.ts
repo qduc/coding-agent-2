@@ -100,9 +100,16 @@ Operations: add, list, complete, delete, clear`;
           const results = textParam.map(text => this.addTodo(text, params.priority || 'medium'));
           const successes = results.filter(r => r.success);
           const errors = results.filter(r => !r.success);
+          // Collect todo objects for added todos
+          const addedTodos = successes.map(r => ({
+            id: r.output?.id,
+            text: r.output?.message?.replace(/^Added todo item: /, '') || '',
+            priority: r.output?.priority || 'medium',
+          }));
           return this.createSuccessResult({
             message: `Added ${successes.length} of ${results.length} todo items`,
             added: successes.map(r => r.output?.id),
+            addedTodos,
             errors: errors.map(r => extractErrorMsg(r.error)),
             total: this.todos.size
           });
@@ -117,9 +124,15 @@ Operations: add, list, complete, delete, clear`;
           const results = params.id.map(id => this.completeTodo(id));
           const successes = results.filter(r => r.success);
           const errors = results.filter(r => !r.success);
+          // Collect todo objects for completed todos
+          const completedTodos = successes.map(r => ({
+            id: r.output?.id,
+            text: r.output?.text || '',
+          }));
           return this.createSuccessResult({
             message: `Completed ${successes.length} of ${results.length} todo items`,
             completed: successes.map(r => r.output?.id),
+            completedTodos,
             errors: errors.map(r => extractErrorMsg(r.error))
           });
         } else {
@@ -131,9 +144,15 @@ Operations: add, list, complete, delete, clear`;
           const results = params.id.map(id => this.deleteTodo(id));
           const successes = results.filter(r => r.success);
           const errors = results.filter(r => !r.success);
+          // Collect todo objects for deleted todos
+          const deletedTodos = successes.map(r => ({
+            id: r.output?.id,
+            text: r.output?.text || '',
+          }));
           return this.createSuccessResult({
             message: `Deleted ${successes.length} of ${results.length} todo items`,
             deleted: successes.map(r => r.output?.id),
+            deletedTodos,
             errors: errors.map(r => extractErrorMsg(r.error))
           });
         } else {
@@ -150,7 +169,18 @@ Operations: add, list, complete, delete, clear`;
             ['text must be a non-empty array of strings']
           );
         }
-        return this.initTodos(textParam, params.priority || 'medium');
+        // Use initTodos, but also collect the added todos' text
+        const result = this.initTodos(textParam, params.priority || 'medium');
+        // Find the todos just added (should be all in this.todos)
+        const initializedTodos = Array.from(this.todos.values()).map(todo => ({
+          id: todo.id,
+          text: todo.text,
+          priority: todo.priority
+        }));
+        return this.createSuccessResult({
+          ...result.output,
+          initializedTodos
+        });
       }
       default:
         return this.createErrorResult(

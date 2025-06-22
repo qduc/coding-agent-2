@@ -109,8 +109,23 @@ function formatSearchReplaceBlock(search: string, replace: string): string {
   // Split into lines for multiline support
   const searchLines = (search || '').split('\n');
   const replaceLines = (replace || '').split('\n');
-  const searchBlock = searchLines.map(line => chalk.bgYellow.black(`${line}`)).join('\n');
-  const replaceBlock = replaceLines.map(line => chalk.bgGreen.black(`${line}`)).join('\n');
+
+  const maxLines = 10;
+  const formatBlock = (lines: string[], colorFn: (s: string) => string) => {
+    if (lines.length <= maxLines) {
+      return lines.map(line => colorFn(`${line}`)).join('\n');
+    } else {
+      const shown = lines.slice(0, maxLines);
+      const omitted = lines.length - maxLines;
+      return [
+        ...shown.map(line => colorFn(`${line}`)),
+        colorFn(`+${omitted} lines`)
+      ].join('\n');
+    }
+  };
+
+  const searchBlock = formatBlock(searchLines, chalk.bgYellow.black);
+  const replaceBlock = formatBlock(replaceLines, chalk.bgGreen.black);
   return `\n${searchBlock}\n${replaceBlock}`;
 }
 
@@ -217,8 +232,20 @@ export function getMinimalOutcome(toolName: string, success: boolean, result?: a
       return `\n${result?.message || 'Todo error'}`;
     }
     if (typeof result === 'object' && result !== null) {
-      // Handle different todo actions by inspecting result keys
-      if (result.added && Array.isArray(result.added)) {
+      // Show added todos with content
+      if (result.addedTodos && Array.isArray(result.addedTodos)) {
+        const lines = result.addedTodos.map((t: any) => `  • ${t.text}${t.priority ? ` (${t.priority})` : ''}`).join('\n');
+        return `\n✓ todo(s) added:\n${lines}`;
+      } else if (result.completedTodos && Array.isArray(result.completedTodos)) {
+        const lines = result.completedTodos.map((t: any) => `  ✓ ${t.text}`).join('\n');
+        return `\n✓ todo(s) completed:\n${lines}`;
+      } else if (result.deletedTodos && Array.isArray(result.deletedTodos)) {
+        const lines = result.deletedTodos.map((t: any) => `  ✗ ${t.text}`).join('\n');
+        return `\n✗ todo(s) deleted:\n${lines}`;
+      } else if (result.initializedTodos && Array.isArray(result.initializedTodos)) {
+        const lines = result.initializedTodos.map((t: any) => `  • ${t.text}${t.priority ? ` (${t.priority})` : ''}`).join('\n');
+        return `\n✓ todo list initialized:\n${lines}`;
+      } else if (result.added && Array.isArray(result.added)) {
         return ` • added ${result.added.length} todo${result.added.length === 1 ? '' : 's'}`;
       } else if (result.completed && Array.isArray(result.completed)) {
         return ` • completed ${result.completed.length} todo${result.completed.length === 1 ? '' : 's'}`;
