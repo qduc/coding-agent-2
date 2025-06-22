@@ -157,7 +157,44 @@ export class ProjectDiscovery {
       }
 
       const projectName = path.basename(this.workingDirectory);
-      const ignoreDirs = new Set(['node_modules', '.git', '__pycache__', 'venv', 'env', 'dist', 'build']);
+      const ignoreDirs = new Set([
+        'node_modules', 'vendor', '__pycache__', '.venv', 'venv', 'dist',
+        'build', 'target', '.git', '.idea', '.vscode', 'coverage', '.cache'
+      ]);
+
+      // Read root .gitignore and add directory entries to ignoreDirs
+      try {
+        const gitignorePath = path.join(this.workingDirectory, '.gitignore');
+        if (fs.existsSync(gitignorePath)) {
+          const gitignoreContent = fs.readFileSync(gitignorePath, 'utf8');
+          gitignoreContent.split('\n').forEach(line => {
+            const trimmed = line.trim();
+
+            // Skip comments, empty lines, and negations
+            if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('!')) return;
+
+            // Skip complex patterns with wildcards
+            if (trimmed.includes('*') || trimmed.includes('?') || trimmed.includes('[')) return;
+
+            // Handle directory patterns
+            if (trimmed.endsWith('/')) {
+              // Explicit directory: "build/"
+              ignoreDirs.add(trimmed.slice(0, -1));
+            } else if (!trimmed.includes('/')) {
+              // Simple top-level pattern: "logs", "temp", "node_modules"
+              ignoreDirs.add(trimmed);
+            } else {
+              // Path pattern: "src/temp" -> ignore the root "src"
+              const rootDir = trimmed.split('/')[0];
+              if (rootDir && !rootDir.includes('.')) {
+                ignoreDirs.add(rootDir);
+              }
+            }
+          });
+        }
+      } catch (e) {
+        // Ignore errors reading .gitignore
+      }
 
       const buildTree = (dir: string, prefix: string = '', maxDepth: number = 10, currentDepth: number = 0): string => {
         if (currentDepth >= maxDepth) return '';
