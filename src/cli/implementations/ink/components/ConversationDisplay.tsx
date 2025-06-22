@@ -23,12 +23,16 @@ export interface ConversationDisplayProps {
   messages: Message[];
   showWelcome?: boolean;
   isProcessing?: boolean;
+  provider?: string;
+  model?: string;
 }
 
 export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
   messages,
   showWelcome = false,
   isProcessing = false,
+  provider,
+  model,
 }) => {
   const renderMessage = (message: Message) => {
     const prefix = getMessagePrefix(message.type);
@@ -89,6 +93,19 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
     );
   };
 
+  const renderProviderModel = () => {
+    if (!provider && !model) return null;
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        <Box borderStyle="round" borderColor="yellow" padding={1}>
+          <Text color="yellow" bold>
+            Provider: {provider || 'N/A'}   Model: {model || 'N/A'}
+          </Text>
+        </Box>
+      </Box>
+    );
+  };
+
   const renderProcessingIndicator = () => {
     // Show processing spinner when processing
     if (!isProcessing) return null;
@@ -106,6 +123,7 @@ export const ConversationDisplay: React.FC<ConversationDisplayProps> = ({
 
   return (
     <Box flexDirection="column">
+      {renderProviderModel()}
       {renderWelcome()}
       {messages.map(renderMessage)}
       {renderProcessingIndicator()}

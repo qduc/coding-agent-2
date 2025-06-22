@@ -375,7 +375,7 @@ Example Questions:
   const inputOptions: InputOptions = {
     prompt: isProcessing
       ? '🤖 Processing...'
-      : '💬 Your Message (Enter to send, Enter again for multi-line):',
+      : '💬 Your Message (End message with \'\\\' for multi-line):',
     disabled: isProcessing,
   };
 
@@ -387,6 +387,8 @@ Example Questions:
             messages={messages}
             showWelcome={showWelcome}
             isProcessing={isProcessing}
+            provider={configManager.getCurrentProvider()}
+            model={configManager.getConfig().model}
           />
         </Box>
         <InputComponent

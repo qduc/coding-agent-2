@@ -495,6 +495,7 @@ export class ConfigManager {
         default: this.config.provider,
         choices: [
           { name: 'OpenAI (GPT-4o, o3-mini, GPT-4.1, or compatible)', value: 'openai' },
+          { name: 'OpenRouter (openrouter.ai, supports many models)', value: 'openrouter' },
           { name: 'Anthropic (Claude 4, Claude 3.7)', value: 'anthropic' },
           { name: 'Google Gemini (Gemini 2.5, 2.0)', value: 'gemini' }
         ]
@@ -502,7 +503,8 @@ export class ConfigManager {
     ]);
 
     let openaiApiBaseUrl = 'https://api.openai.com/v1';
-    let openaiEndpointChoice = 'official';
+    let openrouterApiBaseUrl = 'https://openrouter.ai/api/v1';
+    let endpointChoice = 'official';
     if (provider === 'openai') {
       // Prompt for OpenAI endpoint type
       const { endpointType } = await inquirer.default.prompt([
@@ -513,16 +515,13 @@ export class ConfigManager {
           default: 'official',
           choices: [
             { name: 'Official OpenAI (https://api.openai.com/v1)', value: 'official' },
-            { name: 'OpenRouter (https://openrouter.ai/api/v1)', value: 'openrouter' },
             { name: 'Custom OpenAI-compatible endpoint', value: 'custom' }
           ]
         }
       ]);
-      openaiEndpointChoice = endpointType;
+      endpointChoice = endpointType;
       if (endpointType === 'official') {
         openaiApiBaseUrl = 'https://api.openai.com/v1';
-      } else if (endpointType === 'openrouter') {
-        openaiApiBaseUrl = 'https://openrouter.ai/api/v1';
       } else {
         // Custom endpoint
         const { endpointUrl } = await inquirer.default.prompt([
@@ -539,10 +538,14 @@ export class ConfigManager {
         ]);
         openaiApiBaseUrl = endpointUrl;
       }
+    } else if (provider === 'openrouter') {
+      // Use default OpenRouter endpoint, do not prompt
+      openrouterApiBaseUrl = 'https://openrouter.ai/api/v1';
     }
 
     // Get API key based on provider
     const needsApiKey = provider === 'openai' ? !this.hasOpenAIKey() :
+                       provider === 'openrouter' ? !this.hasOpenAIKey() :
                        provider === 'anthropic' ? !this.hasAnthropicKey() :
                        !this.hasGeminiKey();
 
@@ -550,16 +553,16 @@ export class ConfigManager {
     let apiKey = '';
     if (needsApiKey) {
       if (provider === 'openai') {
-        if (openaiEndpointChoice === 'official') {
+        if (endpointChoice === 'official') {
           console.log(chalk.cyan('OpenAI API Key:'));
           console.log(chalk.gray('You can get your API key from: https://platform.openai.com/api-keys'));
-        } else if (openaiEndpointChoice === 'openrouter') {
-          console.log(chalk.cyan('OpenRouter API Key:'));
-          console.log(chalk.gray('You can get your API key from: https://openrouter.ai/keys'));
         } else {
           console.log(chalk.cyan('OpenAI-Compatible API Key:'));
           console.log(chalk.gray('You can get your API key from your custom endpoint provider.'));
         }
+      } else if (provider === 'openrouter') {
+        console.log(chalk.cyan('OpenRouter API Key:'));
+        console.log(chalk.gray('You can get your API key from: https://openrouter.ai/keys'));
       } else if (provider === 'anthropic') {
         console.log(chalk.cyan('Anthropic API Key:'));
         console.log(chalk.gray('You can get your API key from: https://console.anthropic.com/'));
@@ -574,7 +577,8 @@ export class ConfigManager {
           type: 'password',
           name: 'apiKey',
           message: `Enter your ${provider === 'openai'
-            ? (openaiEndpointChoice === 'official' ? 'OpenAI' : openaiEndpointChoice === 'openrouter' ? 'OpenRouter' : 'OpenAI-Compatible')
+            ? (endpointChoice === 'official' ? 'OpenAI' : 'OpenAI-Compatible')
+            : provider === 'openrouter' ? 'OpenRouter'
             : provider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key:`,
           mask: '*',
           validate: (input: string) => {
@@ -582,16 +586,17 @@ export class ConfigManager {
               return 'API key is required';
             }
             if (provider === 'openai') {
-              if (openaiEndpointChoice === 'official') {
+              if (endpointChoice === 'official') {
                 if (!input.startsWith('sk-')) {
                   return 'OpenAI API keys start with "sk-"';
                 }
-              } else if (openaiEndpointChoice === 'openrouter') {
-                if (!input.startsWith('org-') && !input.startsWith('sk-or-')) {
-                  return 'OpenRouter API keys start with "org-" or "sk-or-"';
-                }
               }
               // For custom, accept any key
+            }
+            if (provider === 'openrouter') {
+              if (!input.startsWith('org-') && !input.startsWith('sk-or-')) {
+                return 'OpenRouter API keys start with "org-" or "sk-or-"';
+              }
             }
             if (provider === 'anthropic' && !input.startsWith('sk-ant-')) {
               return 'Anthropic API keys start with "sk-ant-"';
@@ -604,7 +609,7 @@ export class ConfigManager {
         }
       ]);
       apiKey = enteredKey;
-      if (provider === 'openai') {
+      if (provider === 'openai' || provider === 'openrouter') {
         this.setOpenAIKey(apiKey);
       } else if (provider === 'anthropic') {
         this.setAnthropicKey(apiKey);
@@ -613,7 +618,7 @@ export class ConfigManager {
       }
     } else {
       // If not entered, get from config (env or memory)
-      if (provider === 'openai') {
+      if (provider === 'openai' || provider === 'openrouter') {
         apiKey = this.getOpenAIKey() || '';
       } else if (provider === 'anthropic') {
         apiKey = this.getAnthropicKey() || '';
@@ -623,20 +628,21 @@ export class ConfigManager {
     }
 
     let model = this.config.model;
-    if (provider === 'openai') {
+    if (provider === 'openai' || provider === 'openrouter') {
       // Try to fetch models from the endpoint
       let models: { id: string; object: string }[] = [];
       let fetchFailed = false;
+      let apiBaseUrl = provider === 'openai' ? openaiApiBaseUrl : openrouterApiBaseUrl;
       try {
-        const res = await fetch(`${openaiApiBaseUrl.replace(/\/$/, '')}/models`, {
+        const res = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/models`, {
           headers: { 'Authorization': `Bearer ${apiKey}` }
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (Array.isArray(data.data)) {
           models = data.data.filter((m: any) => typeof m.id === 'string');
-          // Filter OpenRouter models to only those supporting tools
-          if (openaiEndpointChoice === 'openrouter') {
+          // For OpenRouter, filter to models supporting tools
+          if (provider === 'openrouter') {
             models = models.filter((m: any) => Array.isArray(m.supported_parameters) && m.supported_parameters.includes('tools'));
           }
         } else {
@@ -692,7 +698,7 @@ export class ConfigManager {
             type: 'input',
             name: 'model',
             message: 'Enter the model name to use:',
-            default: model || 'gpt-4o-2024-11-20',
+            default: model || (provider === 'openai' ? 'gpt-4o-2024-11-20' : 'openrouter/codellama-70b-instruct'),
             validate: (input: string) => input.trim() ? true : 'Model name is required'
           }
         ]);
@@ -740,19 +746,21 @@ export class ConfigManager {
     const configToSave: Partial<Config> = { provider, model };
     if (provider === 'openai') {
       configToSave.openaiApiBaseUrl = openaiApiBaseUrl;
+    } else if (provider === 'openrouter') {
+      configToSave.openaiApiBaseUrl = openrouterApiBaseUrl;
     }
     await this.saveConfig(configToSave);
 
     console.log();
     console.log(chalk.green('✅ Configuration saved!'));
     console.log(chalk.gray('Note: API key is stored in memory only for security.'));
-    const envVar = provider === 'openai'
-      ? 'OPENAI_API_KEY'
+    const envVar = provider === 'openai' || provider === 'openrouter'
+      ? (provider === 'openai' ? 'OPENAI_API_KEY' : 'OPENROUTER_API_KEY')
       : provider === 'anthropic'
         ? 'ANTHROPIC_API_KEY'
         : 'GEMINI_API_KEY';
     console.log(chalk.gray(`Set ${envVar} environment variable for persistent usage.`));
-    if (provider === 'openai') {
+    if (provider === 'openai' || provider === 'openrouter') {
       console.log(chalk.gray(`Set OPENAI_API_BASE_URL if you want to override the endpoint in the future.`));
     }
     console.log();
