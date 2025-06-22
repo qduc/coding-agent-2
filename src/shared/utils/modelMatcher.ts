@@ -9,15 +9,28 @@ export interface ModelMatchInfo {
 
 export const MODEL_ALIASES: Record<string, string[]> = {
   // Anthropic Claude 4 Models (Latest - 2025)
-  'claude-4-sonnet': ['sonnet', 'sonnet-4', 'claude-sonnet-4', 'sonnet4', 'claude-4-sonnet', 'claude4-sonnet'],
+  'claude-sonnet-4-20250514': [
+    'sonnet-4', 'claude-sonnet-4', 'sonnet4', 'claude4-sonnet', 'claude-sonnet-4-0', 'claude-sonnet-4', 'sonnet', 'sonnet4-2025', 'claude4', 'claude4sonnet', 'claude-4-sonnet'
+  ],
+  'claude-opus-4-20250514': [
+    'opus-4', 'claude-opus-4', 'opus4', 'claude4-opus', 'claude-opus-4-0', 'claude-opus-4', 'opus', 'opus4-2025', 'claude4', 'claude4opus', 'claude-4-opus'
+  ],
 
   // Anthropic Claude 3.7 Models (Current Top Performers)
-  'claude-3-7-sonnet': ['sonnet-3.7', 'claude-3.7-sonnet', 'claude-sonnet-3.7', '3.7-sonnet', 'sonnet3.7', 'sonnet', 'claude-3.7'],
-  'claude-3-7-sonnet-thinking': ['sonnet-3.7-thinking', 'claude-3.7-thinking', 'thinking-3.7', 'extended-thinking'],
+  'claude-3-7-sonnet-20250219': [
+    'sonnet-3.7', 'claude-3.7-sonnet', 'claude-sonnet-3.7', '3.7-sonnet', 'sonnet3.7', 'claude-3-7', 'claude-3-7-sonnet-latest', 'claude3.7', 'claude3.7sonnet', 'claude-3-7-sonnet', 'sonnet-3.7-2025', 'claude3-7sonnet', 'claude-3-7-sonnet-20250219', 'sonnet3-7', 'sonnet-3-7', 'claude3-7', 'claude3-7-sonnet'
+  ],
+  'claude-3-7-sonnet-thinking': [
+    'sonnet-3.7-thinking', 'claude-3.7-thinking', 'thinking-3.7', 'extended-thinking'
+  ],
 
   // Anthropic Claude 3.5 Models (Still Strong)
-  'claude-3-5-sonnet-20241022': ['sonnet-3.5', 'claude-3.5-sonnet', 'claude-sonnet-3.5', '3.5-sonnet', 'sonnet3.5'],
-  'claude-3-5-haiku-20241022': ['haiku', 'haiku-3.5', 'claude-3.5-haiku', 'claude-haiku-3.5', '3.5-haiku', 'haiku3.5', 'haiku'],
+  'claude-3-5-sonnet-20241022': [
+    'sonnet-3.5', 'claude-3.5-sonnet', 'claude-sonnet-3.5', '3.5-sonnet', 'sonnet3.5', 'claude-3-5-sonnet-latest', 'claude3.5', 'claude3.5sonnet', 'claude-3-5-sonnet', 'sonnet-3.5-2024', 'claude3-5sonnet', 'claude-3-5-sonnet-20241022', 'sonnet3-5', 'sonnet-3-5', 'claude3-5', 'claude3-5-sonnet'
+  ],
+  'claude-3-5-haiku-20241022': [
+    'haiku-3.5', 'claude-3.5-haiku', 'claude-haiku-3.5', '3.5-haiku', 'haiku3.5', 'haiku', 'claude-3-5-haiku-latest', 'claude3.5haiku', 'claude-3-5-haiku', 'haiku-3.5-2024', 'claude3-5haiku', 'claude-3-5-haiku-20241022', 'haiku3-5', 'haiku-3-5', 'claude3-5', 'claude3-5-haiku'
+  ],
 
   // OpenAI GPT-4 Series (2025 Updates)
   'gpt-4.1': ['4.1', 'gpt-4.1', 'gpt4.1', 'coding-focused', 'developer'],

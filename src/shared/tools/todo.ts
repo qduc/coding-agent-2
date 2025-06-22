@@ -81,10 +81,23 @@ Operations: add, list, complete, delete, clear`;
     priority?: 'low' | 'medium' | 'high';
   }, abortSignal?: AbortSignal): Promise<ToolResult> {
     const extractErrorMsg = (err: any) => typeof err === 'string' ? err : err?.message;
+    // --- BEGIN PATCH: auto-parse JSON array string for text param ---
+    let textParam = params.text;
+    if (typeof textParam === 'string' && textParam.trim().startsWith('[') && textParam.trim().endsWith(']')) {
+      try {
+        const parsed = JSON.parse(textParam);
+        if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
+          textParam = parsed;
+        }
+      } catch (e) {
+        // ignore, fallback to original string
+      }
+    }
+    // --- END PATCH ---
     switch (params.action) {
       case 'add': {
-        if (Array.isArray(params.text)) {
-          const results = params.text.map(text => this.addTodo(text, params.priority || 'medium'));
+        if (Array.isArray(textParam)) {
+          const results = textParam.map(text => this.addTodo(text, params.priority || 'medium'));
           const successes = results.filter(r => r.success);
           const errors = results.filter(r => !r.success);
           return this.createSuccessResult({
@@ -94,7 +107,7 @@ Operations: add, list, complete, delete, clear`;
             total: this.todos.size
           });
         } else {
-          return this.addTodo(params.text!, params.priority || 'medium');
+          return this.addTodo(textParam!, params.priority || 'medium');
         }
       }
       case 'list':
@@ -130,14 +143,14 @@ Operations: add, list, complete, delete, clear`;
       case 'clear':
         return this.clearTodos();
       case 'init': {
-        if (!params.text || !Array.isArray(params.text) || params.text.length === 0) {
+        if (!textParam || !Array.isArray(textParam) || textParam.length === 0) {
           return this.createErrorResult(
             'Provide an array of todo item texts for init action',
             'INVALID_PARAMS',
             ['text must be a non-empty array of strings']
           );
         }
-        return this.initTodos(params.text, params.priority || 'medium');
+        return this.initTodos(textParam, params.priority || 'medium');
       }
       default:
         return this.createErrorResult(
