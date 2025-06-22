@@ -124,17 +124,7 @@ if (this.options?.temporaryProvider) {
     const initialized = await this.llmService.initialize();
 
     if (initialized) {
-      // Output the current provider and model being used
-      const providerName = this.llmService.getProviderName();
-      let modelName = 'unknown';
-      try {
-        modelName = this.llmService.getModelName();
-      } catch (error) {
-        console.warn('Could not get model name, showing provider only');
-      }
-      console.log(`Initialized with provider: ${providerName}${modelName !== 'unknown' ? `, model: ${modelName}` : ''}`);
-
-      // Initialize the orchestrator's provider strategy now that LLM service is ready
+      // Removed user-facing log to avoid duplicate output; CLI will handle logging
       this.orchestrator.initializeProviderStrategy();
     }
 

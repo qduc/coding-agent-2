@@ -221,14 +221,6 @@ export async function startInteractiveMode(agent: Agent, options: any, toolConte
     };
     process.on('SIGINT', handleExit);
 
-    // If model was specified, show the temporary model and provider being used
-    if (options.model) {
-      console.log(chalk.blue('🤖 Using temporary model:'), chalk.white(options.model));
-      const { detectProviderFromModel } = await import('../shared/core/config');
-      const provider = detectProviderFromModel(options.model);
-      console.log(chalk.blue('Provider auto-selected:'), chalk.white(provider));
-    }
-
     // Start the full Ink interactive mode with the already initialized agent
     await chatHandler.handleInteractiveChatMode(
       agent,
