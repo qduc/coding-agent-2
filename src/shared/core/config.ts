@@ -404,19 +404,11 @@ export class ConfigManager {
         return;
       }
 
-      // Convert string log level to enum
-      const logLevelMap: Record<string, LogLevel> = {
-        error: LogLevel.ERROR,
-        warn: LogLevel.WARN,
-        info: LogLevel.INFO,
-        debug: LogLevel.DEBUG,
-        trace: LogLevel.TRACE,
-      };
-
-      const logLevel = config.logLevel ? logLevelMap[config.logLevel] : LogLevel.INFO;
+      // Use string log level directly for clarity
+      const logLevel = config.logLevel || 'info';
 
       logger.configure({
-        level: logLevel,
+        level: logLevel, // Pass string log level
         enableConsole: config.enableConsoleLogging ?? false, // Default to false for general logs
         enableFile: config.enableFileLogging ?? true,
         enableToolConsole: config.enableToolConsoleLogging ?? true, // Default to true for tool logs

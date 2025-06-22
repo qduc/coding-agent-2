@@ -4,11 +4,11 @@ import * as path from 'path';
 import * as os from 'os';
 
 export enum LogLevel {
-  ERROR = 0,
-  WARN = 1,
-  INFO = 2,
-  DEBUG = 3,
-  TRACE = 4,
+  ERROR = 'error',
+  WARN = 'warn',
+  INFO = 'info',
+  DEBUG = 'debug',
+  TRACE = 'trace',
 }
 
 export interface LogEntry {
@@ -53,7 +53,7 @@ export class Logger {
 
   private constructor(config: Partial<LoggerConfig> = {}) {
     this.config = {
-      level: LogLevel.DEBUG,
+      level: config.level || LogLevel.DEBUG,
       enableConsole: true,
       enableFile: true,
       enableToolConsole: true, // Default to showing tool messages
@@ -62,7 +62,6 @@ export class Logger {
       maxLogSizeBytes: 10 * 1024 * 1024, // 10MB
       ...config,
     };
-
     if (this.config.enableFile && this.config.logDirectory) {
       this.initializeFileLogging();
     }
@@ -163,7 +162,7 @@ export class Logger {
    */
   private writeLog(entry: LogEntry, forceConsole = false): void {
     // Check if this log level should be output
-    if (entry.level > this.config.level) {
+    if (logLevelOrder(entry.level) > logLevelOrder(this.config.level)) {
       return;
     }
 
@@ -405,7 +404,7 @@ export class Logger {
    * Check if a log level is enabled
    */
   isLevelEnabled(level: LogLevel): boolean {
-    return level <= this.config.level;
+    return logLevelOrder(level) <= logLevelOrder(this.config.level);
   }
 
   /**
@@ -462,3 +461,14 @@ export const logDebug = (message: string, context?: Record<string, any>, source?
 
 export const logTrace = (message: string, context?: Record<string, any>, source?: string, correlationId?: string) =>
   logger.trace(message, context, source, correlationId);
+
+function logLevelOrder(level: LogLevel): number {
+  switch (level) {
+    case LogLevel.ERROR: return 0;
+    case LogLevel.WARN: return 1;
+    case LogLevel.INFO: return 2;
+    case LogLevel.DEBUG: return 3;
+    case LogLevel.TRACE: return 4;
+    default: return 2;
+  }
+}

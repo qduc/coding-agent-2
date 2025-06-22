@@ -75,8 +75,11 @@ export class ProjectDiscovery {
     try {
       // Run all three discovery commands
       const projectStructure = await this.getProjectStructure();
+      this.logger.debug(`projectStructure length: ${projectStructure.length}`);
       const techStack = await this.getTechStack();
+      this.logger.debug(`techStack length: ${techStack.length}`);
       const entryPoints = await this.getEntryPoints();
+      this.logger.debug(`entryPoints count: ${entryPoints.length}`);
 
       let codeStructure: CodeStructureAnalysis | undefined;
       let analysisMetadata = {
@@ -89,6 +92,7 @@ export class ProjectDiscovery {
         try {
           const { codeStructure: analysis, metadata } = await this.codeAnalyzer.analyzeProject(this.workingDirectory);
           codeStructure = analysis;
+          this.logger.debug(`codeStructure: files=${analysis.files.length}, totalSymbols=${analysis.files.reduce((total, file) => total + file.symbols.length, 0)}`);
           analysisMetadata = {
             filesAnalyzed: analysis.files.length,
             filesSkipped: 0, // TODO: track skipped files
@@ -106,6 +110,7 @@ export class ProjectDiscovery {
 
       // Generate summary (after code analysis is complete)
       const summary = this.generateSummary(projectStructure, techStack, entryPoints, codeStructure);
+      this.logger.debug(`summary length: ${summary.length}`);
 
       return {
         projectStructure,
@@ -148,6 +153,7 @@ export class ProjectDiscovery {
   /**
    * Create a tree-like representation using Node.js filesystem APIs
    * This replaces shell commands with pure Node.js implementation
+   * Trimmed: Only top 10 items per directory
    */
   private createTreeRepresentationNodeJS(): string {
     try {
@@ -196,7 +202,7 @@ export class ProjectDiscovery {
         // Ignore errors reading .gitignore
       }
 
-      const buildTree = (dir: string, prefix: string = '', maxDepth: number = 10, currentDepth: number = 0): string => {
+      const buildTree = (dir: string, prefix: string = '', maxDepth: number = 3, currentDepth: number = 0): string => {
         if (currentDepth >= maxDepth) return '';
 
         try {
@@ -210,8 +216,9 @@ export class ProjectDiscovery {
             });
 
           let result = '';
-          items.forEach((item, index) => {
-            const isLast = index === items.length - 1;
+          const displayItems = items.slice(0, 10);
+          displayItems.forEach((item, index) => {
+            const isLast = index === displayItems.length - 1;
             const connector = isLast ? '└── ' : '├── ';
             const nextPrefix = prefix + (isLast ? '    ' : '│   ');
 
@@ -221,7 +228,9 @@ export class ProjectDiscovery {
               result += buildTree(path.join(dir, item.name), nextPrefix, maxDepth, currentDepth + 1);
             }
           });
-
+          if (items.length > 10) {
+            result += `${prefix}...and ${items.length - 10} more\n`;
+          }
           return result;
         } catch (error) {
           return '';
@@ -253,7 +262,7 @@ export class ProjectDiscovery {
 
   /**
    * Tech stack detection using Node.js file system APIs
-   * Replaces find command with direct file checks
+   * Trimmed: Only show file names that exist
    */
   private detectTechStackWithNodeJS(): string {
     try {
@@ -262,7 +271,6 @@ export class ProjectDiscovery {
         return '';
       }
 
-      let result = '';
       const projectRoot = this.workingDirectory;
 
       // Check for common dependency files directly
@@ -278,18 +286,11 @@ export class ProjectDiscovery {
         { file: 'tsconfig.json', type: 'TypeScript' }
       ];
 
+      let result = '';
       for (const check of fileChecks) {
         const filePath = path.join(projectRoot, check.file);
         if (fs.existsSync(filePath)) {
-          result += `=== ./${check.file} ===\n`;
-          try {
-            // Read just the first few lines
-            const content = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 20).join('\n');
-            result += content + '\n...(truncated)...\n\n';
-          } catch (readError) {
-            // Silently ignore read errors
-            result += '[File exists but couldn\'t read]\n\n';
-          }
+          result += `./${check.file}\n`;
         }
       }
 
@@ -299,13 +300,7 @@ export class ProjectDiscovery {
         for (const check of fileChecks) {
           const filePath = path.join(srcDir, check.file);
           if (fs.existsSync(filePath)) {
-            result += `=== ./src/${check.file} ===\n`;
-            try {
-              const content = fs.readFileSync(filePath, 'utf8').split('\n').slice(0, 20).join('\n');
-              result += content + '\n...(truncated)...\n\n';
-            } catch (readError) {
-              result += '[File exists but couldn\'t read]\n\n';
-            }
+            result += `src/${check.file}\n`;
           }
         }
       }
