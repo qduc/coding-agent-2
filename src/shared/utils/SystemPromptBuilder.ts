@@ -141,11 +141,11 @@ AVAILABLE TOOLS & USAGE:
   Example: glob({pattern: "**/*.test.ts", includeHidden: false})
 
 • ripgrep - Fast text search across files with context and regex
-  Use: Search code patterns, function definitions, string literals
-  Example: ripgrep({pattern: "export.*function", types: ["js", "ts"]})
+  Use: Plain text search, log analysis, finding literal strings, configuration values
+  Example: ripgrep({pattern: "TODO|FIXME", types: ["js", "ts"]})
 
-• ast_grep - AST-based structural code search and transformation
-  Use: Find semantic code patterns, perform precise refactoring, create custom linting rules
+• ast_grep - **STRONGLY RECOMMENDED** AST-based structural code search and transformation
+  Use: **PREFERRED FOR CODE ANALYSIS** - function definitions, class patterns, semantic code structures, refactoring
   Example: ast_grep({pattern: "function $NAME($$$) { $$$ }", language: "js"})
 
 ⚙️ System Operations:
@@ -217,21 +217,34 @@ MODE SELECTION GUIDE:
 
 TOOL SELECTION STRATEGY:
 - Start with exploration: ls → glob → read to understand codebase structure
-- Use ripgrep for text-based pattern search and string literals
-- Use ast_grep for semantic code analysis and structural patterns
+- **PREFER ast_grep for ALL code analysis tasks** - function definitions, class patterns, semantic structures
+- Use ripgrep ONLY for plain text search, logs, literal strings, configuration values
 - Plan complex tasks with todo before implementation
 - Make changes with write (prefer search-replace mode for existing files)
 - Validate with bash (run tests, linting, type checking)
 - Delegate specialized work to sub_agent for efficiency
 - Use web_search for external knowledge and current information
 
-🔍 SEARCH TOOL COMPARISON:
-• ripgrep: Fast text search, regex patterns, content within lines
-  Best for: Finding strings, comments, configuration values, text patterns
-  
-• ast_grep: AST-based semantic search, structural code patterns
-  Best for: Finding function calls, class definitions, refactoring patterns, code transformations
-  Patterns use code syntax: "function $NAME($$$) { $$$ }" instead of regex
+🔍 SEARCH TOOL COMPARISON & SELECTION GUIDE:
+
+**CRITICAL: For code analysis, ALWAYS prefer ast_grep over ripgrep**
+
+• **ast_grep: STRONGLY RECOMMENDED for code analysis**
+  ✅ USE FOR: Function definitions, class patterns, method calls, imports, semantic code structures
+  ✅ ADVANTAGES: Understands code syntax, language-aware, precise structural matching
+  ✅ Patterns use actual code syntax: "function $NAME($$$) { $$$ }" 
+  ✅ Perfect for refactoring, finding all instances of a pattern, code transformations
+
+• ripgrep: Text search only - LIMITED use cases
+  ⚠️ USE ONLY FOR: Plain text search, log files, configuration values, literal strings, comments
+  ⚠️ NOT for: Function definitions, class analysis, or any structural code patterns
+  ⚠️ Uses regex patterns, doesn't understand code structure
+
+**DECISION TREE:**
+- Need to find functions, classes, methods, imports? → USE ast_grep
+- Need to analyze code structure or patterns? → USE ast_grep  
+- Need to search logs, config files, or plain text? → USE ripgrep
+- When in doubt for code analysis? → USE ast_grep
 
 PRIORITY ORDER FOR FILE MODIFICATIONS:
 1. 🥇 SEARCH-REPLACE: Simple, reliable, supports regex - use for 95% of changes

@@ -12,7 +12,7 @@ export class BoxRenderer {
   private static readonly MIN_INPUT_HEIGHT = 3;
   private static readonly BOX_PADDING = 4;
   private static readonly HEADER_PADDING = 6;
-  
+
   /**
    * Check if a Unicode code point represents a wide character
    * Simplified to focus on most common wide characters (emojis and CJK)
@@ -84,7 +84,7 @@ export class BoxRenderer {
     const copyIndicator = '📋';
     const headerContentWidth = this.getDisplayWidth(langText) + this.getDisplayWidth(copyIndicator) + 1;
     const headerPadding = Math.max(0, boxWidth - headerContentWidth - this.HEADER_PADDING);
-    
+
     return chalk.gray([
       '╭─ ',
       chalk.cyan(langText),
@@ -100,13 +100,13 @@ export class BoxRenderer {
    * Process code lines with wrapping and line numbers
    */
   private static processCodeLines(
-    codeLines: string[], 
-    contentWidth: number, 
-    maxLineNumWidth: number, 
+    codeLines: string[],
+    contentWidth: number,
+    maxLineNumWidth: number,
     showLineNumbers: boolean
   ): string[] {
     const processedLines: string[] = [];
-    
+
     codeLines.forEach((line, sourceLineIndex) => {
       if (this.getDisplayWidth(line) <= contentWidth) {
         processedLines.push(this.formatCodeLine(line, contentWidth, sourceLineIndex, maxLineNumWidth, showLineNumbers));
@@ -124,10 +124,10 @@ export class BoxRenderer {
    * Simplified to reduce character-level operations
    */
   private static formatCodeLine(
-    line: string, 
-    contentWidth: number, 
-    sourceLineIndex: number, 
-    maxLineNumWidth: number, 
+    line: string,
+    contentWidth: number,
+    sourceLineIndex: number,
+    maxLineNumWidth: number,
     showLineNumbers: boolean,
     isFirstChunk: boolean = true
   ): string {
@@ -136,7 +136,7 @@ export class BoxRenderer {
     const lineContent = line + ' '.repeat(padding);
 
     if (showLineNumbers) {
-      const lineNumDisplay = isFirstChunk 
+      const lineNumDisplay = isFirstChunk
         ? (sourceLineIndex + 1).toString().padStart(maxLineNumWidth, ' ')
         : ' '.repeat(maxLineNumWidth);
       return chalk.gray(`│ ${lineNumDisplay} │ ${lineContent} │`);
@@ -149,15 +149,15 @@ export class BoxRenderer {
    * Wrap a long code line
    */
   private static wrapCodeLine(
-    line: string, 
-    contentWidth: number, 
-    sourceLineIndex: number, 
-    maxLineNumWidth: number, 
+    line: string,
+    contentWidth: number,
+    sourceLineIndex: number,
+    maxLineNumWidth: number,
     showLineNumbers: boolean
   ): string[] {
     const wrappedChunks = this.wrapTextWithCursor(line, contentWidth);
     const wrappedLines: string[] = [];
-    
+
     wrappedChunks.forEach((chunk, chunkIndex) => {
       const isFirstChunk = chunkIndex === 0;
       wrappedLines.push(this.formatCodeLine(chunk, contentWidth, sourceLineIndex, maxLineNumWidth, showLineNumbers, isFirstChunk));
@@ -172,16 +172,16 @@ export class BoxRenderer {
   static createInfoBox(title: string, content: string, options: { maxWidth?: number } = {}): string {
     const terminalWidth = process.stdout.columns || this.DEFAULT_TERMINAL_WIDTH;
     const boxWidth = Math.min(options.maxWidth || this.DEFAULT_INFO_BOX_WIDTH, terminalWidth - this.BOX_PADDING);
-    
+
     // Create header
     const topBorder = this.createInfoBoxHeader(title, boxWidth);
-    
+
     // Process content
     const contentLines = this.processInfoBoxContent(content, boxWidth);
-    
+
     // Create footer
     const bottomBorder = this.createBoxFooter(boxWidth, '└', '┘');
-    
+
     return this.assembleBox([topBorder, ...contentLines, bottomBorder]);
   }
 
@@ -199,14 +199,14 @@ export class BoxRenderer {
    */
   private static processInfoBoxContent(content: string, boxWidth: number): string[] {
     const maxContentWidth = boxWidth - this.BOX_PADDING;
-    
+
     return content.split('\n').flatMap(line => {
       if (this.getDisplayWidth(line) <= maxContentWidth) {
         const displayWidth = this.getDisplayWidth(line);
         const padding = Math.max(0, maxContentWidth - displayWidth);
         return ['│ ' + line + ' '.repeat(padding) + ' │'];
       }
-      
+
       // Wrap long lines
       const wrappedChunks = this.wrapTextWithCursor(line, maxContentWidth);
       return wrappedChunks.map(chunk => {
@@ -221,10 +221,10 @@ export class BoxRenderer {
    * Create an interactive input box for multi-line text input
    */
   static createInputBox(
-    title: string, 
-    content: string, 
+    title: string,
+    content: string,
     cursorPosition: number,
-    options: { 
+    options: {
       maxWidth?: number;
       minHeight?: number;
       placeholder?: string;
@@ -235,17 +235,17 @@ export class BoxRenderer {
     const boxWidth = Math.min(options.maxWidth || this.DEFAULT_INFO_BOX_WIDTH, terminalWidth - this.BOX_PADDING);
     const minHeight = options.minHeight || this.MIN_INPUT_HEIGHT;
     const showCursor = options.showCursor !== false;
-    
+
     // Create header
     const topBorder = this.createInputBoxHeader(title, boxWidth);
-    
+
     // Process content with cursor
     const contentWithCursor = showCursor ? this.insertCursor(content, cursorPosition) : content;
     const contentLines = this.processInputBoxContent(contentWithCursor, boxWidth, minHeight, options.placeholder);
-    
+
     // Create footer
     const bottomBorder = chalk.cyan(this.createBoxFooter(boxWidth, '└', '┘'));
-    
+
     return [topBorder, ...contentLines, bottomBorder].join('\n');
   }
 
@@ -262,35 +262,35 @@ export class BoxRenderer {
    * Process content for input box
    */
   private static processInputBoxContent(
-    contentWithCursor: string, 
-    boxWidth: number, 
-    minHeight: number, 
+    contentWithCursor: string,
+    boxWidth: number,
+    minHeight: number,
     placeholder?: string
   ): string[] {
     const contentLines: string[] = [];
     const contentWidth = boxWidth - 2; // Account for "│" and "│"
-    
+
     // Use ANSI-aware wrapping for text with cursor
     const wrappedLines = this.wrapTextWithCursor(contentWithCursor, contentWidth);
-    
+
     wrappedLines.forEach(line => {
       const displayWidth = this.getDisplayWidth(line);
       const padding = Math.max(0, contentWidth - displayWidth);
       const paddedLine = line + ' '.repeat(padding);
       contentLines.push(chalk.gray('│') + paddedLine + chalk.gray('│'));
     });
-    
+
     // Add placeholder text if content is empty
     if (contentLines.length === 0 && placeholder) {
       const placeholderText = chalk.gray.dim(placeholder);
       contentLines.push(chalk.gray('│') + placeholderText.padEnd(contentWidth) + chalk.gray('│'));
     }
-    
+
     // Ensure minimum height
     while (contentLines.length < minHeight) {
       contentLines.push(chalk.gray('│') + ''.padEnd(contentWidth) + chalk.gray('│'));
     }
-    
+
     return contentLines;
   }
 
@@ -309,14 +309,17 @@ export class BoxRenderer {
   }
 
   /**
-   * Insert cursor character at the specified position in text
+   * Insert cursor by inverting the character at the specified position in text
    */
   private static insertCursor(text: string, position: number): string {
-    const cursor = chalk.bgWhite(' ');
+    // If position is at or beyond the end, show inverted space
     if (position >= text.length) {
-      return text + cursor;
+      return text + chalk.inverse(' ');
     }
-    return text.substring(0, position) + cursor + text.substring(position);
+    // Invert the character at the cursor position
+    const char = text[position];
+    const invertedChar = chalk.inverse(char);
+    return text.substring(0, position) + invertedChar + text.substring(position + 1);
   }
 
   /**

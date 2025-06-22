@@ -108,6 +108,24 @@ export class OpenAIProvider extends BaseLLMProvider {
 
       const response = await this.openai!.chat.completions.create(requestParams);
 
+      if (!response.choices || response.choices.length === 0) {
+        // Serialize debug info as a string to avoid logger type errors
+        let debugInfo = '';
+        let userFacingError = 'OpenAI API returned no choices.';
+        try {
+          debugInfo =
+            '\nRequestParams: ' + JSON.stringify(requestParams, null, 2) +
+            '\nResponse: ' + JSON.stringify(response, null, 2);
+          // If the response has an error, surface it to the user
+          if (response.error && response.error.message) {
+            userFacingError += ` OpenAI error: ${response.error.message} (code: ${response.error.code ?? 'unknown'})`;
+          }
+        } catch (e) {
+          debugInfo = '[Failed to stringify request/response]';
+        }
+        logger.error('OpenAI API returned no choices', { details: debugInfo }, 'OpenAIProvider');
+        throw new Error(userFacingError + ' See logs for request/response details.');
+      }
       const choice = response.choices[0];
       if (choice.message.tool_calls) {
         for (const toolCall of choice.message.tool_calls) {

@@ -9,6 +9,7 @@ import { Agent } from '../../../../shared/core/agent';
 import { toolEventEmitter, ToolEvent } from '../../../../shared/utils/toolEvents';
 import { ToolLogger } from '../../../../shared/utils/toolLogger';
 import { configManager } from '../../../../shared/core/config';
+import { ApprovalProvider } from '../../../approval/ApprovalContext';
 
 export interface ChatAppProps {
   agent: Agent;
@@ -59,12 +60,12 @@ export const ChatApp: React.FC<ChatAppProps> = ({
         // Verbose mode: show detailed information
         const callInfo = ToolLogger.formatToolCallForUI(event.toolName, event.args);
         const resultInfo = ToolLogger.formatToolResultForUI(event.toolName, event.success, event.result, event.args);
-        
+
         addMessage({
           type: 'tool_call',
           content: `🔧 ${callInfo}`,
         });
-        
+
         // Show arguments if they exist
         if (event.args && Object.keys(event.args).length > 0) {
           const argsContent = Object.entries(event.args)
@@ -82,13 +83,13 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             content: `📋 Arguments:\n${argsContent}`,
           });
         }
-        
+
         // Show result details
         addMessage({
           type: 'tool_call',
           content: `📤 ${resultInfo}`,
         });
-        
+
         // Show error details if failed
         if (!event.success && event.result) {
           let errorDetails = '';
@@ -102,7 +103,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           } else if (typeof event.result === 'object') {
             errorDetails = JSON.stringify(event.result, null, 2);
           }
-          
+
           if (errorDetails) {
             addMessage({
               type: 'error',
@@ -325,20 +326,22 @@ Example Questions:
   }, [handleExit]);
 
   return (
-    <Box flexDirection="column" height="100%">
-      <Box flexGrow={1} flexDirection="column" overflow="hidden">
-        <ConversationDisplay
-          messages={messages}
-          showWelcome={showWelcome}
-          isProcessing={isProcessing}
+    <ApprovalProvider>
+      <Box flexDirection="column" height="100%">
+        <Box flexGrow={1} flexDirection="column" overflow="hidden">
+          <ConversationDisplay
+            messages={messages}
+            showWelcome={showWelcome}
+            isProcessing={isProcessing}
+          />
+        </Box>
+        <InputComponent
+          callbacks={inputCallbacks}
+          options={inputOptions}
+          completionManager={completionManager}
+          clipboardManager={clipboardManager}
         />
       </Box>
-      <InputComponent
-        callbacks={inputCallbacks}
-        options={inputOptions}
-        completionManager={completionManager}
-        clipboardManager={clipboardManager}
-      />
-    </Box>
+    </ApprovalProvider>
   );
 };

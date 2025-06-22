@@ -106,7 +106,7 @@ export interface AstGrepResult {
 
 export class AstGrepTool extends BaseTool {
   readonly name = 'ast_grep';
-  readonly description = 'Advanced structural code search and transformation using AST patterns - perfect for refactoring, code analysis, and finding semantic patterns across multiple languages';
+  readonly description = '**STRONGLY RECOMMENDED** Advanced structural code search and transformation using AST patterns - USE THIS INSTEAD OF RIPGREP for code analysis, refactoring, finding function definitions, class patterns, and semantic code structures across multiple languages. This is the preferred tool for understanding code structure and relationships.';
   private astGrepPath: string | null = null;
 
   constructor(context: Partial<ToolContext> = {}) {

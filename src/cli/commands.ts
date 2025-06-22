@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { BoxRenderer } from '../shared/utils/boxRenderer';
 import { MarkdownRenderer } from '../shared/utils/markdown';
 import { calculateStreamingClearSequence } from '../shared/utils/terminalOutput';
+import { Logger } from '../shared/utils/logger';
 
 /**
  * Configure the commander program with all available commands
@@ -26,6 +27,11 @@ export function configureCommands(program: Command, version: string): void {
     .option('--model <model>', 'Temporarily specify the LLM model to use for this session')
     .helpOption('-h, --help', 'Display help information')
     .action(async (command: string | undefined, options: any) => {
+      // Generate correlation ID for this CLI session
+      const correlationId = Logger.generateCorrelationId();
+      const logger = Logger.getInstance();
+      logger.setCorrelationId(correlationId);
+
       // Handle colored output setting
       if (options.noColor) {
         chalk.level = 0;

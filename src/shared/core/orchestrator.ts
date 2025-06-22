@@ -47,6 +47,7 @@ export class ToolOrchestrator {
   private toolExecutionHandler: ToolExecutionHandler;
   private systemPromptBuilder: SystemPromptBuilder;
   private providerStrategy: ProviderStrategy;
+  private correlationId?: string;
 
   constructor(
     private llmService: LLMService,
@@ -97,6 +98,13 @@ export class ToolOrchestrator {
   }
 
   /**
+   * Set correlation ID for this orchestrator session
+   */
+  setCorrelationId(correlationId: string): void {
+    this.correlationId = correlationId;
+  }
+
+  /**
    * Initialize system prompt builder with LLM service
    */
   private initializeSystemPromptBuilder(): void {
@@ -141,7 +149,7 @@ export class ToolOrchestrator {
     // Loop until we get a final response or detect an infinite loop
     while (true) {
       if (verbose) {
-        logger.debug('🔄 Processing with LLM...', {}, 'ORCHESTRATOR');
+        logger.debug('🔄 Processing with LLM...', {}, 'ORCHESTRATOR', this.correlationId);
       }
 
       // Build messages for this request with AI-powered task-aware context
@@ -162,7 +170,7 @@ export class ToolOrchestrator {
           if (verbose) {
             logger.debug(`🔧 LLM wants to call ${response.tool_calls.length} tool(s)`, {
               toolCount: response.tool_calls.length
-            }, 'ORCHESTRATOR');
+            }, 'ORCHESTRATOR', this.correlationId);
           }
 
           // Add assistant's tool call message

@@ -8,28 +8,28 @@ import { matchModelName } from '../utils/modelMatcher';
 export function detectProviderFromModel(model: string): 'openai' | 'anthropic' | 'gemini' {
   // First use the model matcher to get a normalized model name
   const matchedModel = matchModelName(model);
-  
+
   if (!matchedModel) {
     // If no match is found, fall back to original detection logic
     const modelLower = model.toLowerCase();
-    
+
     // OpenAI models
-    if (modelLower.includes('gpt') || modelLower.includes('davinci') || modelLower.includes('curie') || 
-        modelLower.includes('babbage') || modelLower.includes('ada') || modelLower.startsWith('org-') || 
+    if (modelLower.includes('gpt') || modelLower.includes('davinci') || modelLower.includes('curie') ||
+        modelLower.includes('babbage') || modelLower.includes('ada') || modelLower.startsWith('org-') ||
         modelLower.startsWith('openai/')) {
       return 'openai';
     }
-    
+
     // Anthropic models
     if (modelLower.includes('claude') || modelLower.startsWith('anthropic/')) {
       return 'anthropic';
     }
-    
+
     // Gemini models
     if (modelLower.includes('gemini') || modelLower.includes('bard') || modelLower.startsWith('google/')) {
       return 'gemini';
     }
-    
+
     // Default to OpenAI if no clear match
     return 'openai';
   }
@@ -221,7 +221,7 @@ export class ConfigManager {
     if (newConfig.model && !newConfig.provider) {
       newConfig.provider = detectProviderFromModel(newConfig.model);
     }
-    
+
     this.config = { ...this.config, ...newConfig };
 
     // Ensure config directory exists
@@ -243,15 +243,15 @@ export class ConfigManager {
   getConfig(): Config {
     // Clone the current config and dynamically determine provider if not set
     const config = { ...this.config };
-    
+
     // If provider is not explicitly set, detect it from the model
     if (!config.provider && config.model) {
       config.provider = detectProviderFromModel(config.model);
     }
-    
+
     return config;
   }
-  
+
   /**
    * Get the current provider, detecting it from the model if necessary
    */
@@ -260,7 +260,7 @@ export class ConfigManager {
     if (this.config.provider) {
       return this.config.provider;
     }
-    
+
     // If not set, detect from the model
     return detectProviderFromModel(this.config.model || 'gpt-4o-2024-11-20');
   }
@@ -616,6 +616,10 @@ export class ConfigManager {
         const data = await res.json();
         if (Array.isArray(data.data)) {
           models = data.data.filter((m: any) => typeof m.id === 'string');
+          // Filter OpenRouter models to only those supporting tools
+          if (openaiEndpointChoice === 'openrouter') {
+            models = models.filter((m: any) => Array.isArray(m.supported_parameters) && m.supported_parameters.includes('tools'));
+          }
         } else {
           fetchFailed = true;
         }

@@ -22,6 +22,7 @@ export interface LogEntry {
     stack?: string;
   };
   source?: string;
+  correlationId?: string;
 }
 
 export interface LoggerConfig {
@@ -48,6 +49,7 @@ export class Logger {
   private static instance: Logger;
   private config: LoggerConfig;
   private logFilePath?: string;
+  private correlationId?: string;
 
   private constructor(config: Partial<LoggerConfig> = {}) {
     this.config = {
@@ -184,8 +186,9 @@ export class Logger {
     const timestamp = chalk.gray(entry.timestamp);
     const level = this.formatLogLevel(entry.level);
     const source = entry.source ? chalk.cyan(`[${entry.source}]`) : '';
+    const correlationId = entry.correlationId ? chalk.magenta(`[${entry.correlationId}]`) : '';
 
-    let message = `${timestamp} ${level} ${source} ${entry.message}`;
+    let message = `${timestamp} ${level} ${correlationId} ${source} ${entry.message}`;
 
     if (entry.context && Object.keys(entry.context).length > 0) {
       message += '\n' + chalk.gray('  Context: ') + JSON.stringify(entry.context, null, 2);
@@ -248,7 +251,8 @@ export class Logger {
     message: string,
     context?: Record<string, any>,
     error?: Error,
-    source?: string
+    source?: string,
+    correlationId?: string
   ): LogEntry {
     return {
       timestamp: new Date().toISOString(),
@@ -261,46 +265,47 @@ export class Logger {
         stack: error.stack,
       } : undefined,
       source,
+      correlationId: correlationId || this.correlationId,
     };
   }
 
   /**
    * Log an error with full context
    */
-  error(message: string, error?: Error, context?: Record<string, any>, source?: string): void {
-    const entry = this.createLogEntry(LogLevel.ERROR, message, context, error, source);
+  error(message: string, error?: Error, context?: Record<string, any>, source?: string, correlationId?: string): void {
+    const entry = this.createLogEntry(LogLevel.ERROR, message, context, error, source, correlationId);
     this.writeLog(entry);
   }
 
   /**
    * Log a warning
    */
-  warn(message: string, context?: Record<string, any>, source?: string): void {
-    const entry = this.createLogEntry(LogLevel.WARN, message, context, undefined, source);
+  warn(message: string, context?: Record<string, any>, source?: string, correlationId?: string): void {
+    const entry = this.createLogEntry(LogLevel.WARN, message, context, undefined, source, correlationId);
     this.writeLog(entry);
   }
 
   /**
    * Log general information
    */
-  info(message: string, context?: Record<string, any>, source?: string): void {
-    const entry = this.createLogEntry(LogLevel.INFO, message, context, undefined, source);
+  info(message: string, context?: Record<string, any>, source?: string, correlationId?: string): void {
+    const entry = this.createLogEntry(LogLevel.INFO, message, context, undefined, source, correlationId);
     this.writeLog(entry);
   }
 
   /**
    * Log debug information
    */
-  debug(message: string, context?: Record<string, any>, source?: string): void {
-    const entry = this.createLogEntry(LogLevel.DEBUG, message, context, undefined, source);
+  debug(message: string, context?: Record<string, any>, source?: string, correlationId?: string): void {
+    const entry = this.createLogEntry(LogLevel.DEBUG, message, context, undefined, source, correlationId);
     this.writeLog(entry);
   }
 
   /**
    * Log detailed trace information
    */
-  trace(message: string, context?: Record<string, any>, source?: string): void {
-    const entry = this.createLogEntry(LogLevel.TRACE, message, context, undefined, source);
+  trace(message: string, context?: Record<string, any>, source?: string, correlationId?: string): void {
+    const entry = this.createLogEntry(LogLevel.TRACE, message, context, undefined, source, correlationId);
     this.writeLog(entry);
   }
 
@@ -409,23 +414,51 @@ export class Logger {
   isToolConsoleEnabled(): boolean {
     return this.config.enableToolConsole ?? true;
   }
+
+  /**
+   * Set correlation ID for this logger instance
+   */
+  setCorrelationId(correlationId: string): void {
+    this.correlationId = correlationId;
+  }
+
+  /**
+   * Get current correlation ID
+   */
+  getCorrelationId(): string | undefined {
+    return this.correlationId;
+  }
+
+  /**
+   * Clear correlation ID
+   */
+  clearCorrelationId(): void {
+    this.correlationId = undefined;
+  }
+
+  /**
+   * Generate a new correlation ID
+   */
+  static generateCorrelationId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
 }
 
 // Export default logger instance
 export const logger = Logger.getInstance();
 
 // Export convenient logging functions
-export const logError = (message: string, error?: Error, context?: Record<string, any>, source?: string) =>
-  logger.error(message, error, context, source);
+export const logError = (message: string, error?: Error, context?: Record<string, any>, source?: string, correlationId?: string) =>
+  logger.error(message, error, context, source, correlationId);
 
-export const logWarn = (message: string, context?: Record<string, any>, source?: string) =>
-  logger.warn(message, context, source);
+export const logWarn = (message: string, context?: Record<string, any>, source?: string, correlationId?: string) =>
+  logger.warn(message, context, source, correlationId);
 
-export const logInfo = (message: string, context?: Record<string, any>, source?: string) =>
-  logger.info(message, context, source);
+export const logInfo = (message: string, context?: Record<string, any>, source?: string, correlationId?: string) =>
+  logger.info(message, context, source, correlationId);
 
-export const logDebug = (message: string, context?: Record<string, any>, source?: string) =>
-  logger.debug(message, context, source);
+export const logDebug = (message: string, context?: Record<string, any>, source?: string, correlationId?: string) =>
+  logger.debug(message, context, source, correlationId);
 
-export const logTrace = (message: string, context?: Record<string, any>, source?: string) =>
-  logger.trace(message, context, source);
+export const logTrace = (message: string, context?: Record<string, any>, source?: string, correlationId?: string) =>
+  logger.trace(message, context, source, correlationId);

@@ -11,7 +11,7 @@ import { SubAgentTool } from '../tools/subAgent';
 import { ToolOrchestrator } from './orchestrator';
 import { ProjectDiscovery, ProjectDiscoveryResult } from '../utils/projectDiscovery';
 import { toolContextManager } from '../utils/ToolContextManager';
-import { logger } from '../utils/logger';
+import { logger, Logger } from '../utils/logger';
 
 /**
  * Core Agent - Primary interface for AI programming assistant
@@ -102,6 +102,13 @@ export class Agent {
 
     // Set project context in orchestrator
     this.orchestrator.setProjectContext(this.discoveryResult);
+
+    // Pass correlation ID from logger to orchestrator
+    const logger = Logger.getInstance();
+    const correlationId = logger.getCorrelationId();
+    if (correlationId) {
+      this.orchestrator.setCorrelationId(correlationId);
+    }
 
     // If a temporary model is provided, temporarily override the config
     if (this.options?.temporaryModel) {

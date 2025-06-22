@@ -15,6 +15,7 @@ import mainRouter from './routes'; // Added
 import { requestLogger, responseLogger } from './middleware/logging';
 import { sessionMiddleware } from './middleware/session';
 import { validateApiKey } from './middleware/auth';
+import { Logger } from '../shared/utils/logger';
 
 // Import WebSocket handling
 import {
@@ -131,6 +132,11 @@ export class WebServer {
    */
   private setupWebSocket(): void {
     this.io.on(SocketEvents.CONNECTION, (socket) => {
+      // Generate correlation ID for this WebSocket session
+      const correlationId = Logger.generateCorrelationId();
+      const logger = Logger.getInstance();
+      logger.setCorrelationId(correlationId);
+      
       console.log(`Client connected: ${socket.id}`);
 
       // Create chat handler for this socket
@@ -143,6 +149,8 @@ export class WebServer {
 
       socket.on(SocketEvents.DISCONNECT, (reason) => {
         console.log(`Client disconnected: ${socket.id}, reason: ${reason}`);
+        // Clear correlation ID when client disconnects
+        logger.clearCorrelationId();
       });
     });
 

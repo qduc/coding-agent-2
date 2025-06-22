@@ -108,7 +108,7 @@ export interface RipgrepResult {
 
 export class RipgrepTool extends BaseTool {
   readonly name = 'ripgrep';
-  readonly description = 'Fast text search across files and directories with context, filtering, and statistics - perfect for code archaeology, debugging, and refactoring';
+  readonly description = 'Fast text search across files and directories - USE FOR: plain text search, log analysis, finding literal strings, configuration values. For code structure analysis, function definitions, or semantic patterns, USE AST_GREP instead.';
   private ripgrepPath: string | null = null;
 
   constructor(context: Partial<ToolContext> = {}) {

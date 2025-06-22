@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { logger } from './logger';
+import { logger, Logger } from './logger';
 import { toolEventEmitter } from './toolEvents';
 import { configManager } from '../core/config';
 import {
@@ -30,8 +30,11 @@ export class ToolLogger {
     // Emit tool event for UI components (like Ink) to handle
     toolEventEmitter.emitToolCall(toolName, args);
 
+    // Get correlation ID from logger instance
+    const correlationId = Logger.getInstance().getCorrelationId();
+
     // Always log to structured logger for debugging (goes to file)
-    logger.debug(`Tool called: ${toolName}`, { toolName, args }, 'TOOL');
+    logger.debug(`Tool called: ${toolName}`, { toolName, args }, 'TOOL', correlationId);
   }
 
   /**
@@ -41,9 +44,12 @@ export class ToolLogger {
     // Emit tool event for UI components (like Ink) to handle
     toolEventEmitter.emitToolResult(toolName, success, result, args);
 
+    // Get correlation ID from logger instance
+    const correlationId = Logger.getInstance().getCorrelationId();
+
     // Always log to structured logger for debugging (goes to file)
     if (success) {
-      logger.debug(`Tool completed: ${toolName}`, { toolName, success, result }, 'TOOL');
+      logger.debug(`Tool completed: ${toolName}`, { toolName, success, result }, 'TOOL', correlationId);
     } else {
       const error = result instanceof Error ? result : undefined;
 
@@ -60,14 +66,14 @@ export class ToolLogger {
             arguments: args,
             timestamp: new Date().toISOString()
           }
-        }, 'TOOL');
+        }, 'TOOL', correlationId);
 
         // For write tool failures, the error information is already logged above
         // The UI layer (Ink) will handle displaying critical errors through events
         // No additional console output needed here to avoid interfering with Ink
       } else {
         // Standard logging for other tool failures
-        logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL');
+        logger.error(`Tool failed: ${toolName}`, error, { toolName, success, result }, 'TOOL', correlationId);
       }
     }
   }

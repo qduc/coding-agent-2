@@ -25,7 +25,7 @@ export const InputBox: React.FC<InputBoxProps> = ({ state, options = {} }) => {
     }
 
     if (state.isMultilineMode) {
-      return '💬 Multi-line (Ctrl+Enter to send)';
+      return '💬 Multi-line (Shift+Enter for newline, Enter to send)';
     }
 
     return options.prompt || '💬 Message';
