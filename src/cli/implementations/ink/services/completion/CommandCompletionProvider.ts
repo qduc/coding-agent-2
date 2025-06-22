@@ -3,9 +3,7 @@ import { CompletionProvider, CompletionItem, CompletionType } from './Completion
 export class CommandCompletionProvider implements CompletionProvider {
   private availableCommands: Array<{ name: string; description: string }> = [
     { name: 'help', description: 'Show help information' },
-    { name: 'exit', description: 'Exit the application' },
     { name: 'quit', description: 'Quit the application' },
-    { name: 'q', description: 'Quick quit' },
     { name: 'clear', description: 'Clear chat history and refresh project context' },
     { name: 'refresh', description: 'Refresh project context without clearing history' },
     { name: 'history', description: 'Show command history' },
@@ -37,13 +35,13 @@ export class CommandCompletionProvider implements CompletionProvider {
     if (!input.startsWith('/') || cursorPosition === 0) {
       return false;
     }
-    
+
     // Don't show completions if input is already a complete command
     const command = input.substring(1).toLowerCase();
-    const isCompleteCommand = this.availableCommands.some(cmd => 
+    const isCompleteCommand = this.availableCommands.some(cmd =>
       cmd.name.toLowerCase() === command
     );
-    
+
     return !isCompleteCommand;
   }
 

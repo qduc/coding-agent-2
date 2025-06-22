@@ -62,8 +62,14 @@ export function useKeyboardHandler({
         inputActions.setCursorPosition(beforeAt.length + selectedItem.value.length + 1);
       }
     } else if (selectedItem.type === 'command') {
-      inputActions.setValue('/' + selectedItem.value);
-      inputActions.setCursorPosition(selectedItem.value.length + 1);
+      const completedCommand = '/' + selectedItem.value;
+      inputActions.setValue(completedCommand);
+      inputActions.setCursorPosition(completedCommand.length);
+      // Immediately submit the command after completion
+      completionActions.hide();
+      callbacks.onSubmit(completedCommand);
+      inputActions.reset();
+      return true;
     }
 
     completionActions.hide();
@@ -133,8 +139,12 @@ export function useKeyboardHandler({
       return;
     }
 
-    // Handle Escape: Exit (when not processing)
+    // Handle Escape: Close completions if open, else exit
     if (key.escape) {
+      if (hasCompletions) {
+        completionActions.hide();
+        return;
+      }
       handleExit();
       return;
     }

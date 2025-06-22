@@ -137,17 +137,11 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     }
   }, [exit, onExit]);
 
-  const handleUserInput = useCallback(async (input: string) => {
-    const trimmedInput = input.trim();
-
-    // Handle exit commands
-    if (['exit', 'quit', 'q'].some(cmd => trimmedInput.toLowerCase() === `/${cmd}`)) {
-      handleExit();
-      return;
-    }
-
-    // Handle help command
-    if (trimmedInput.toLowerCase() === '/help') {
+  const commandHandlers: { [key: string]: () => Promise<void> | void } = {
+    '/exit': () => handleExit(),
+    '/quit': () => handleExit(),
+    '/q': () => handleExit(),
+    '/help': () => {
       addMessage({
         type: 'system',
         content: `Multi-line Input Controls:
@@ -178,11 +172,8 @@ Example Questions:
     "What are the main components?"
     "Show me the test files"`,
       });
-      return;
-    }
-
-    // Handle clear command
-    if (trimmedInput.toLowerCase() === '/clear') {
+    },
+    '/clear': async () => {
       setIsProcessing(true);
       try {
         await agent.clearHistoryAndRefresh();
@@ -199,11 +190,8 @@ Example Questions:
       } finally {
         setIsProcessing(false);
       }
-      return;
-    }
-
-    // Handle refresh command
-    if (trimmedInput.toLowerCase() === '/refresh') {
+    },
+    '/refresh': async () => {
       setIsProcessing(true);
       try {
         await agent.refreshProjectContext();
@@ -219,26 +207,33 @@ Example Questions:
       } finally {
         setIsProcessing(false);
       }
-      return;
-    }
-
-    // Handle verbose tool logging toggle
-    if (trimmedInput.toLowerCase() === '/verbose-tools') {
+    },
+    '/verbose-tools': () => {
       setVerboseToolLogs(!verboseToolLogs);
       addMessage({
         type: 'system',
         content: `🔧 Verbose tool logging ${!verboseToolLogs ? 'enabled' : 'disabled'}. Tool calls will now show ${!verboseToolLogs ? 'detailed breakdown with arguments and results' : 'clean, minimalistic format'}.`,
       });
-      return;
-    }
-
-    // Handle tool logging toggle
-    if (trimmedInput.toLowerCase() === '/tools') {
+    },
+    '/tools': () => {
       setShowToolLogs(!showToolLogs);
       addMessage({
         type: 'system',
         content: `🔧 Tool logging ${!showToolLogs ? 'enabled' : 'disabled'}. Tool calls will ${!showToolLogs ? 'now be shown' : 'no longer be displayed'} in the chat.`,
       });
+    },
+  };
+
+  const handleUserInput = useCallback(async (input: string) => {
+    const trimmedInput = input.trim();
+    const lowerInput = trimmedInput.toLowerCase();
+
+    // Check if input matches a command
+    if (commandHandlers[lowerInput]) {
+      const result = commandHandlers[lowerInput]();
+      if (result instanceof Promise) {
+        await result;
+      }
       return;
     }
 
@@ -256,19 +251,15 @@ Example Questions:
     // Process with agent
     setIsProcessing(true);
     try {
-
       const response = await agent.processMessage(
         trimmedInput,
         undefined,
         options.verbose
       );
-
-      // Add final response
       addMessage({
         type: 'agent',
         content: response,
       });
-
     } catch (error) {
       addMessage({
         type: 'error',
@@ -277,7 +268,7 @@ Example Questions:
     } finally {
       setIsProcessing(false);
     }
-  }, [agent, addMessage, handleExit, options, showWelcome]);
+  }, [agent, addMessage, handleExit, options, showWelcome, verboseToolLogs, showToolLogs]);
 
   const handleInterrupt = useCallback(() => {
     if (isProcessing) {
