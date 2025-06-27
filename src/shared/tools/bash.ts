@@ -15,7 +15,7 @@ import { BaseTool } from './base';
 import { ToolSchema, ToolResult, ToolError } from './types';
 import { validatePath } from './validation';
 import { toolContextManager } from '../utils/ToolContextManager';
-import * as ApprovalManager from '../../cli/approval/ApprovalManager';
+import { eventBus } from '../utils/EventBus';
 
 /**
  * Parameters for the Bash tool
@@ -90,16 +90,19 @@ export class BashTool extends BaseTool {
       env = {}
     } = params;
 
-    // Approval check before destructive action
-    if (process.env.CODING_AGENT_REQUIRE_APPROVAL === '1') {
-      const approval = await ApprovalManager.requestApproval({
-        type: 'command',
-        command,
-        cwd
+    // Approval check before destructive action (eventBus-based)
+    const approval = await new Promise<string>((resolve) => {
+      eventBus.emit('approval-request', {
+        details: {
+          type: 'command',
+          command,
+          cwd
+        },
+        callback: resolve
       });
-      if (approval === 'denied') {
-        return this.createErrorResult('Command denied by user approval', 'PERMISSION_DENIED');
-      }
+    });
+    if (approval === 'denied') {
+      return this.createErrorResult('Command denied by user approval', 'PERMISSION_DENIED');
     }
 
     try {

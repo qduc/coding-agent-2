@@ -13,7 +13,7 @@ import { ToolSchema, ToolResult, ToolError, ToolContext } from './types';
 import { validatePath } from './validation';
 import { toolContextManager } from '../utils/ToolContextManager';
 import { logger } from '../utils/logger';
-import * as ApprovalManager from '../../cli/approval/ApprovalManager';
+import { eventBus } from '../utils/EventBus';
 
 export interface WriteParams {
   path: string;
@@ -155,16 +155,19 @@ export class WriteTool extends BaseTool {
         }
       }
 
-      // Approval check before destructive action
-      if (process.env.CODING_AGENT_REQUIRE_APPROVAL === '1') {
-        const approval = await ApprovalManager.requestApproval({
-          type: 'write',
-          path: filePath,
-          diff: content || search ? undefined : undefined // Optionally add diff preview
+      // Approval check before destructive action (eventBus-based)
+      const approval = await new Promise<string>((resolve) => {
+        eventBus.emit('approval-request', {
+          details: {
+            type: 'write',
+            path: filePath,
+            diff: undefined // Optionally add diff preview
+          },
+          callback: resolve
         });
-        if (approval === 'denied') {
-          return this.createErrorResult('Write denied by user approval', 'PERMISSION_DENIED');
-        }
+      });
+      if (approval === 'denied') {
+        return this.createErrorResult('Write denied by user approval', 'PERMISSION_DENIED');
       }
 
       // Perform atomic write

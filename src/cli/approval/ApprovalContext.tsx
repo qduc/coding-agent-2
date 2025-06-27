@@ -12,6 +12,8 @@ type ApprovalRequest = {
 type RequestApproval = (prompt: string, options?: {key?: string}) => Promise<ApprovalResult>;
 type ApprovalContextType = {
   requestApproval: RequestApproval;
+  currentApproval: ApprovalRequest | null;
+  handleRespond: (result: ApprovalResult) => void;
 };
 
 const ApprovalContext = createContext<ApprovalContextType | undefined>(undefined);
@@ -57,11 +59,8 @@ export const ApprovalProvider = ({children}:{children:ReactNode}) => {
   };
 
   return (
-    <ApprovalContext.Provider value={{requestApproval}}>
+    <ApprovalContext.Provider value={{requestApproval, currentApproval: current, handleRespond }}>
       {children}
-      {current && (
-        <ApprovalPrompt prompt={current.prompt} onRespond={handleRespond} />
-      )}
     </ApprovalContext.Provider>
   );
 };

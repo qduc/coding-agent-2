@@ -1,4 +1,5 @@
 import { useApproval } from './ApprovalContext';
+import readline from 'readline';
 
 export type DestructiveActionDetails = {
   type: 'write' | 'command';
@@ -29,11 +30,34 @@ export async function requestApproval(details: DestructiveActionDetails): Promis
       }
       return result.approved ? 'approved' : 'denied';
     } catch {
-      // Not in Ink context
-      throw new Error('Approval prompt must be integrated into Ink render tree.');
+      // Not in Ink context, do NOT fallback to CLI prompt if running in CLI mode
+      throw new Error('Approval prompt must be rendered with Ink. Approval was requested outside the Ink render tree.');
     }
   }
-  throw new Error('Approval prompt must be integrated into Ink render tree.');
+  // Fallback for browser or unknown context (e.g., tests, non-CLI scripts)
+  return await cliApprovalPrompt(details);
+}
+
+async function cliApprovalPrompt(details: DestructiveActionDetails): Promise<ApprovalResponse> {
+  const prompt = buildPrompt(details) + ' (y/n/a for always allow): ';
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    rl.question(prompt, (answer) => {
+      rl.close();
+      const normalized = answer.trim().toLowerCase();
+      if (normalized === 'y' || normalized === 'yes') {
+        resolve('approved');
+      } else if (normalized === 'a' || normalized === 'always') {
+        alwaysAllowSession = true;
+        resolve('always-allow');
+      } else {
+        resolve('denied');
+      }
+    });
+  });
 }
 
 function buildPrompt(details: DestructiveActionDetails): string {

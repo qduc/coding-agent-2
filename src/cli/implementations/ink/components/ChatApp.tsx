@@ -9,7 +9,9 @@ import { Agent } from '../../../../shared/core/agent';
 import { toolEventEmitter, ToolEvent } from '../../../../shared/utils/toolEvents';
 import { ToolLogger } from '../../../../shared/utils/toolLogger';
 import { configManager } from '../../../../shared/core/config';
-import { ApprovalProvider } from '../../../approval/ApprovalContext';
+import { ApprovalProvider, useApproval } from '../../../approval/ApprovalContext';
+import { ApprovalEventBridge } from '../../../approval/ApprovalEventBridge';
+import ApprovalPrompt from '../../../approval/ApprovalPrompt';
 
 export interface ChatAppProps {
   agent: Agent;
@@ -422,7 +424,10 @@ Example Questions:
 
   return (
     <ApprovalProvider>
+      <ApprovalEventBridge />
       <Box flexDirection="column" height="100%">
+        {/* Approval box above chat input */}
+        <ApprovalPromptBox />
         <Box flexGrow={1} flexDirection="column" overflow="hidden">
           <ConversationDisplay
             messages={messages.map(mapBackendToUIMessage)}
@@ -441,4 +446,13 @@ Example Questions:
       </Box>
     </ApprovalProvider>
   );
+
+// ApprovalPromptBox renders the approval prompt above the input if needed
+function ApprovalPromptBox() {
+  const approval = useApproval();
+  if (!approval.currentApproval) return null;
+  return (
+    <ApprovalPrompt prompt={approval.currentApproval.prompt} onRespond={approval.handleRespond} />
+  );
+}
 };
