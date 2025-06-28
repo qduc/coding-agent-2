@@ -145,8 +145,8 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 ### 5. Tool Ecosystem (`src/shared/tools/`)
 
 #### File Operations
-- **Read Tool** (`read.ts`): File content reading with line range support
-- **Write Tool** (`write.ts`): File creation and editing with diff-based interface
+- **Read Tool** (`read.ts`): File content reading with line range support, content hashing for change tracking
+- **Write Tool** (`write.ts`): File creation and editing with diff-based interface, regex search-replace functionality
 - **LS Tool** (`ls.ts`): Directory listing and file exploration
 
 #### Search Tools
@@ -154,12 +154,12 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Ripgrep Tool** (`ripgrep.ts`): Fast content search with regex support
 
 #### System Tools
-- **Bash Tool** (`bash.ts`): Command execution with security controls
+- **Bash Tool** (`bash.ts`): Command execution with security controls and approval system integration
 - **Web Search Tool** (`webSearch.ts`): Internet search using Brave Search API
 
 #### Code Analysis Tools
 - **AST Grep Tool** (`astGrep.ts`): Advanced structural code search and transformation using AST patterns
-- **Todo Tool** (`todo.ts`): In-memory todo list management for planning and tracking complex coding tasks
+- **Todo Tool** (`todo.ts`): In-memory todo list management with auto-parsing, batch operations, and rich output formatting
 
 #### Tool Infrastructure
 - **Base Tool** (`base.ts`): Abstract base class with schema definitions
@@ -243,12 +243,15 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Approval Manager** (`ApprovalManager.ts`): Core approval logic with session management
 - **Approval UI** (`ApprovalPrompt.tsx`): Interactive Ink-based approval interface
 - **Context System** (`ApprovalContext.tsx`, `ApprovalProvider.tsx`): React context management
+- **Event Bridge** (`ApprovalEventBridge.tsx`): Event-driven approval system with centralized event bus
 - **Policy Interface** (`IApprovalPolicy.ts`): Approval system contracts
 
 #### Features
+- **Event-Driven Architecture**: Centralized EventBus for approval requests between tools and UI
 - **Context-Aware Approval**: Smart approval for destructive file operations and command execution
+- **Decoupled Communication**: Tools request approval through event bus rather than direct UI calls
 - **Session Management**: "Always allow for session" option with persistent preferences
-- **Integration**: Seamless integration with CLI tool execution context
+- **Standardized Interface**: Consistent approval request format across all tools
 - **Safety**: Prevents accidental destructive operations with clear user confirmation
 
 ## Data Flow
@@ -299,12 +302,13 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Fallback Support**: Graceful degradation on provider errors
 
 ### Enhanced Tool Capabilities
-- **Diff-Based Writing**: Intelligent file editing with change tracking
+- **Advanced File Operations**: Dual-mode writing with regex search-replace and content hashing
 - **Context-Aware Search**: Project-specific search patterns and filters
-- **Secure Execution**: Sandboxed command execution with timeout controls and approval system
+- **Event-Driven Security**: Approval system with event bus architecture and session management
 - **Auto-Discovery**: Dynamic tool availability detection
 - **AST-Based Analysis**: Advanced structural code search and transformation
-- **Task Management**: Built-in todo list system for complex task planning
+- **Enhanced Task Management**: Todo system with auto-parsing, batch operations, and rich formatting
+- **Tool Context Validation**: Read history tracking and operation validation for safer file modifications
 
 ### Project Intelligence
 - **Tech Stack Recognition**: Automatic framework and language detection
@@ -330,9 +334,10 @@ The Coding Agent is an AI programming assistant that provides an advanced CLI in
 - **Model Flexibility**: Different LLM models optimized for different task complexities
 
 ### Advanced Safety & Quality Features
-- **Approval System**: Interactive approval for destructive operations with session management
+- **Event-Driven Approval**: Interactive approval system with centralized event bus architecture
+- **Tool Context Management**: Read history tracking and operation validation for error prevention
 - **Prompt Caching**: Cost optimization through intelligent prompt caching
-- **Error Prevention**: Tool context tracking and intelligent warnings
+- **Enhanced Security**: Binary content detection, file hashing, and fuzzy matching validation
 - **Code Quality**: Terminal syntax highlighting and enhanced output formatting
 - **Model Intelligence**: Smart model name matching and provider optimization
 
@@ -392,6 +397,24 @@ This architecture provides a robust, extensible foundation for AI-powered progra
 ---
 
 ## Recent Updates (Latest First)
+
+### 2025-06-28: Event-Driven Approval System & Enhanced Tool Capabilities
+- **COMPLETED**: Event-driven approval system with centralized event bus architecture
+- **Added**: ApprovalEventBridge (`src/cli/approval/ApprovalEventBridge.tsx`) for decoupled approval requests
+- **Enhanced**: WriteTool with regex search-replace functionality and dual-mode operation
+- **Added**: Advanced search-replace with fuzzy matching and similarity scoring (70% threshold)
+- **Enhanced**: TodoTool with auto-parsing of JSON array strings and batch operations
+- **Added**: Rich output formatting with detailed operation tracking and multi-line support
+- **Enhanced**: BashTool and ReadTool with integrated approval system and tool context management
+- **Added**: Content hashing (MD5) for file change tracking and read history validation
+- **Features**: 
+  - Event bus architecture for tool-UI communication
+  - Context-aware approval prompts for different operation types
+  - Session-based "always allow" preferences with persistent configuration
+  - Enhanced binary file detection with magic byte signatures
+  - Performance metrics and operation statistics across all tools
+- **Integration**: Seamless backward compatibility with existing tool ecosystem
+- **Impact**: Enterprise-grade safety controls with improved user experience and automation capabilities
 
 ### 2025-01-20: Advanced Tool Integration & Safety Systems
 - **COMPLETED**: AST Grep Tool implementation for advanced structural code search and transformation

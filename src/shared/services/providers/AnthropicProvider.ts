@@ -308,15 +308,8 @@ export class AnthropicProvider extends BaseLLMProvider {
       throw new Error(errorMsg);
     }
 
-    const efficiency = this.cachingService.calculateCacheEfficiency(usage);
-    this.logger.debug('Cache validation passed', {
-      operation,
-      cacheReads: cacheUsage?.cache_read_input_tokens || 0,
-      cacheCreation: cacheUsage?.cache_creation_input_tokens || 0,
-      hitRatio: efficiency.hitRatio,
-      costSavings: efficiency.costSavings,
-      hasReads: hasCacheReads,
-      hasCreation: hasCacheCreation
-    });
+    // this.logger.debug('Cache validation passed', { ... });
+    // Remove call to non-existent calculateCacheEfficiency
+    // Optionally, log cacheUsage or other info here if needed
   }
 }

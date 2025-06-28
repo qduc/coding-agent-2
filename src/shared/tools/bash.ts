@@ -16,6 +16,7 @@ import { ToolSchema, ToolResult, ToolError } from './types';
 import { validatePath } from './validation';
 import { toolContextManager } from '../utils/ToolContextManager';
 import { eventBus } from '../utils/EventBus';
+import { configManager } from '../core/config';
 
 /**
  * Parameters for the Bash tool
@@ -91,16 +92,22 @@ export class BashTool extends BaseTool {
     } = params;
 
     // Approval check before destructive action (eventBus-based)
-    const approval = await new Promise<string>((resolve) => {
-      eventBus.emit('approval-request', {
-        details: {
-          type: 'command',
-          command,
-          cwd
-        },
-        callback: resolve
+    const alwaysAllowTools = configManager.getConfig().alwaysAllowTools || [];
+    let approval: string;
+    if (Array.isArray(alwaysAllowTools) && alwaysAllowTools.includes(this.name)) {
+      approval = 'always-allow';
+    } else {
+      approval = await new Promise<string>((resolve) => {
+        eventBus.emit('approval-request', {
+          details: {
+            type: 'command',
+            command,
+            cwd
+          },
+          callback: resolve
+        });
       });
-    });
+    }
     if (approval === 'denied') {
       return this.createErrorResult('Command denied by user approval', 'PERMISSION_DENIED');
     }

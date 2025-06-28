@@ -96,6 +96,8 @@ export interface Config {
   cacheToolDefinitions?: boolean;
   cacheConversationHistory?: boolean;
   bailOnNoCacheUsage?: boolean; // Bail out if response doesn't use cache to avoid cost
+  // Approval system: list of tool names to auto-approve
+  alwaysAllowTools?: string[];
 }
 
 export { LogLevel }; // Re-export LogLevel
@@ -133,6 +135,7 @@ export class ConfigManager {
       cacheToolDefinitions: true,
       cacheConversationHistory: true,
       bailOnNoCacheUsage: true, // Default to not bailing out
+      alwaysAllowTools: [], // Default: no tools auto-approved
     };
 
     let fileConfig: Partial<Config> = {};
@@ -408,7 +411,7 @@ export class ConfigManager {
       const logLevel = config.logLevel || 'info';
 
       logger.configure({
-        level: logLevel, // Pass string log level
+        level: logLevel as LogLevel, // Cast string to LogLevel enum
         enableConsole: config.enableConsoleLogging ?? false, // Default to false for general logs
         enableFile: config.enableFileLogging ?? true,
         enableToolConsole: config.enableToolConsoleLogging ?? true, // Default to true for tool logs

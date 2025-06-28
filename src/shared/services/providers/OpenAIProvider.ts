@@ -116,14 +116,10 @@ export class OpenAIProvider extends BaseLLMProvider {
           debugInfo =
             '\nRequestParams: ' + JSON.stringify(requestParams, null, 2) +
             '\nResponse: ' + JSON.stringify(response, null, 2);
-          // If the response has an error, surface it to the user
-          if (response.error && response.error.message) {
-            userFacingError += ` OpenAI error: ${response.error.message} (code: ${response.error.code ?? 'unknown'})`;
-          }
         } catch (e) {
           debugInfo = '[Failed to stringify request/response]';
         }
-        logger.error('OpenAI API returned no choices', { details: debugInfo }, 'OpenAIProvider');
+        logger.error('OpenAI API returned no choices', new Error(userFacingError), { debugInfo }, 'OpenAIProvider');
         throw new Error(userFacingError + ' See logs for request/response details.');
       }
       const choice = response.choices[0];

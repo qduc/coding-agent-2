@@ -42,7 +42,7 @@ router.get('/', generalLimiter, async (req: Request, res: Response) => {
     // Construct data matching WebConfiguration type
     const webConfigData: WebConfiguration = {
       llm: {
-        provider: currentConfig.provider || 'openai',
+        provider: (['openai', 'anthropic', 'gemini'].includes(currentConfig.provider ?? '') ? currentConfig.provider : 'openai') as 'openai' | 'anthropic' | 'gemini',
         model: currentConfig.model || '',
         apiKey: undefined, // API keys are not sent to client
         baseUrl: currentConfig.openaiApiBaseUrl,
@@ -184,7 +184,7 @@ router.post('/', configUpdateLimiter, async (req: Request, res: Response) => {
     const newConfig = configManager.getConfig();
     const webConfigData: WebConfiguration = { // Reconstruct WebConfiguration
       llm: {
-        provider: newConfig.provider || 'openai',
+        provider: (['openai', 'anthropic', 'gemini'].includes(newConfig.provider ?? '') ? newConfig.provider : 'openai') as 'openai' | 'anthropic' | 'gemini',
         model: newConfig.model || '',
         baseUrl: newConfig.openaiApiBaseUrl,
         maxTokens: newConfig.maxTokens

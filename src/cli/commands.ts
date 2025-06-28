@@ -7,7 +7,6 @@ import { configManager } from '../shared/core/config';
 import chalk from 'chalk';
 import { BoxRenderer } from '../shared/utils/boxRenderer';
 import { MarkdownRenderer } from '../shared/utils/markdown';
-import { calculateStreamingClearSequence } from '../shared/utils/terminalOutput';
 import { Logger } from '../shared/utils/logger';
 import { getModelName } from '../shared/utils/modelMatcher';
 

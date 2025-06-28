@@ -14,6 +14,7 @@ import { validatePath } from './validation';
 import { toolContextManager } from '../utils/ToolContextManager';
 import { logger } from '../utils/logger';
 import { eventBus } from '../utils/EventBus';
+import { configManager } from '../core/config';
 
 export interface WriteParams {
   path: string;
@@ -156,16 +157,22 @@ export class WriteTool extends BaseTool {
       }
 
       // Approval check before destructive action (eventBus-based)
-      const approval = await new Promise<string>((resolve) => {
-        eventBus.emit('approval-request', {
-          details: {
-            type: 'write',
-            path: filePath,
-            diff: undefined // Optionally add diff preview
-          },
-          callback: resolve
+      const alwaysAllowTools = configManager.getConfig().alwaysAllowTools || [];
+      let approval: string;
+      if (Array.isArray(alwaysAllowTools) && alwaysAllowTools.includes(this.name)) {
+        approval = 'always-allow';
+      } else {
+        approval = await new Promise<string>((resolve) => {
+          eventBus.emit('approval-request', {
+            details: {
+              type: 'write',
+              path: filePath,
+              diff: undefined // Optionally add diff preview
+            },
+            callback: resolve
+          });
         });
-      });
+      }
       if (approval === 'denied') {
         return this.createErrorResult('Write denied by user approval', 'PERMISSION_DENIED');
       }

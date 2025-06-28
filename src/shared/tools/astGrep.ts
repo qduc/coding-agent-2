@@ -286,7 +286,7 @@ export class AstGrepTool extends BaseTool {
       if (!this.isAstGrepAvailable()) {
         return this.createErrorResult(
           'ast-grep is not available. Please install it using: npm install -g @ast-grep/cli',
-          'TOOL_NOT_FOUND',
+          'INVALID_COMMAND', // changed from TOOL_NOT_FOUND to a valid ToolErrorCode
           ['Install ast-grep: npm install -g @ast-grep/cli', 'Or use npm install @ast-grep/cli for local installation']
         );
       }

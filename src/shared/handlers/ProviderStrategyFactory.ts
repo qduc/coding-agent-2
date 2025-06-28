@@ -39,7 +39,7 @@ export class AnthropicStrategy implements ProviderStrategy {
     }
 
     // Use sendMessageWithTools for Anthropic - the provider has comprehensive tool support
-    return await this.llmService.sendMessageWithTools(messages, schemas, undefined, abortSignal);
+    return await this.llmService.sendMessageWithTools(messages, schemas);
   }
 
   private getToolSchemas(tools: BaseTool[]): any[] {
@@ -65,7 +65,7 @@ export class OpenAIStrategy implements ProviderStrategy {
     const schemas = this.getToolSchemas(tools);
 
     // Use sendMessageWithTools for OpenAI
-    return await this.llmService.sendMessageWithTools(messages, schemas, undefined, abortSignal);
+    return await this.llmService.sendMessageWithTools(messages, schemas);
   }
 
   private getToolSchemas(tools: BaseTool[]): any[] {
@@ -101,7 +101,7 @@ export class GeminiStrategy implements ProviderStrategy {
     }
 
     // Use sendMessageWithTools with tools
-    return await this.llmService.sendMessageWithTools(geminiMessages, schemas, undefined, abortSignal);
+    return await this.llmService.sendMessageWithTools(geminiMessages, schemas);
   }
 
   private convertMessagesToGeminiFormat(messages: ConversationMessage[]): any[] {

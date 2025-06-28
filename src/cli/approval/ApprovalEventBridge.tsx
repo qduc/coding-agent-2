@@ -22,7 +22,7 @@ export function ApprovalEventBridge() {
         .catch(() => callback('denied'));
     }
     eventBus.on('approval-request', handleApprovalRequest);
-    return () => eventBus.off('approval-request', handleApprovalRequest);
+    return () => { eventBus.off('approval-request', handleApprovalRequest); };
   }, [requestApproval]);
   return null;
 }

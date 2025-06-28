@@ -528,19 +528,18 @@ export class ReadTool extends BaseTool {
    */
   getHumanReadableOutput(params: ReadParams, success: boolean, result?: any): string {
     if (!success) {
-      const errorMsg = result instanceof Error ? result.message : 
+      const errorMsg = result instanceof Error ? result.message :
                       typeof result === 'string' ? result :
                       result?.message || 'Unknown error';
       return `\n${errorMsg}`;
     }
 
-    const path = params.path || params.file_path;
+    const path = params.path;
     let context = '';
-    
+
     if (path) {
-      let contextParams = [];
-      if (params.offset) contextParams.push(`offset: ${params.offset}`);
-      if (params.limit) contextParams.push(`limit: ${params.limit}`);
+      const contextParams: string[] = [];
+      // No offset/limit in ReadParams, so contextParams remains empty
       const paramStr = contextParams.length > 0 ? ` (${contextParams.join(', ')})` : '';
       context = ` ${path}${paramStr}`;
     }
@@ -551,7 +550,7 @@ export class ReadTool extends BaseTool {
       const lines = result.split('\n').length;
       return `${context} • ${lines}L read`;
     }
-    
+
     return `${context} • loaded`;
   }
 }
